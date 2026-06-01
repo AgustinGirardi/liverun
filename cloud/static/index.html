@@ -89,12 +89,25 @@ function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,
 function fmtNs(ns){ if(!ns) return "—"; let ms=Math.floor(ns/1e6); const h=Math.floor(ms/3600000); ms%=3600000; const m=Math.floor(ms/60000); ms%=60000; const s=Math.floor(ms/1000); const f=ms%1000; const p=(n,l=2)=>String(n).padStart(l,"0"); return `${p(h)}:${p(m)}:${p(s)}.${p(f,3)}`; }
 function fmtDate(d){ if(!d) return ""; try { return new Date(d+"T12:00:00").toLocaleDateString("es-AR",{day:"numeric",month:"long",year:"numeric"}); } catch { return d; } }
 
+function fmtErr(detail, status){
+  // FastAPI devuelve "detail" como texto (errores de negocio) o como lista de
+  // objetos (errores de validación 422). Normalizamos a un texto legible.
+  if(Array.isArray(detail)) return detail.map(d=>d && d.msg ? d.msg : (typeof d==="string"?d:JSON.stringify(d))).join(" · ");
+  if(typeof detail === "string") return detail;
+  return "Error "+(status||"") ;
+}
+
 async function api(method, path, body, auth){
   const h = {"Content-Type":"application/json"};
   if(auth && TOKEN) h["Authorization"] = "Bearer "+TOKEN;
-  const res = await fetch(API+path, { method, headers:h, body: body!=null?JSON.stringify(body):undefined });
+  let res;
+  try {
+    res = await fetch(API+path, { method, headers:h, body: body!=null?JSON.stringify(body):undefined });
+  } catch(netErr){
+    throw new Error("No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo.");
+  }
   const data = await res.json().catch(()=>null);
-  if(!res.ok) throw new Error((data && data.detail) || "Error "+res.status);
+  if(!res.ok) throw new Error(fmtErr(data && data.detail, res.status));
   return data;
 }
 
@@ -221,15 +234,25 @@ function viewAuth(mode){
       </div>
     </div>`;
 }
+function showAuthErr(msg){ $("amsg").innerHTML = `<div class="err">${esc(msg)}</div>`; }
+
 async function doAuth(mode){
   const reg = mode==="register";
   const email = $("em").value.trim(), pw = $("pw").value;
+
+  // Validación previa, con mensajes claros en español.
+  if(!email){ showAuthErr("Ingresá tu email."); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showAuthErr("El email no tiene un formato válido (ej. vos@email.com)."); return; }
+  if(!pw){ showAuthErr("Ingresá tu contraseña."); return; }
+  if(reg && pw.length < 6){ showAuthErr("La contraseña debe tener al menos 6 caracteres."); return; }
+
   const b = $("abtn"); b.disabled=true;
+  $("amsg").innerHTML = "";
   try {
     const body = reg ? { email, password:pw, full_name:$("fn").value.trim()||null } : { email, password:pw };
     const d = await api("POST", reg?"/api/auth/register":"/api/auth/login", body);
     setSession(d); go("me");
-  } catch(e){ $("amsg").innerHTML = `<div class="err">${esc(e.message)}</div>`; b.disabled=false; }
+  } catch(e){ showAuthErr(e.message); b.disabled=false; }
 }
 
 // ── Mis resultados ────────────────────────────────────────────────────────────
