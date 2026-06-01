@@ -1,0 +1,40 @@
+# ── Bases de datos (datos locales / de prueba — NUNCA subir) ──
+*.db
+*.db-wal
+*.db-shm
+*.ctbackup
+*.pre-restore
+
+# ── Secretos / config local del portal ──
+chronotrack_cloud.json
+.env
+.env.*
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── Build artifacts ──
+build/
+dist/
+*.spec.bak
+frontend/dist/
+frontend/node_modules/
+node_modules/
+
+# ── Instaladores (pesados; se regeneran con build.bat) ──
+installer/*.exe
+
+# ── Config local de Claude / herramientas (máquina-específico) ──
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/*.lock
+
+# ── Logs / temporales ──
+*.log
+.DS_Store
+Thumbs.db

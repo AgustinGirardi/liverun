@@ -1,0 +1,40 @@
+# ChronoTrack — Portal público (Render Blueprint)
+# Render lee este archivo y crea el servicio web + el disco persistente.
+# Doc: https://render.com/docs/blueprint-spec
+#
+# El servicio sirve TODO desde una sola URL:
+#   - SPA pública (cloud/static/index.html) en /
+#   - API en /api/...
+#
+# La base SQLite vive en el disco persistente montado en /var/data,
+# así NO se borra en cada deploy/reinicio.
+
+services:
+  - type: web
+    name: chronotrack-portal
+    runtime: python
+    plan: starter            # El disco persistente requiere plan pago (~US$7/mes).
+    region: ohio             # Cambiá a la región más cercana si querés (oregon, frankfurt, singapore).
+    branch: main
+    buildCommand: pip install -r cloud/requirements.txt
+    startCommand: uvicorn cloud.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/races
+    autoDeploy: true         # Re-deploya solo en cada push a main.
+    disk:
+      name: chronotrack-data
+      mountPath: /var/data
+      sizeGB: 1              # 1 GB alcanza para cientos de miles de resultados.
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      # La base SQLite se guarda en el disco persistente:
+      - key: CT_CLOUD_DB
+        value: sqlite:////var/data/cloud.db
+      # Clave de publicación: Render genera un valor aleatorio seguro.
+      # La copiás del dashboard y la pegás en la app de escritorio.
+      - key: CT_PUBLISH_KEY
+        generateValue: true
+      # Secreto para firmar los tokens de sesión de los corredores.
+      # Generado por Render; nunca necesita salir del servidor.
+      - key: CT_CLOUD_SECRET
+        generateValue: true
