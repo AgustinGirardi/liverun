@@ -2780,7 +2780,7 @@ export default function App() {
           <CloudControls />
           <EmailControls />
           <BackupControls />
-          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center" }}>v2.3</div>
+          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center" }}>v2.4</div>
         </div>
       </div>
 
