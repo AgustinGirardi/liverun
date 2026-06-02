@@ -19,7 +19,14 @@ services:
     buildCommand: pip install -r cloud/requirements.txt
     startCommand: uvicorn cloud.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/races
-    autoDeploy: true         # Re-deploya solo en cada push a main.
+    autoDeploy: true         # Re-deploya en cada push a main…
+    buildFilters:            # …pero SOLO si cambian archivos del portal (no el desktop).
+      paths:
+        - "cloud/**"
+        - "render.yaml"
+      ignoredPaths:
+        - "backend/**"
+        - "frontend/**"
     disk:
       name: chronotrack-data
       mountPath: /var/data
