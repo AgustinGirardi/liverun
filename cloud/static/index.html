@@ -173,7 +173,7 @@ function logout(){ TOKEN=null; USER=null; localStorage.removeItem("ct_token"); l
 function renderNav(){
   const n = $("nav");
   if(USER){
-    n.innerHTML = `<button onclick="go('me')">🏃 Mi perfil</button>
+    n.innerHTML = `<button onclick="go('home')">🏠 Inicio</button>
       <span class="who hide-sm">${esc((USER.full_name||USER.email).split(" ")[0])}</span>
       <button onclick="logout()">Salir</button>`;
   } else {
@@ -192,11 +192,12 @@ function go(view, arg){
   if(view==="race")     return viewRace(arg);
   if(view==="login")    return viewAuth("login");
   if(view==="register") return viewAuth("register");
-  if(view==="me")       return viewMe();
+  if(view==="me")       return viewHome();   // el perfil ahora vive en el inicio (dashboard)
 }
 
 // ── Home ─────────────────────────────────────────────────────────────────
 function viewHome(){
+  if(USER) return viewDashboard();
   $("app").innerHTML = `
     <section class="hero">
       <div class="badge">Resultados oficiales</div>
@@ -221,6 +222,69 @@ function viewHome(){
     </section>`;
 }
 function homeSearch(){ const q=$("q").value.trim(); if(q.length>=2) go("search", q); }
+
+function raceCard(r){
+  return `<div class="card click" onclick="go('race','${r.code}')">
+    <div class="row" style="justify-content:space-between">
+      <div style="font-weight:700;font-size:15px">${esc(r.name)}</div><span class="bib">${r.code}</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      ${r.race_date?`<span class="dim">📅 ${esc(fmtDate(r.race_date))}</span>`:""}
+      ${r.location?`<span class="dim">📍 ${esc(r.location)}</span>`:""}
+      <span class="pill green">${r.finishers} finishers</span>
+      ${r.distances.map(d=>`<span class="pill">${d} km</span>`).join("")}
+    </div>
+  </div>`;
+}
+
+// ── Dashboard (usuario logueado) ─────────────────────────────────────────────
+async function viewDashboard(){
+  const first = esc((USER.full_name || USER.email).split(" ")[0]);
+  $("app").innerHTML = `
+    <h1>Hola, ${first} 👋</h1>
+    <div class="sub">Tu historial personal y todas las carreras publicadas.</div>
+    <div class="search-hero" style="max-width:560px;margin-bottom:24px">
+      <input id="q" placeholder="Buscá tu nombre para agregar un resultado…" onkeydown="if(event.key==='Enter')homeSearch()">
+      <button class="btn sm" onclick="homeSearch()">Buscar</button>
+    </div>
+    <div id="dashMe"><div class="empty">Cargando tu historial…</div></div>
+    <h2 style="margin-top:32px">Todas las carreras</h2>
+    <div class="sub" style="margin-bottom:14px">Explorá los resultados publicados y entrá a cualquier carrera.</div>
+    <div id="dashRaces"><div class="empty">Cargando…</div></div>`;
+
+  // Mi historial + mejores marcas
+  try {
+    const d = await api("GET","/api/me/results", null, true);
+    state.meResults = d.results;
+    const pb = d.personal_bests.length
+      ? `<div class="card"><h2>Mejores marcas</h2><div class="row">${d.personal_bests.map(p=>`<div class="stat" style="min-width:120px"><div class="v">${fmtNs(p.net_time_ns)}</div><div class="l">${p.distance_km} km</div></div>`).join("")}</div></div>`
+      : "";
+    const hist = d.results.length
+      ? `<h2 style="margin-top:24px">Mis carreras</h2><div class="card" style="padding:6px"><table>
+          <thead><tr><th>Carrera</th><th class="hide-sm">Dist.</th><th>Pos.</th><th style="text-align:right">Tiempo</th><th></th></tr></thead>
+          <tbody>${d.results.map((r,i)=>`<tr>
+            <td><a style="color:var(--acc)" onclick="event.stopPropagation();go('race','${r.race_code}')">${esc(r.race_name)}</a><div class="dim">${esc(fmtDate(r.race_date))}${r.distance_km?` · ${r.distance_km} km`:""}</div></td>
+            <td class="hide-sm">${r.distance_km?r.distance_km+" km":"—"}</td>
+            <td>${r.status==="FINISHER"?(r.position||"—"):`<span class="pill warn">${r.status}</span>`}</td>
+            <td class="time">${fmtNs(r.net_time_ns)}</td>
+            <td style="text-align:right">${r.status==="FINISHER"?`<a class="lnk" onclick="certMe(${i})">🏅 PDF</a>`:""}</td></tr>`).join("")}
+          </tbody></table></div>`
+      : `<div class="empty" style="padding:34px"><div class="ic">🏃</div>Todavía no guardaste resultados.<br><span class="dim">Buscá tu nombre arriba para agregar tus carreras.</span></div>`;
+    $("dashMe").innerHTML = `<div class="stats">
+        <div class="stat"><div class="v">${d.total_races}</div><div class="l">Carreras</div></div>
+        <div class="stat"><div class="v">${d.personal_bests.length}</div><div class="l">Distancias</div></div>
+        <div class="stat"><div class="v">${d.results.length}</div><div class="l">Resultados</div></div>
+      </div>${pb}${hist}`;
+  } catch(e){ $("dashMe").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+
+  // Todas las carreras publicadas
+  try {
+    const races = await api("GET","/api/races");
+    $("dashRaces").innerHTML = races.length
+      ? races.map(raceCard).join("")
+      : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
+  } catch(e){ $("dashRaces").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
 
 // ── Búsqueda ───────────────────────────────────────────────────────────────
 async function viewSearch(q){
@@ -408,7 +472,7 @@ async function doAuth(mode){
   try {
     const body = reg ? { email, password:pw, full_name:$("fn").value.trim()||null } : { email, password:pw };
     const d = await api("POST", reg?"/api/auth/register":"/api/auth/login", body);
-    setSession(d); go("me");
+    setSession(d); go("home");
   } catch(e){ showAuthErr(e.message); b.disabled=false; }
 }
 
