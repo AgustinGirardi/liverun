@@ -40,6 +40,7 @@ class Runner(Base):
     id         = Column(Integer, primary_key=True, autoincrement=True)
     first_name = Column(String(100), nullable=False)
     last_name  = Column(String(100), nullable=False)
+    email      = Column(String(200), nullable=True)
     dni        = Column(String(20),  nullable=True)
     birth_date = Column(Date,        nullable=True)
     gender     = Column(Enum(Gender), nullable=True)

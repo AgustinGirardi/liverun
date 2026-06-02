@@ -49,6 +49,7 @@ async def init_db():
             "ALTER TABLE registrations ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'OK'",
             "ALTER TABLE runners ADD COLUMN dni VARCHAR(20)",
             "ALTER TABLE registrations ADD COLUMN distance_km FLOAT",
+            "ALTER TABLE runners ADD COLUMN email VARCHAR(200)",
         ]
         for sql in migrations:
             try:

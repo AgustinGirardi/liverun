@@ -612,7 +612,7 @@ function InscriptosView({ race }) {
   const [saving, setSaving]               = useState(false)
 
   // Formulario nuevo corredor
-  const [newForm, setNewForm] = useState({ first_name: "", last_name: "", dni: "", birth_date: "", category: "", club: "", bib_number: "", gender: "M", distance_km: "" })
+  const [newForm, setNewForm] = useState({ first_name: "", last_name: "", email: "", dni: "", birth_date: "", category: "", club: "", bib_number: "", gender: "M", distance_km: "" })
 
   // Import
   const [importFile, setImportFile]     = useState(null)
@@ -640,7 +640,7 @@ function InscriptosView({ race }) {
   const resetAdd = () => {
     setAddMode("search"); setRunnerQuery(""); setRunnerResults([])
     setSelectedRunner(null); setBibForExisting(""); setDistForExisting("")
-    setNewForm({ first_name: "", last_name: "", dni: "", birth_date: "", category: "", club: "", bib_number: "", gender: "M", distance_km: "" })
+    setNewForm({ first_name: "", last_name: "", email: "", dni: "", birth_date: "", category: "", club: "", bib_number: "", gender: "M", distance_km: "" })
     setAddError(""); setSaving(false)
   }
 
@@ -669,6 +669,7 @@ function InscriptosView({ race }) {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           first_name: newForm.first_name, last_name: newForm.last_name,
+          email: newForm.email || null,
           dni: newForm.dni || null, birth_date: newForm.birth_date || null,
           category: cat || null, club: newForm.club || null, gender: newForm.gender,
         }),
@@ -795,7 +796,7 @@ function InscriptosView({ race }) {
           <div style={{ fontSize: 13, fontWeight: 600, color: "#4d9fff", marginBottom: 8 }}>Importar desde Excel / CSV</div>
           <div style={{ fontSize: 12, color: "#525a60", marginBottom: 12 }}>
             Columnas requeridas: <code style={{ background: "#1c1f21", padding: "2px 6px", borderRadius: 3, color: "#e8eaeb" }}>dorsal, nombre, apellido</code>
-            {" "}· Opcionales: <code style={{ background: "#1c1f21", padding: "2px 6px", borderRadius: 3, color: "#e8eaeb" }}>distancia, categoria, club, genero, dni</code>
+            {" "}· Opcionales: <code style={{ background: "#1c1f21", padding: "2px 6px", borderRadius: 3, color: "#e8eaeb" }}>distancia, categoria, club, genero, dni, email</code>
             {" "}· Los atletas ya existentes se reutilizan automáticamente.
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -960,6 +961,10 @@ function InscriptosView({ race }) {
                 <div>
                   <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Club</div>
                   <input value={newForm.club} onChange={e => setNewForm(p => ({ ...p, club: e.target.value }))} placeholder="RC Runners" style={INPUT} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Email</div>
+                  <input value={newForm.email} onChange={e => setNewForm(p => ({ ...p, email: e.target.value }))} placeholder="corredor@email.com" style={INPUT} type="email" />
                 </div>
                 {newForm.birth_date && calcAge(newForm.birth_date) !== null && (
                   <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
@@ -1662,6 +1667,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
   const [race, setRace]     = useState(initialRace)
   const [subPage, setSubPage] = useState("inscriptos")
   const [publishing, setPublishing] = useState(false)
+  const [sending, setSending] = useState(false)
 
   const refreshRace = useCallback(() => {
     fetch(API + "/races/" + initialRace.id)
@@ -1725,6 +1731,32 @@ function RaceDetailPage({ race: initialRace, onBack }) {
     }
   }
 
+  const sendResults = async () => {
+    const cfg = await fetch(API + "/email/config").then(r => r.json()).catch(() => null)
+    if (!cfg || !cfg.configured) {
+      alert("Primero configurá el envío de emails en Configuración → Email (API key + remitente).")
+      return
+    }
+    if (!confirm(`¿Enviar por email el resultado a los finishers de "${race.name}"?\n\nSe enviará a cada corredor que tenga email cargado: su tiempo, posición y un link al portal.\n\nRemitente: ${cfg.from_name} <${cfg.from_email}>`)) return
+    setSending(true)
+    try {
+      const r = await fetch(API + "/races/" + race.id + "/send-results", { method: "POST" })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        alert("No se pudo enviar: " + (data.detail || "error desconocido"))
+        return
+      }
+      let msg = `✅ Emails enviados: ${data.sent}\n`
+      if (data.no_email) msg += `Sin email (omitidos): ${data.no_email}\n`
+      if (data.failed) msg += `\nFallidos: ${data.failed}\n` + (data.failed_detail || []).join("\n")
+      alert(msg)
+    } catch (e) {
+      alert("No se pudo enviar: " + e.message)
+    } finally {
+      setSending(false)
+    }
+  }
+
   const SUB = [
     { id: "inscriptos", label: "Inscriptos" },
     { id: "cronometro", label: "Cronómetro" },
@@ -1753,6 +1785,11 @@ function RaceDetailPage({ race: initialRace, onBack }) {
             title="Publicar los resultados en el portal público (sin DNI ni fecha de nacimiento)"
             style={{ padding: "5px 12px", background: "#00e5a015", color: "#00e5a0", border: "1px solid #00e5a030", borderRadius: 6, cursor: publishing ? "default" : "pointer", fontSize: 12, fontWeight: 600, opacity: publishing ? 0.6 : 1 }}>
             {publishing ? "Publicando…" : "☁ Publicar"}
+          </button>
+          <button onClick={sendResults} disabled={sending}
+            title="Enviar a cada finisher su resultado por email"
+            style={{ padding: "5px 12px", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 6, cursor: sending ? "default" : "pointer", fontSize: 12, fontWeight: 600, opacity: sending ? 0.6 : 1 }}>
+            {sending ? "Enviando…" : "📧 Enviar resultados"}
           </button>
           {race.status !== "FINISHED" ? (
             <button onClick={() => changeStatus("FINISHED")}
@@ -2101,7 +2138,7 @@ function AthletesPage() {
   const [search, setSearch]     = useState("")
   const [showForm, setShowForm] = useState(false)
   const [editRunner, setEditRunner] = useState(null)
-  const [form, setForm] = useState({ first_name: "", last_name: "", dni: "", birth_date: "", category: "", club: "", gender: "M" })
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", dni: "", birth_date: "", category: "", club: "", gender: "M" })
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState("")
   const [selected, setSelected] = useState(new Set())
@@ -2120,13 +2157,13 @@ function AthletesPage() {
   }, [search])
 
   const resetForm = () => {
-    setForm({ first_name: "", last_name: "", dni: "", birth_date: "", category: "", club: "", gender: "M" })
+    setForm({ first_name: "", last_name: "", email: "", dni: "", birth_date: "", category: "", club: "", gender: "M" })
     setEditRunner(null); setError("")
   }
 
   const startEdit = (r) => {
     setEditRunner(r)
-    setForm({ first_name: r.first_name, last_name: r.last_name, dni: r.dni || "", birth_date: r.birth_date || "", category: r.category || "", club: r.club || "", gender: r.gender || "M" })
+    setForm({ first_name: r.first_name, last_name: r.last_name, email: r.email || "", dni: r.dni || "", birth_date: r.birth_date || "", category: r.category || "", club: r.club || "", gender: r.gender || "M" })
     setShowForm(true)
   }
 
@@ -2230,7 +2267,11 @@ function AthletesPage() {
               <input value={form.club} onChange={e => setForm(p => ({ ...p, club: e.target.value }))} placeholder="RC Runners" style={INPUT} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Email <span style={{ color: "#363b3f" }}>(para enviar resultados)</span></div>
+              <input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="corredor@email.com" style={INPUT} type="email" />
+            </div>
             <div>
               <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Fecha de nacimiento</div>
               <input value={form.birth_date} onChange={e => {
@@ -2465,6 +2506,86 @@ function RaceResultCard({ race, onOpen }) {
 // APP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
+function EmailControls() {
+  const [open, setOpen]   = useState(false)
+  const [cfg, setCfg]     = useState(null)
+  const [fromEmail, setFromEmail] = useState("")
+  const [fromName, setFromName]   = useState("ChronoTrack")
+  const [key, setKey]     = useState("")
+  const [busy, setBusy]   = useState(false)
+  const [testTo, setTestTo] = useState("")
+
+  const loadCfg = useCallback(() => {
+    fetch(API + "/email/config").then(r => r.json()).then(d => {
+      setCfg(d); setFromEmail(d.from_email || ""); setFromName(d.from_name || "ChronoTrack")
+    }).catch(() => {})
+  }, [])
+  useEffect(() => { loadCfg() }, [loadCfg])
+
+  const openModal = () => { loadCfg(); setKey(""); setTestTo(""); setOpen(true) }
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      const body = { provider: "brevo", from_email: fromEmail, from_name: fromName }
+      if (key.trim()) body.api_key = key.trim()
+      const r = await fetch(API + "/email/config", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || "No se pudo guardar")
+      setCfg(d); setKey("")
+    } catch (e) { alert("Error: " + e.message) } finally { setBusy(false) }
+  }
+
+  const sendTest = async () => {
+    if (!testTo.trim()) { alert("Ingresá un email para la prueba."); return }
+    setBusy(true)
+    try {
+      const r = await fetch(API + "/email/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: testTo.trim() }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.detail || "Error")
+      alert("✅ Email de prueba enviado a " + testTo.trim())
+    } catch (e) { alert("No se pudo enviar la prueba: " + e.message) } finally { setBusy(false) }
+  }
+
+  const btn = { width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: "1px solid #2a2e31", background: "#1c1f21", color: "#8a9299", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
+  const inp = { width: "100%", padding: "8px 10px", marginTop: 4, marginBottom: 12, fontSize: 13, borderRadius: 6, border: "1px solid #2a2e31", background: "#0d0f10", color: "#e8eaeb", boxSizing: "border-box" }
+  const lbl = { fontSize: 11, color: "#8a9299", fontWeight: 600 }
+
+  return (
+    <>
+      <button onClick={openModal} style={btn} title="Configurar el envío de emails de resultados">
+        📧 Emails {cfg?.configured ? "✓" : ""}
+      </button>
+      {open && (
+        <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: "#141618", border: "1px solid #2a2e31", borderRadius: 10, padding: 24, color: "#e8eaeb" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Envío de emails (Brevo)</div>
+            <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 16, lineHeight: 1.5 }}>
+              Creá una cuenta gratis en <span style={{ color: "#4d9fff" }}>brevo.com</span>, verificá tu email remitente y pegá tu API key (Settings → SMTP &amp; API → API Keys). 300 emails/día gratis.
+            </div>
+            <div style={lbl}>Nombre del remitente</div>
+            <input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Mi Club / Organización" style={inp} />
+            <div style={lbl}>Email remitente (verificado en Brevo)</div>
+            <input value={fromEmail} onChange={e => setFromEmail(e.target.value)} placeholder="resultados@miclub.com" style={inp} type="email" />
+            <div style={lbl}>API key de Brevo</div>
+            <input value={key} onChange={e => setKey(e.target.value)} type="password" placeholder={cfg?.configured ? `Guardada (${cfg.api_key_masked}) — dejá vacío para mantener` : "xkeysib-..."} style={inp} />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setOpen(false)} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0 }}>Cerrar</button>
+              <button onClick={save} disabled={busy} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0, background: "#00e5a020", color: "#00e5a0", border: "1px solid #00e5a040" }}>{busy ? "Guardando…" : "Guardar"}</button>
+            </div>
+            <div style={{ borderTop: "1px solid #2a2e31", margin: "16px 0 12px" }} />
+            <div style={lbl}>Probar envío</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+              <input value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="tu@email.com" style={{ ...inp, marginBottom: 0, flex: 1 }} type="email" />
+              <button onClick={sendTest} disabled={busy} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0 }}>Enviar prueba</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function CloudControls() {
   const [open, setOpen] = useState(false)
   const [cfg, setCfg]   = useState(null)
@@ -2657,8 +2778,9 @@ export default function App() {
 
         <div style={{ padding: "12px 12px", borderTop: "1px solid #2a2e31" }}>
           <CloudControls />
+          <EmailControls />
           <BackupControls />
-          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center" }}>v2.2</div>
+          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center" }}>v2.3</div>
         </div>
       </div>
 

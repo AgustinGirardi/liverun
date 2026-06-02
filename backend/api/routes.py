@@ -15,6 +15,7 @@ from starlette.background import BackgroundTask
 
 from backend.core.database import get_db, AsyncSessionLocal, engine as db_engine, DB_PATH
 from backend.core import cloud_config
+from backend.services import email_service
 from backend.core.schemas import (
     RunnerCreate, RunnerUpdate, RunnerOut,
     RaceCreate, RaceUpdate, RaceOut,
@@ -40,6 +41,7 @@ def _runner_out(r: Runner) -> RunnerOut:
     return RunnerOut(
         id=r.id, first_name=r.first_name, last_name=r.last_name,
         full_name=f"{r.first_name} {r.last_name}",
+        email=r.email,
         dni=r.dni,
         birth_date=r.birth_date,
         gender=r.gender.value if r.gender else None,
@@ -347,6 +349,7 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
 
         category      = col(row, "categoria", "category", "cat")
         club          = col(row, "club", "equipo", "team")
+        email         = col(row, "email", "correo", "mail", "e-mail")
         dni           = col(row, "dni", "documento", "cedula")
         gender_raw    = col(row, "genero", "gender", "sexo")
         distance_raw  = col(row, "distancia", "distance", "distance_km", "km", "dist")
@@ -380,8 +383,9 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
             if category    and not runner.category: runner.category = category
             if club        and not runner.club:     runner.club     = club
             if dni         and not runner.dni:      runner.dni      = dni
+            if email       and not runner.email:    runner.email    = email
         else:
-            runner = Runner(first_name=first, last_name=last, category=category, club=club, gender=gender_enum, dni=dni)
+            runner = Runner(first_name=first, last_name=last, category=category, club=club, gender=gender_enum, dni=dni, email=email)
             db.add(runner)
             await db.flush()
 
@@ -786,6 +790,111 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
         "code": cloud_resp.get("code"),
         "published_results": cloud_resp.get("published_results", len(results)),
         "portal_url": cfg["url"].rstrip("/"),
+    }
+
+
+# ── Email (envío de resultados) ───────────────────────────────────────────────
+
+class EmailConfigIn(_BaseModel):
+    provider: Optional[str] = None
+    api_key: Optional[str] = None
+    from_email: Optional[str] = None
+    from_name: Optional[str] = None
+
+
+class EmailTestIn(_BaseModel):
+    to: str
+
+
+@router.get("/email/config", tags=["Email"])
+async def get_email_config():
+    cfg = email_service.load_config()
+    return {
+        "provider": cfg["provider"],
+        "from_email": cfg["from_email"],
+        "from_name": cfg["from_name"],
+        "api_key_masked": email_service.mask_key(cfg["api_key"]),
+        "configured": email_service.is_configured(cfg),
+    }
+
+
+@router.put("/email/config", tags=["Email"])
+async def set_email_config(body: EmailConfigIn):
+    cfg = email_service.save_config(
+        provider=body.provider, api_key=body.api_key,
+        from_email=body.from_email, from_name=body.from_name,
+    )
+    return {
+        "provider": cfg["provider"],
+        "from_email": cfg["from_email"],
+        "from_name": cfg["from_name"],
+        "api_key_masked": email_service.mask_key(cfg["api_key"]),
+        "configured": email_service.is_configured(cfg),
+    }
+
+
+@router.post("/email/test", tags=["Email"])
+async def send_test_email(body: EmailTestIn):
+    cfg = email_service.load_config()
+    if not email_service.is_configured(cfg):
+        raise HTTPException(400, "Configurá primero el proveedor de email (API key y remitente).")
+    html = (
+        '<div style="font-family:Arial,sans-serif;color:#13202b">'
+        '<h2>✅ ChronoTrack — email de prueba</h2>'
+        '<p>Si recibís este mensaje, el envío de emails está configurado correctamente.</p></div>'
+    )
+    ok, err = await anyio.to_thread.run_sync(
+        lambda: email_service.send_email(body.to, "Prueba", "ChronoTrack — prueba de envío", html, cfg)
+    )
+    if not ok:
+        raise HTTPException(502, f"No se pudo enviar: {err}")
+    return {"sent": True}
+
+
+@router.post("/races/{race_id}/send-results", tags=["Email"])
+async def send_results_email(race_id: int, db: AsyncSession = Depends(get_db)):
+    """Envía a cada finisher con email cargado su resultado (tiempo, puesto y link al portal)."""
+    cfg = email_service.load_config()
+    if not email_service.is_configured(cfg):
+        raise HTTPException(400, "Configurá primero el proveedor de email (Configuración → Email).")
+
+    data = await get_results(race_id, db)
+    race = data.race
+    portal_url = cloud_config.load_config().get("url") or None
+    race_date = race.race_date.isoformat() if race.race_date else None
+
+    sent = 0
+    no_email = 0
+    failed: list[str] = []
+
+    for row in data.results:  # finishers
+        to = (row.runner.email or "").strip()
+        name = row.runner.full_name
+        if not to:
+            no_email += 1
+            continue
+        html = email_service.build_result_email(
+            runner_name=name, race_name=race.name, race_date=race_date,
+            location=race.location, distance_km=row.distance_km,
+            net_time_ns=row.net_time_ns, finish_time_ns=row.finish_time_ns,
+            position=row.position, category=row.category,
+            portal_url=portal_url, race_code=None,
+        )
+        subject = f"Tu resultado en {race.name}"
+        ok, err = await anyio.to_thread.run_sync(
+            lambda t=to, n=name, h=html, s=subject: email_service.send_email(t, n, s, h, cfg)
+        )
+        if ok:
+            sent += 1
+        else:
+            failed.append(f"{name} <{to}>: {err}")
+
+    return {
+        "sent": sent,
+        "no_email": no_email,
+        "failed": len(failed),
+        "failed_detail": failed[:20],
+        "total_finishers": len(data.results),
     }
 
 

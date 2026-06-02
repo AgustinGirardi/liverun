@@ -28,6 +28,7 @@ class RegistrationStatusSchema(str, Enum):
 class RunnerCreate(BaseModel):
     first_name: str  = Field(..., min_length=1, max_length=100)
     last_name:  str  = Field(..., min_length=1, max_length=100)
+    email:      Optional[str]  = None
     dni:        Optional[str]  = None
     birth_date: Optional[date] = None
     gender:     Optional[str]  = None
@@ -37,6 +38,7 @@ class RunnerCreate(BaseModel):
 class RunnerUpdate(BaseModel):
     first_name: Optional[str]  = None
     last_name:  Optional[str]  = None
+    email:      Optional[str]  = None
     dni:        Optional[str]  = None
     birth_date: Optional[date] = None
     gender:     Optional[str]  = None
@@ -48,6 +50,7 @@ class RunnerOut(BaseModel):
     first_name: str
     last_name:  str
     full_name:  str
+    email:      Optional[str]  = None
     dni:        Optional[str]  = None
     birth_date: Optional[date] = None
     gender:     Optional[str]  = None
