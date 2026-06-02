@@ -17,7 +17,7 @@ import re
 from pydantic import BaseModel, Field, field_validator
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.orm import Session
 
 from cloud.db import get_db, init_db
@@ -85,6 +85,10 @@ class ClaimIn(BaseModel):
     code: str
     bib_number: str
     last_name: str
+
+
+class ClaimResultIn(BaseModel):
+    result_id: int
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -253,6 +257,86 @@ def my_results(user: PortalUser = Depends(current_user), db: Session = Depends(g
         "personal_bests": [{"distance_km": k, "net_time_ns": v} for k, v in sorted(best_by_dist.items())],
         "results": items,
     }
+
+
+# ── Búsqueda (corredor por nombre, o carrera por nombre/código) ───────────────
+
+@app.get("/api/search", tags=["Público"])
+def search(q: str, db: Session = Depends(get_db)):
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {"races": [], "results": []}
+    ql = q.lower()
+    like = f"%{ql}%"
+
+    # Carreras por nombre o código exacto
+    races = db.scalars(
+        select(PublishedRace)
+        .where(func.lower(PublishedRace.name).like(like) | (func.lower(PublishedRace.code) == ql))
+        .order_by(PublishedRace.published_at.desc())
+        .limit(20)
+    ).all()
+    race_out = [{
+        "code": r.code, "name": r.name, "location": r.location,
+        "race_date": r.race_date.isoformat() if r.race_date else None,
+        "distances": [float(x) for x in r.distances.split(",")] if r.distances else [],
+    } for r in races]
+
+    # Resultados por nombre del corredor
+    rows = db.execute(
+        select(PublishedResult, PublishedRace)
+        .join(PublishedRace, PublishedResult.race_id == PublishedRace.id)
+        .where(func.lower(PublishedResult.full_name).like(like))
+        .order_by(PublishedResult.full_name)
+        .limit(60)
+    ).all()
+    results = []
+    for res, race in rows:
+        results.append({
+            "result_id": res.id,
+            "race_code": race.code, "race_name": race.name,
+            "race_date": race.race_date.isoformat() if race.race_date else None,
+            "location": race.location,
+            **_result_dict(res),
+        })
+    return {"races": race_out, "results": results}
+
+
+@app.post("/api/me/claim", tags=["Corredor"])
+def claim_result(body: ClaimResultIn, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Guarda un resultado puntual en el perfil del corredor (por id de resultado)."""
+    res = db.get(PublishedResult, body.result_id)
+    if not res:
+        raise HTTPException(404, "Resultado no encontrado")
+    existing = db.scalar(select(Claim).where(Claim.user_id == user.id, Claim.result_id == res.id))
+    linked = 0
+    if not existing:
+        db.add(Claim(user_id=user.id, result_id=res.id))
+        db.commit()
+        linked = 1
+    return {"linked": linked, "race": res.race.name, "result": _result_dict(res)}
+
+
+# ── Despublicar (organizador) ─────────────────────────────────────────────────
+
+@app.delete("/api/publish/{source_id}", tags=["Organizador"])
+def unpublish(source_id: str, x_api_key: str = Header(None), db: Session = Depends(get_db)):
+    """Elimina una carrera publicada (y sus resultados/claims). Idempotente:
+    si no existe, no es error. Lo usa la app de escritorio al borrar una carrera."""
+    if x_api_key != PUBLISH_API_KEY:
+        raise HTTPException(403, "API key inválida")
+    race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == source_id))
+    if not race:
+        return {"deleted": False, "reason": "no existía"}
+    code = race.code
+    result_ids = [r.id for r in race.results]
+    if result_ids:
+        db.execute(sa_delete(Claim).where(Claim.result_id.in_(result_ids)))
+    for res in list(race.results):
+        db.delete(res)
+    db.delete(race)
+    db.commit()
+    return {"deleted": True, "code": code}
 
 
 # ── Portal estático (se monta al final para no tapar /api) ────────────────────

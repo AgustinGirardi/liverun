@@ -171,6 +171,25 @@ async def duplicate_race(race_id: int, db: AsyncSession = Depends(get_db)):
     return new_race
 
 
+async def _cloud_unpublish(race_id: int) -> None:
+    """Best-effort: despublica la carrera del portal si hay nube configurada.
+    Cualquier error (offline, nunca publicada) se ignora: el borrado local manda."""
+    cfg = cloud_config.load_config()
+    if not cfg.get("api_key"):
+        return
+    url = cfg["url"].rstrip("/") + f"/api/publish/ct-race-{race_id}"
+
+    def _del():
+        req = urllib.request.Request(url, method="DELETE", headers={"X-API-Key": cfg["api_key"]})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return resp.status
+
+    try:
+        await anyio.to_thread.run_sync(_del)
+    except Exception:
+        pass
+
+
 @router.delete("/races/{race_id}", status_code=204, tags=["Races"])
 async def delete_race(race_id: int, db: AsyncSession = Depends(get_db)):
     race = await db.get(Race, race_id)
@@ -183,6 +202,8 @@ async def delete_race(race_id: int, db: AsyncSession = Depends(get_db)):
     await db.execute(sa_delete(TimestampCapture).where(TimestampCapture.race_id == race_id))
     await db.delete(race)
     await db.commit()
+    # Si estaba publicada en el portal, despublicarla también.
+    await _cloud_unpublish(race_id)
 
 
 # ── Registrations ─────────────────────────────────────────────────────────────
@@ -696,11 +717,14 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     data = await get_results(race_id, db)
     race = data.race
 
+    def _clean_name(n: str) -> str:
+        return " ".join((n or "").split())  # colapsa espacios dobles / extremos
+
     results = []
     for row in data.results:
         results.append({
             "bib_number": row.bib_number,
-            "full_name": row.runner.full_name,
+            "full_name": _clean_name(row.runner.full_name),
             "category": row.category,
             "club": row.club,
             "distance_km": row.distance_km,
@@ -712,7 +736,7 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     for row in data.dnf_list:
         results.append({
             "bib_number": row.bib_number,
-            "full_name": row.runner.full_name,
+            "full_name": _clean_name(row.runner.full_name),
             "category": row.category,
             "club": row.club,
             "distance_km": row.distance_km,
