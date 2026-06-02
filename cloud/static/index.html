@@ -88,6 +88,10 @@
   .btn.sm { width:auto; padding:8px 14px; font-size:13px; }
   .btn:disabled { opacity:.55; cursor:wait; }
   .btn.done { background:rgba(0,229,160,.15); color:var(--acc); border:1px solid rgba(0,229,160,.3); }
+  .pw-wrap { position:relative; }
+  .pw-wrap input { padding-right:44px; }
+  .pw-eye { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--mut); font-size:16px; line-height:1; padding:6px 8px; border-radius:6px; cursor:pointer; }
+  .pw-eye:hover { color:var(--acc); }
 
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th { text-align:left; padding:9px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--dim); border-bottom:1px solid var(--border); }
@@ -451,7 +455,12 @@ function viewAuth(mode){
         <div id="amsg"></div>
         ${reg?`<div class="field"><label>Nombre completo</label><input type="text" id="fn" placeholder="Juan Pérez"></div>`:""}
         <div class="field"><label>Email</label><input type="email" id="em" placeholder="vos@email.com" onkeydown="if(event.key==='Enter')${reg?"$('pw').focus()":"doAuth('login')"}"></div>
-        <div class="field"><label>Contraseña</label><input type="password" id="pw" placeholder="${reg?'mínimo 6 caracteres':'••••••'}" onkeydown="if(event.key==='Enter')doAuth('${mode}')"></div>
+        <div class="field"><label>Contraseña</label>
+          <div class="pw-wrap">
+            <input type="password" id="pw" placeholder="${reg?'mínimo 6 caracteres':'••••••'}" onkeydown="if(event.key==='Enter')doAuth('${mode}')">
+            <button type="button" class="pw-eye" id="pwEye" onclick="togglePw()" title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">👁</button>
+          </div>
+        </div>
         <button class="btn" id="abtn" onclick="doAuth('${mode}')">${reg?"Crear cuenta":"Ingresar"}</button>
         <div style="text-align:center;margin-top:15px" class="muted">
           ${reg?`¿Ya tenés cuenta? <a style="color:var(--acc)" onclick="go('login')">Ingresá</a>`
@@ -461,6 +470,7 @@ function viewAuth(mode){
     </div>`;
 }
 function showAuthErr(msg){ $("amsg").innerHTML = `<div class="err">${esc(msg)}</div>`; }
+function togglePw(){ const i=$("pw"), e=$("pwEye"); if(!i) return; const show = i.type==="password"; i.type = show ? "text" : "password"; e.textContent = show ? "🙈" : "👁"; i.focus(); }
 async function doAuth(mode){
   const reg = mode==="register";
   const email = $("em").value.trim(), pw = $("pw").value;
