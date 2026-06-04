@@ -2722,6 +2722,7 @@ function BackupControls() {
 export default function App() {
   const [page, setPage]   = useState("home")
   const [clock, setClock] = useState("")
+  const [showConfig, setShowConfig] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -2777,10 +2778,28 @@ export default function App() {
         </nav>
 
         <div style={{ padding: "12px 12px", borderTop: "1px solid #2a2e31" }}>
-          <CloudControls />
-          <EmailControls />
-          <BackupControls />
-          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center" }}>v2.4</div>
+          <button
+            onClick={() => setShowConfig(v => !v)}
+            style={{
+              width: "100%", padding: "8px 10px", marginBottom: showConfig ? 8 : 0,
+              fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
+              border: `1px solid ${showConfig ? "#00e5a040" : "#2a2e31"}`,
+              background: showConfig ? "#00e5a020" : "#1c1f21",
+              color: showConfig ? "#00e5a0" : "#8a9299",
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+            title="Nube, email y respaldos">
+            <span>⚙️</span><span>Configuración</span>
+            <span style={{ marginLeft: "auto", fontSize: 10 }}>{showConfig ? "▾" : "▸"}</span>
+          </button>
+          {showConfig && (
+            <div>
+              <CloudControls />
+              <EmailControls />
+              <BackupControls />
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center", marginTop: 8 }}>v2.4</div>
         </div>
       </div>
 

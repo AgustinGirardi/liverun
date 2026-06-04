@@ -5,12 +5,15 @@ Roles:
   - Corredor:   crea cuenta, reclama sus resultados (dorsal + apellido) y ve su historial.
 """
 import os
+import time
 import hashlib
+import unicodedata
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import re
@@ -26,6 +29,38 @@ from cloud.security import hash_password, verify_password, make_token, verify_to
 
 PUBLISH_API_KEY = os.environ.get("CT_PUBLISH_KEY", "dev-publish-key-change-me")
 
+
+# ── Rate limiting simple en memoria (proceso único en Render starter) ─────────
+_RATE: dict[str, list[float]] = defaultdict(list)
+
+def _client_ip(request: Request) -> str:
+    # Detrás del proxy de Render el IP real viaja en X-Forwarded-For.
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def rate_limit(request: Request, bucket: str, limit: int = 10, window: float = 60.0):
+    """Lanza 429 si se superan `limit` intentos por IP en `window` segundos."""
+    key = f"{bucket}:{_client_ip(request)}"
+    now = time.time()
+    hits = [t for t in _RATE[key] if now - t < window]
+    if len(hits) >= limit:
+        raise HTTPException(429, "Demasiados intentos. Esperá un minuto e intentá de nuevo.")
+    hits.append(now)
+    _RATE[key] = hits
+
+
+# ── Coincidencia de nombre (para verificar identidad al guardar resultados) ───
+def _name_tokens(s: str) -> set[str]:
+    s = unicodedata.normalize("NFKD", (s or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return {t for t in re.findall(r"[a-z]+", s) if len(t) >= 3}
+
+def _name_matches(a: str, b: str) -> bool:
+    return bool(_name_tokens(a) & _name_tokens(b))
+
+
 app = FastAPI(title="ChronoTrack Cloud", version="1.0")
 app.add_middleware(
     CORSMiddleware,
@@ -37,6 +72,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup():
+    # En producción (Render setea la env var RENDER) NO arrancar con secretos por
+    # defecto: tokens y publicación quedarían falsificables. Fallar temprano y claro.
+    if os.environ.get("RENDER"):
+        from cloud.security import SECRET
+        if SECRET == "dev-insecure-secret-change-me" or PUBLISH_API_KEY == "dev-publish-key-change-me":
+            raise RuntimeError(
+                "Faltan secretos en producción: definí CT_CLOUD_SECRET y CT_PUBLISH_KEY "
+                "(Render los genera automáticamente vía render.yaml)."
+            )
     init_db()
 
 
@@ -65,7 +109,7 @@ class PublishPayload(BaseModel):
 
 class RegisterIn(BaseModel):
     email: str
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
     full_name: Optional[str] = None
 
     @field_validator("email")
@@ -89,6 +133,7 @@ class ClaimIn(BaseModel):
 
 class ClaimResultIn(BaseModel):
     result_id: int
+    last_name: Optional[str] = None
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -180,7 +225,13 @@ def race_detail(code: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Carrera no encontrada")
     results = db.scalars(
         select(PublishedResult).where(PublishedResult.race_id == race.id)
-        .order_by(PublishedResult.distance_km, PublishedResult.position)
+        # Dentro de cada distancia: primero los FINISHER por posición, luego DNF/DNS/DQ.
+        # (Si no, los position=NULL de SQLite quedarían antes del 1° puesto.)
+        .order_by(
+            PublishedResult.distance_km,
+            (PublishedResult.status != "FINISHER"),
+            PublishedResult.position,
+        )
     ).all()
     return {
         "code": race.code, "name": race.name, "location": race.location,
@@ -193,7 +244,11 @@ def race_detail(code: str, db: Session = Depends(get_db)):
 # ── Cuentas de corredor ──────────────────────────────────────────────────────
 
 @app.post("/api/auth/register", tags=["Corredor"])
-def register(body: RegisterIn, db: Session = Depends(get_db)):
+def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
+    # Registro permisivo: en un evento muchos corredores se anotan desde la misma
+    # WiFi (mismo IP). El abuso de registro es de bajo valor (sólo da acceso a datos
+    # ya públicos), así que el límite apunta a frenar floods automáticos, no a personas.
+    rate_limit(request, "register", limit=40, window=60.0)
     email = body.email.lower()
     if db.scalar(select(PortalUser).where(PortalUser.email == email)):
         raise HTTPException(409, "Ya existe una cuenta con ese email")
@@ -204,7 +259,9 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
 
 
 @app.post("/api/auth/login", tags=["Corredor"])
-def login(body: LoginIn, db: Session = Depends(get_db)):
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    # Login más estricto: es el vector de fuerza-bruta de contraseñas.
+    rate_limit(request, "login", limit=15, window=60.0)
     user = db.scalar(select(PortalUser).where(PortalUser.email == body.email.lower()))
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Email o contraseña incorrectos")
@@ -303,11 +360,27 @@ def search(q: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/me/claim", tags=["Corredor"])
-def claim_result(body: ClaimResultIn, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
-    """Guarda un resultado puntual en el perfil del corredor (por id de resultado)."""
+def claim_result(body: ClaimResultIn, request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Guarda un resultado puntual en el perfil del corredor (por id de resultado).
+
+    Verifica identidad: el resultado debe coincidir con el nombre del usuario
+    (o con el apellido provisto). Evita que alguien adjunte a su perfil el
+    resultado de otra persona sólo conociendo su result_id (que es público)."""
+    rate_limit(request, "claim", limit=30, window=60.0)
     res = db.get(PublishedResult, body.result_id)
     if not res:
         raise HTTPException(404, "Resultado no encontrado")
+    prov_last = (body.last_name or "").strip().lower()
+    identity_ok = (
+        (prov_last and prov_last in res.full_name.lower())
+        or (user.full_name and _name_matches(user.full_name, res.full_name))
+    )
+    if not identity_ok:
+        raise HTTPException(
+            403,
+            "Ese resultado no coincide con tu nombre. Si es tuyo, completá tu nombre "
+            "en el perfil o reclamalo con código + dorsal + apellido.",
+        )
     existing = db.scalar(select(Claim).where(Claim.user_id == user.id, Claim.result_id == res.id))
     linked = 0
     if not existing:

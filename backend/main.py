@@ -16,13 +16,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="ChronoTrack API", version="2.0.0", lifespan=lifespan)
 
+# CORS restringido al propio origen de la app (el SPA se sirve desde este mismo
+# host:puerto) y al dev-server de Vite. NO usar "*": el backend local no tiene
+# autenticación y devuelve datos personales (DNI/email); con CORS abierto,
+# cualquier web que el usuario tenga abierta podría leer toda la base.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        "http://127.0.0.1:8001", "http://localhost:8001",
+        "http://127.0.0.1:5173", "http://localhost:5173",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# /health se define ANTES de montar el SPA: si no, el catch-all "/{full_path}"
+# lo tapa y devuelve el index.html en lugar del JSON de estado.
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "ChronoTrack", "version": "2.0.0"}
 
 app.include_router(router, prefix="/api/v1")
 
@@ -60,7 +73,3 @@ if STATIC.exists():
         if file.exists() and file.is_file():
             return FileResponse(file)
         return FileResponse(STATIC / "index.html")
-
-@app.get("/health")
-async def health():
-    return {"status": "ok", "service": "ChronoTrack", "version": "2.0.0"}

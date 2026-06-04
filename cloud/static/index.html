@@ -92,6 +92,10 @@
   .pw-wrap input { padding-right:44px; }
   .pw-eye { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--mut); font-size:16px; line-height:1; padding:6px 8px; border-radius:6px; cursor:pointer; }
   .pw-eye:hover { color:var(--acc); }
+  .pw-meter { display:flex; align-items:center; gap:9px; margin-top:8px; }
+  .pw-bar { flex:1; height:5px; background:var(--border); border-radius:99px; overflow:hidden; }
+  .pw-bar i { display:block; height:100%; width:0; border-radius:99px; transition:width .2s ease, background .2s ease; }
+  .pw-lbl { font-size:11px; color:var(--mut); min-width:58px; text-align:right; font-weight:600; }
 
   table { width:100%; border-collapse:collapse; font-size:13px; }
   th { text-align:left; padding:9px 10px; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--dim); border-bottom:1px solid var(--border); }
@@ -342,7 +346,11 @@ function certSearch(i){ const r=state.searchResults[i]; printCertificate(r, r.ra
 async function saveResult(resultId, btn){
   if(!USER){ go("register"); return; }
   const orig = btn.textContent; btn.disabled=true; btn.textContent="Guardando…";
-  try { await api("POST","/api/me/claim",{result_id:resultId}, true); btn.textContent="✓ Guardado"; btn.classList.add("done"); }
+  // Apellido del propio usuario como prueba de identidad (el server verifica
+  // que el resultado coincida con tu nombre antes de guardarlo).
+  const parts = (USER.full_name||"").trim().split(/\s+/);
+  const lastName = parts.length>1 ? parts[parts.length-1] : "";
+  try { await api("POST","/api/me/claim",{result_id:resultId, last_name:lastName}, true); btn.textContent="✓ Guardado"; btn.classList.add("done"); }
   catch(e){ btn.disabled=false; btn.textContent=orig; alert(e.message); }
 }
 
@@ -388,7 +396,18 @@ async function viewRace(code){
       <div class="stat"><div class="v" style="color:var(--warn)">${dnf.length}</div><div class="l">DNF/DNS/DQ</div></div>
     </div>
     ${dists.length>1?`<div class="dist-tabs" id="dtabs">${dists.map(d=>`<button class="${d===state.distFilter?'on':''}" onclick="setDist(${d})">${d} km</button>`).join("")}</div>`:""}
-    <div class="card" style="padding:6px" id="tbl">${renderTable()}</div>`;
+    <div class="card" style="padding:6px" id="tbl">${renderTable()}</div>
+    ${dnf.length?`
+      <h2 style="margin-top:24px;font-size:16px">No finalizaron <span class="muted" style="font-weight:400">· ${dnf.length}</span></h2>
+      <div class="card" style="padding:6px"><table>
+        <thead><tr><th>Dorsal</th><th>Nombre</th><th class="hide-sm">Cat.</th><th class="hide-sm">Club</th><th>Estado</th></tr></thead>
+        <tbody>${dnf.map(r=>`<tr>
+          <td><span class="bib">${esc(r.bib_number)}</span></td>
+          <td style="font-weight:600">${esc(r.full_name)}</td>
+          <td class="hide-sm">${r.category?`<span class="pill ${r.category[0]==='F'?'':'green'}">${esc(r.category)}</span>`:'—'}</td>
+          <td class="muted hide-sm">${esc(r.club||'—')}</td>
+          <td><span class="pill warn" title="${r.status==='DNS'?'No largó':r.status==='DNF'?'No finalizó':r.status==='DQ'?'Descalificado':''}">${esc(r.status)}</span></td>
+        </tr>`).join("")}</tbody></table></div>`:""}`;
   state._renderTable = renderTable;
 }
 function setDist(d){ state.distFilter=d; $("tbl").innerHTML = state._renderTable(); document.querySelectorAll("#dtabs button").forEach(b=>b.classList.toggle("on", b.textContent===d+" km")); }
@@ -457,9 +476,10 @@ function viewAuth(mode){
         <div class="field"><label>Email</label><input type="email" id="em" placeholder="vos@email.com" onkeydown="if(event.key==='Enter')${reg?"$('pw').focus()":"doAuth('login')"}"></div>
         <div class="field"><label>Contraseña</label>
           <div class="pw-wrap">
-            <input type="password" id="pw" placeholder="${reg?'mínimo 6 caracteres':'••••••'}" onkeydown="if(event.key==='Enter')doAuth('${mode}')">
+            <input type="password" id="pw" placeholder="${reg?'mínimo 8 caracteres':'••••••'}" ${reg?'oninput="pwMeter()"':''} onkeydown="if(event.key==='Enter')doAuth('${mode}')">
             <button type="button" class="pw-eye" id="pwEye" onclick="togglePw()" title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">👁</button>
           </div>
+          ${reg?`<div class="pw-meter"><div class="pw-bar"><i id="pwFill"></i></div><span class="pw-lbl" id="pwLbl"></span></div>`:""}
         </div>
         <button class="btn" id="abtn" onclick="doAuth('${mode}')">${reg?"Crear cuenta":"Ingresar"}</button>
         <div style="text-align:center;margin-top:15px" class="muted">
@@ -471,13 +491,36 @@ function viewAuth(mode){
 }
 function showAuthErr(msg){ $("amsg").innerHTML = `<div class="err">${esc(msg)}</div>`; }
 function togglePw(){ const i=$("pw"), e=$("pwEye"); if(!i) return; const show = i.type==="password"; i.type = show ? "text" : "password"; e.textContent = show ? "🙈" : "👁"; i.focus(); }
+function pwScore(pw){
+  if(pw.length < 8) return 0;                 // por debajo del mínimo: siempre "muy débil"
+  let s = 1;
+  if(pw.length >= 12) s++;
+  if(/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if(/\d/.test(pw)) s++;
+  if(/[^A-Za-z0-9]/.test(pw)) s++;
+  return Math.min(s, 4);                        // 0..4
+}
+function pwMeter(){
+  const i=$("pw"), fill=$("pwFill"), lbl=$("pwLbl");
+  if(!i || !fill) return;
+  const pw = i.value;
+  if(!pw){ fill.style.width="0"; lbl.textContent=""; return; }
+  const sc = pwScore(pw);
+  const widths = ["20%","40%","65%","85%","100%"];
+  const colors = ["#e5484d","#e5484d","#f5a524","#3aa675","#00b483"];
+  const labels = ["Muy débil","Débil","Media","Buena","Fuerte"];
+  fill.style.width = widths[sc];
+  fill.style.background = colors[sc];
+  lbl.textContent = labels[sc];
+  lbl.style.color = colors[sc];
+}
 async function doAuth(mode){
   const reg = mode==="register";
   const email = $("em").value.trim(), pw = $("pw").value;
   if(!email){ showAuthErr("Ingresá tu email."); return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ showAuthErr("El email no tiene un formato válido (ej. vos@email.com)."); return; }
   if(!pw){ showAuthErr("Ingresá tu contraseña."); return; }
-  if(reg && pw.length < 6){ showAuthErr("La contraseña debe tener al menos 6 caracteres."); return; }
+  if(reg && pw.length < 8){ showAuthErr("La contraseña debe tener al menos 8 caracteres."); return; }
   const b = $("abtn"); b.disabled=true; $("amsg").innerHTML="";
   try {
     const body = reg ? { email, password:pw, full_name:$("fn").value.trim()||null } : { email, password:pw };
