@@ -3,12 +3,14 @@
     --txt:#0E1A22; --mut:#5B6B75; --dim:#8A969E; --acc:#00B383; --acc2:#009E74;
     --blue:#2D6FE0; --warn:#E5772A; --danger:#E5484D;
     --shadow:0 6px 20px rgba(14,26,34,.08);
+    --header-bg:rgba(255,255,255,.85);
   }
   [data-theme="dark"] {
     --bg:#0b0d0e; --bg2:#0f1213; --panel:#15181a; --panel2:#1c2023; --border:#262b2e;
     --txt:#eef1f2; --mut:#97a0a6; --dim:#5b646a; --acc:#00e5a0; --acc2:#00b483;
     --blue:#5aa2ff; --warn:#f5a623; --danger:#ff6b6b;
     --shadow:0 10px 30px rgba(0,0,0,.35);
+    --header-bg:rgba(15,18,19,.85);
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
@@ -24,7 +26,7 @@
   input { font-family:inherit; }
 
   /* Header */
-  header { background:rgba(15,18,19,.85); backdrop-filter:blur(10px); border-bottom:1px solid var(--border);
+  header { background:var(--header-bg); backdrop-filter:blur(10px); border-bottom:1px solid var(--border);
     padding:0 22px; height:60px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:20; }
   .logo { font-weight:800; font-size:20px; color:var(--acc); letter-spacing:-.4px; display:flex; align-items:center; gap:7px; }
   .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--acc); box-shadow:0 0 12px var(--acc); }
