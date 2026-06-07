@@ -160,20 +160,30 @@ Una página dividida en dos secciones con el mismo término de búsqueda:
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 Paleta (tema claro por defecto)
+### 3.3 Paleta — tonos pastel suaves (tema claro por defecto)
 
-| Token        | Valor      | Uso                                  |
-|--------------|------------|--------------------------------------|
-| `--bg`       | `#F7F9FA`  | Fondo general                        |
-| `--surface`  | `#FFFFFF`  | Cards, tablas                        |
-| `--text`     | `#0E1A22`  | Texto principal                      |
-| `--muted`    | `#5B6B75`  | Texto secundario                     |
-| `--acc`      | `#00B383`  | Acento (botones, links, podio 🥇)    |
-| `--warn`     | `#E5772A`  | Estados DNF/alertas                  |
-| `--border`   | `#E3E9ED`  | Bordes sutiles                       |
+Tras revisión visual con el usuario se eligió una paleta **pastel** (menos saturada que la
+propuesta inicial). Valores implementados:
 
-El tema oscuro redefine estos mismos tokens bajo `[data-theme="dark"]`. Toda la UI consume
-**solo** los tokens (sin colores hardcodeados), de modo que el toggle es un cambio de atributo.
+| Token        | Claro      | Oscuro     | Uso                                  |
+|--------------|------------|------------|--------------------------------------|
+| `--bg`       | `#F5F7F8`  | `#14171A`  | Fondo general (oscuro = pizarra, no negro) |
+| `--panel`    | `#FFFFFF`  | `#1E2329`  | Cards, tablas                        |
+| `--txt`      | `#28323A`  | `#E4E8EA`  | Texto principal (gris pizarra / off-white) |
+| `--mut`      | `#6B7780`  | `#9BA6AD`  | Texto secundario                     |
+| `--acc`      | `#54BFA3`  | `#6FD3B8`  | Acento menta pastel (botones, links, podio 🥇) |
+| `--blue`     | `#7099DE`  | `#84ABEC`  | Pills / enlaces                      |
+| `--warn`     | `#E2A06E`  | `#E8B583`  | Estados DNF/alertas (durazno)        |
+| `--danger`   | `#DE7B81`  | `#E89399`  | Errores (rosa)                       |
+| `--border`   | `#E7ECEE`  | `#323A41`  | Bordes sutiles                       |
+
+Tokens auxiliares: `--acc-rgb`/`--blue-rgb`/`--warn-rgb`/`--danger-rgb` (componentes RGB para
+tintes translúcidos `rgba(var(--x-rgb), α)` en pills, badges, anillos de foco y mensajes
+ok/error, de modo que **todos** los tintes siguen la paleta en ambos temas); `--on-acc`
+(texto sobre el acento: verde oscuro en claro, casi negro en oscuro); `--header-bg` (fondo del
+header con `backdrop-filter`). El tema oscuro redefine estos mismos tokens bajo
+`[data-theme="dark"]`. Toda la UI consume **solo** tokens, así que el toggle es un cambio de
+atributo y no quedan colores hardcodeados dependientes del tema.
 
 ### 3.4 Enfoque técnico (recomendado: opción B)
 
