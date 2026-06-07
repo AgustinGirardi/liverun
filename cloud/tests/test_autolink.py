@@ -50,6 +50,7 @@ def test_autolink_is_idempotent(client):
     client.post("/api/auth/register", json={
         "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
     r = client.post("/api/auth/login", json={"email": "juan@mail.com", "password": "supersecreta"})
+    assert r.json()["linked"] == 0
     token = r.json()["token"]
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {token}"})
     assert len(me.json()["results"]) == 1  # no se duplica

@@ -186,11 +186,12 @@ def _autolink(user: PortalUser, db: Session) -> int:
     results = db.scalars(
         select(PublishedResult).where(PublishedResult.email_hash == h)
     ).all()
+    claimed_ids = set(db.scalars(
+        select(Claim.result_id).where(Claim.user_id == user.id)
+    ).all())
     created = 0
     for res in results:
-        exists = db.scalar(select(Claim).where(
-            Claim.user_id == user.id, Claim.result_id == res.id))
-        if not exists:
+        if res.id not in claimed_ids:
             db.add(Claim(user_id=user.id, result_id=res.id))
             created += 1
     if created:
@@ -297,7 +298,11 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
     user = PortalUser(email=email, password_hash=hash_password(body.password), full_name=body.full_name)
     db.add(user)
     db.commit()
-    linked = _autolink(user, db)
+    try:
+        linked = _autolink(user, db)
+    except Exception:
+        db.rollback()
+        linked = 0
     return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": linked}
 
 
@@ -308,7 +313,11 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
     user = db.scalar(select(PortalUser).where(PortalUser.email == body.email.lower()))
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Email o contraseña incorrectos")
-    linked = _autolink(user, db)
+    try:
+        linked = _autolink(user, db)
+    except Exception:
+        db.rollback()
+        linked = 0
     return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": linked}
 
 
