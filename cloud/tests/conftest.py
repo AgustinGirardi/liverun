@@ -11,12 +11,13 @@ os.environ["CT_PUBLISH_KEY"] = "test-publish-key"
 from fastapi.testclient import TestClient  # noqa: E402
 from cloud.db import Base, engine, SessionLocal  # noqa: E402
 from cloud import models  # noqa: E402,F401  registra los modelos
-from cloud.main import app  # noqa: E402
+from cloud.main import app, _RATE  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _fresh_db():
-    """Cada test arranca con tablas limpias."""
+    """Cada test arranca con tablas limpias y sin estado de rate-limit."""
+    _RATE.clear()
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     yield
