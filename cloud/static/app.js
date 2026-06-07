@@ -187,7 +187,7 @@ async function viewSearch(q){
           </div>
         </div>`).join("");
     }
-    $("sres").innerHTML = html || `<div class="empty"><div class="ic">🔎</div>No encontramos resultados para "${esc(q)}".<br><span class="dim">Probá con tu nombre y apellido, o el nombre de la carrera.</span></div>`;
+    $("sres").innerHTML = html || `<div class="empty"><div class="ic">🔎</div>No encontramos resultados para “${esc(q)}”.<br><span class="dim">Probá con tu nombre y apellido, o el nombre de la carrera.</span></div>`;
   } catch(e){ $("sres").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 function certSearch(i){ const r=state.searchResults[i]; printCertificate(r, r.race_name, r.race_date, r.location, r.race_code); }
@@ -424,7 +424,7 @@ async function doFind(){
   $("findRes").innerHTML=`<div class="muted">Buscando…</div>`;
   try {
     const d = await api("GET","/api/search?q="+encodeURIComponent(q));
-    if(!d.results.length){ $("findRes").innerHTML=`<div class="empty" style="padding:24px"><div class="ic">🔎</div>No encontramos resultados para "${esc(q)}".</div>`; return; }
+    if(!d.results.length){ $("findRes").innerHTML=`<div class="empty" style="padding:24px"><div class="ic">🔎</div>No encontramos resultados para “${esc(q)}”.</div>`; return; }
     $("findRes").innerHTML = d.results.map(r=>`
       <div class="card" style="margin-bottom:8px;box-shadow:none">
         <div class="row" style="justify-content:space-between">
