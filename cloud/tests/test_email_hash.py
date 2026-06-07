@@ -24,3 +24,7 @@ def test_migration_adds_column_to_existing_table():
     insp = inspect(engine)
     cols = {c["name"] for c in insp.get_columns("published_results")}
     assert "email_hash" in cols
+    with engine.connect() as conn:
+        idxs = [r[0] for r in conn.execute(text(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='published_results'"))]
+    assert "ix_published_results_email_hash" in idxs
