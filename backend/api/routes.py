@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.orm import selectinload
 from typing import Optional
+import hashlib
 import json
 import os
 import sqlite3
@@ -706,6 +707,15 @@ async def set_cloud_config(body: CloudConfigIn):
     }
 
 
+def _email_hash(email):
+    """sha256 del email normalizado (privacy-preserving). DEBE coincidir byte a byte
+    con cloud/main.py::_email_hash — si cambia uno, cambiar el otro."""
+    e = (email or "").strip().lower()
+    if not e:
+        return None
+    return hashlib.sha256(("chronotrack-v1:" + e).encode()).hexdigest()
+
+
 @router.post("/races/{race_id}/publish", tags=["Cloud"])
 async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     """Publica los resultados de una carrera en el portal público (server-to-server).
@@ -736,6 +746,7 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
             "finish_time_ns": row.finish_time_ns,
             "position": row.position,
             "status": "FINISHER",
+            "email_hash": _email_hash(row.runner.email),
         })
     for row in data.dnf_list:
         results.append({
@@ -748,6 +759,7 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
             "finish_time_ns": None,
             "position": None,
             "status": row.status,
+            "email_hash": _email_hash(row.runner.email),
         })
 
     payload = {
