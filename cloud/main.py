@@ -112,6 +112,7 @@ class PublishResult(BaseModel):
     finish_time_ns: Optional[int] = None
     position: Optional[int] = None
     status: str = "FINISHER"
+    email_hash: Optional[str] = None  # sha256 hex; el escritorio lo calcula, el cloud nunca ve el email en claro
 
 
 class PublishPayload(BaseModel):
