@@ -173,6 +173,31 @@ def _result_dict(r: PublishedResult) -> dict:
     }
 
 
+def _email_hash(email: str) -> str:
+    """sha256 del email normalizado. DEBE coincidir byte a byte con
+    backend/api/routes.py::_email_hash — si cambia uno, cambiar el otro."""
+    return hashlib.sha256(("chronotrack-v1:" + (email or "").strip().lower()).encode()).hexdigest()
+
+
+def _autolink(user: PortalUser, db: Session) -> int:
+    """Vincula a `user` todos los PublishedResult cuyo email_hash coincide con su
+    email de cuenta. Devuelve cuántos vínculos NUEVOS creó (no duplica)."""
+    h = _email_hash(user.email)
+    results = db.scalars(
+        select(PublishedResult).where(PublishedResult.email_hash == h)
+    ).all()
+    created = 0
+    for res in results:
+        exists = db.scalar(select(Claim).where(
+            Claim.user_id == user.id, Claim.result_id == res.id))
+        if not exists:
+            db.add(Claim(user_id=user.id, result_id=res.id))
+            created += 1
+    if created:
+        db.commit()
+    return created
+
+
 def current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> PortalUser:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "No autenticado")
@@ -272,7 +297,8 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
     user = PortalUser(email=email, password_hash=hash_password(body.password), full_name=body.full_name)
     db.add(user)
     db.commit()
-    return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name}
+    linked = _autolink(user, db)
+    return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": linked}
 
 
 @app.post("/api/auth/login", tags=["Corredor"])
@@ -282,7 +308,8 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
     user = db.scalar(select(PortalUser).where(PortalUser.email == body.email.lower()))
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Email o contraseña incorrectos")
-    return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name}
+    linked = _autolink(user, db)
+    return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": linked}
 
 
 @app.post("/api/claim", tags=["Corredor"])
