@@ -48,6 +48,7 @@ class PublishedResult(Base):
     finish_time_ns = Column(BigInteger, nullable=True)
     position       = Column(Integer, nullable=True)
     status         = Column(String(12), nullable=False, default="FINISHER")  # FINISHER/DNF/DNS/DQ
+    email_hash     = Column(String(64), nullable=True, index=True)  # sha256 hex del email (privacy-preserving); ver design doc
     race           = relationship("PublishedRace", back_populates="results")
     claims         = relationship("Claim", back_populates="result", cascade="all, delete-orphan")
     __table_args__ = (UniqueConstraint("race_id", "bib_number", "distance_km", name="uq_race_bib_dist"),)

@@ -70,6 +70,21 @@ app.add_middleware(
 )
 
 
+def _ensure_email_hash_column():
+    """Migración suave para SQLite: agrega published_results.email_hash si falta.
+    create_all() no altera tablas existentes, así que en bases ya creadas
+    (p. ej. Render) hay que hacer el ALTER manualmente. Idempotente."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_results)"))]
+        if not cols:
+            return  # tabla inexistente: create_all (ya corrió en init_db) la crea con la columna
+        if "email_hash" not in cols:
+            conn.execute(text("ALTER TABLE published_results ADD COLUMN email_hash VARCHAR(64)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_published_results_email_hash ON published_results (email_hash)"))
+
+
 @app.on_event("startup")
 def _startup():
     # En producción (Render setea la env var RENDER) NO arrancar con secretos por
@@ -82,6 +97,7 @@ def _startup():
                 "(Render los genera automáticamente vía render.yaml)."
             )
     init_db()
+    _ensure_email_hash_column()
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
