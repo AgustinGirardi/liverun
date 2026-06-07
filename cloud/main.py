@@ -443,6 +443,15 @@ def claim_result(body: ClaimResultIn, request: Request, user: PortalUser = Depen
     return {"linked": linked, "race": res.race.name, "result": _result_dict(res)}
 
 
+@app.post("/api/me/autolink", tags=["Corredor"])
+def autolink_me(request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Re-ejecuta la auto-vinculación por email para el usuario logueado.
+    Lo usa el botón 'Buscar mis resultados por email' del perfil."""
+    rate_limit(request, "claim", limit=30, window=60.0)
+    linked = _autolink(user, db)
+    return {"linked": linked}
+
+
 # ── Despublicar (organizador) ─────────────────────────────────────────────────
 
 @app.delete("/api/publish/{source_id}", tags=["Organizador"])
