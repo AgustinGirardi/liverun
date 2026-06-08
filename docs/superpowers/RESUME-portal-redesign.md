@@ -1,95 +1,98 @@
 # RESUME — Rediseño del Portal Cloud (ChronoTrack)
 
 > Documento para retomar el trabajo en una próxima sesión de Claude Code.
-> Última actualización: 2026-06-08
+> Última actualización: 2026-06-08 (sesión que completó y liberó todo)
 
 ## Estado en una línea
 
-**Fase A (auto-vinculación por email) → COMPLETA y commiteada.**
-**Fase B (rediseño visual) → EN CURSO.** Hechos: B1 (split), B2 (tema claro+oscuro) y el
-ajuste de **paleta pastel** (ambos temas, aprobado por el usuario). **Próxima tarea: B3.**
+**TODO EL REDISEÑO ESTÁ COMPLETO Y LIBERADO.** Fase A (auto-vinculación por hash de email) +
+Fase B (rediseño visual) → mergeadas a `main`, pusheadas, y el portal está **deployado en
+Render**. El escritorio fue rebuildeado (instalador v2.5 generado). No queda trabajo de código
+pendiente.
 
-- **Rama:** `mejoras-seguridad-ux` (NO main).
-- **HEAD actual:** `e042342` — árbol de trabajo limpio (solo `.claude/` sin trackear, ignorable).
-- **Nada está pusheado ni deployado todavía.**
+- **Rama:** ya NO hay rama de feature — todo se mergeó a `main` (fast-forward) y la rama
+  `mejoras-seguridad-ux` se borró.
+- **HEAD:** `c5ac107` (bump a v2.5). `main` ↔ `origin/main` sincronizados.
+- **Portal en producción:** https://chronotrack-portal.onrender.com (Render, auto-deploy de
+  `cloud/**`). Verificado que sirve el código nuevo (header-search, podio, etc.).
+- **Instalador escritorio:** `installer\ChronoTrack_Setup_v2.5.exe` (~21 MB) ya construido.
 
-## Documentos clave
+## Lo que se entregó esta sesión (Fase B completa + cierre)
 
-- **Diseño:** `docs/superpowers/specs/2026-06-07-portal-redesign-design.md` (la §3.3 ya tiene la paleta pastel final).
-- **Plan de implementación (tareas paso a paso con código):** `docs/superpowers/plans/2026-06-07-portal-redesign.md`.
-- Este resumen.
+- **B3** — Búsqueda siempre accesible en el header (input `id="hq"`, oculto en home, sincroniza
+  el término en la vista `search`; foco con token `rgba(var(--acc-rgb),.18)`). Commit `d416818`.
+- **B3b** — Home híbrido: grid de "Carreras recientes" bajo el hero del visitante
+  (`loadHomeRaces()`, slice 9, reusa `raceCard`). Commit `7548f8c`.
+- **B4** — Conexión con Fase A: helper `toast()` (tokens `--on-acc`/`--warn`), muestra
+  `d.linked` tras register/login, botón "🔄 Buscar por email" en el dashboard → `manualAutolink()`
+  → `POST /api/me/autolink`. Commit `3960a92`.
+- **B5** — Podio top-3 (`renderPodium()`) + filtro instantáneo por nombre/dorsal (`id="rfilter"`,
+  `filterRace()`); la posición/medalla se basa en `ranked` por tiempo, NO en la lista filtrada;
+  `setDist` resetea el filtro. Commit `3ffeaa0`.
+- **B6** — Pase final: `pytest cloud/tests/` → **11 passed**; review de contraste en ambos temas
+  (sin ajustes necesarios, todo usa tokens ya aprobados).
+- **Cierre** — Merge a `main` (fast-forward), `git push` → deploy en Render, `build.bat` →
+  instalador v2.5, bump `version.txt` 2.4→2.5 (commit `c5ac107`).
 
-## Cómo retomar
+## Único pendiente (operativo, NO de código)
 
-1. **Levantar el portal local para ver cambios** (sirve archivos estáticos desde disco, no
-   necesita reinicio al editar CSS/HTML/JS — solo Ctrl+F5 en el navegador):
-   ```powershell
-   $env:CT_CLOUD_DB = "sqlite:///$($PWD)\cloud\cloud.db"; python -m uvicorn cloud.main:app --port 8002
-   ```
-   Abrir **http://127.0.0.1:8002** (¡la URL local, NO el Render de internet!). La `cloud.db`
-   ya tiene 6 carreras de prueba publicadas con datos reales.
-2. **Tests del cloud:** `python -m pytest cloud/tests/ -q` (deben dar 11 passed).
-3. **Método de trabajo usado:** subagent-driven-development (skill superpowers). Por cada
-   tarea del plan: implementador (sonnet, TDD donde aplica) → revisor de spec → revisor de
-   calidad → fixes → commit. Para los cambios visuales sin test runner, verificación manual en
-   el navegador + checkpoints con el usuario.
+**Distribuir `installer\ChronoTrack_Setup_v2.5.exe` a los organizadores** e instalarlo. Ese
+build incluye la Tarea A4 (el escritorio calcula y envía `email_hash` al publicar), que habilita
+la auto-vinculación. Hasta que cada organizador actualice y **re-publique** sus carreras, las
+carreras viejas no tienen hash y los corredores usan el claim manual (que funciona igual que
+siempre). No es un bug; es el flujo esperado de propagación.
 
-## Fase B — lo que falta (en orden)
+## Tema abierto al cerrar la sesión: "no se ven los cambios en la web"
 
-El código exacto de cada paso está en el PLAN. Resumen:
+**Diagnóstico:** NO era un problema de deploy. Se verificó por `curl` que producción ya sirve el
+código nuevo (`index.html` enlaza `styles.css` y tiene `header-search`/`id="hq"`; `app.js`
+contiene `headerSearch`, `loadHomeRaces`, `manualAutolink`, `renderPodium`; `/api/races` → 200;
+`last-modified` del día del deploy). **La causa es caché del navegador:** antes de B1 el
+`index.html` era monolítico (con `<style>`/`<script>` inline), y el navegador retuvo esa versión
+vieja sin pedir los archivos nuevos.
 
-- **B3 — Búsqueda en el header (PRÓXIMA).** Input `id="hq"` en `<header>` entre logo y nav;
-  `.header-search` en CSS; función `headerSearch()` en app.js; en `go(view,arg)` después de
-  `renderNav()`, ocultar el header-search en `home` y mostrarlo en el resto, y sincronizar el
-  valor en la vista `search`. (Ojo: el header YA tiene el botón `#themeBtn` del toggle; el
-  input va ANTES del nav. El input del hero/búsqueda usa `id="q"` — no tocarlo, son distintos.)
-  *Nota:* en la sesión anterior B3 quedó a medio aplicar y se revirtió — arrancar B3 limpio.
-- **B3b — Home híbrido.** Bajo el hero del visitante (no logueado), grid de carreras recientes
-  reusando `raceCard` + función `loadHomeRaces()` (GET /api/races, slice 9). Ver plan.
-- **B4 — Toast de auto-vinculación + botón "Buscar por email".** Helper `toast()`, mostrar
-  `d.linked` tras register/login (el backend ya devuelve `linked`), botón `manualAutolink()`
-  en el dashboard que llama `POST /api/me/autolink`. CSS `.toast`. Ver plan.
-- **B5 — Podio top-3 + filtro instantáneo en la carrera.** Bloque `.podium` arriba de la tabla
-  y filtro de texto por nombre/dorsal (input `id="rfilter"`, `filterRace()`, `renderPodium()`),
-  cuidando que la posición/medalla se base en el ranking por tiempo, no en la lista filtrada.
-- **B6 — Pulido y verificación integral.** Checklist de contraste en ambos temas + flujos
-  end-to-end. (Muchos tintes ya se arreglaron al hacer la paleta pastel con tokens RGB.)
+**Solución para el usuario:** recarga forzada `Ctrl+F5` / `Ctrl+Shift+R`, o ventana de incógnito
+para confirmar. Si en incógnito tampoco aparecieran (no esperado), recién ahí revisar logs/estado
+del build en el dashboard de Render. **Al cerrar la sesión faltaba la confirmación del usuario de
+que en incógnito ya ve el rediseño** — ese es el primer punto a chequear la próxima vez.
 
-Tras B6: revisión final holística → `superpowers:finishing-a-development-branch` (merge/PR) y
-decidir despliegue.
+## Arquitectura imprescindible (referencia)
 
-## Contexto técnico imprescindible
+- **Escritorio** (`backend/` FastAPI async + `frontend/` React/Vite) empaquetado como `.exe` con
+  `build.bat` (bumpea `version.txt`, compila frontend, PyInstaller, Inno Setup → `installer\`).
+  Requiere Inno Setup 6, node_modules y PyInstaller instalados. El `.bat` termina con `pause`;
+  para correrlo no-interactivo: `cmd /c "C:\Users\agust\chronotrack\build.bat < nul"` desde
+  PowerShell (en git-bash el `cmd //c` no encuentra el .bat por mangling de ruta).
+- **Portal cloud** (`cloud/` FastAPI sync + SQLite) + SPA estática en 3 archivos:
+  `cloud/static/index.html` (shell + script FOUC inline en `<head>`), `cloud/static/styles.css`,
+  `cloud/static/app.js` (router por estado `go(view,arg)`; init al final `renderNav(); go("home")`).
+  Sin build step. Deploya en Render al pushear `cloud/**`.
+- **Hash de email (privacy-preserving):**
+  `sha256(("chronotrack-v1:" + email.strip().lower()).encode()).hexdigest()`. Duplicado en
+  `backend/api/routes.py::_email_hash` y `cloud/main.py::_email_hash` (procesos separados;
+  mantener sincronizados byte a byte). El cloud NUNCA guarda email en claro (Ley 25.326).
 
-- **Arquitectura:** escritorio (`backend/` FastAPI async + `frontend/`) empaquetado como .exe
-  con `build.bat`; portal cloud (`cloud/` FastAPI sync + SQLite `cloud.db`) + SPA estática en
-  `cloud/static/` (sin build step), deploya en Render al pushear `cloud/**`.
-- **SPA en 3 archivos** (separados en B1): `cloud/static/index.html` (shell + script FOUC
-  inline en <head>), `cloud/static/styles.css`, `cloud/static/app.js` (router por estado
-  `go(view,arg)`; init al final: `renderNav(); go("home")`).
-- **Despliegue:** `cloud/**` auto-deploya en Render al pushear. El cambio del ESCRITORIO de la
-  Fase A (A4, `backend/api/routes.py`) necesita **`build.bat`** para llegar a los organizadores.
-- **Privacidad (Ley 25.326):** el cloud NUNCA guarda DNI/fecha/email en texto plano de los
-  corredores. La auto-vinculación usa un **hash** del email.
-- **Fórmula del hash (idéntica en escritorio y cloud):**
-  `sha256(("chronotrack-v1:" + email.strip().lower()).encode()).hexdigest()`.
-  Duplicada en `backend/api/routes.py::_email_hash` y `cloud/main.py::_email_hash` (procesos
-  separados; mantener sincronizadas).
+## Cómo levantar el portal local (para futuras ediciones)
 
-## Paleta pastel (tokens CSS, ya implementada en `cloud/static/styles.css`)
+```powershell
+$env:CT_CLOUD_DB = "sqlite:///$($PWD.Path)\cloud\cloud.db"; python -m uvicorn cloud.main:app --port 8002
+```
+Abrir **http://127.0.0.1:8002** (URL local, NO el Render). La `cloud.db` tiene 6 carreras de
+prueba. Sirve estáticos desde disco: basta Ctrl+F5 al editar CSS/HTML/JS, sin reiniciar.
+Tests: `python -m pytest cloud/tests/ -q` (11 passed).
 
-Tema **claro** (`:root`) / **oscuro** (`[data-theme="dark"]`):
+## Paleta pastel (tokens en `cloud/static/styles.css`)
+
+Tema **claro** (`:root`) / **oscuro** (`[data-theme="dark"]`); toggle ◐/◑ persiste en
+`localStorage` key `ct_theme` (default claro):
 - `--bg` #F5F7F8 / #14171A · `--panel` #FFFFFF / #1E2329 · `--txt` #28323A / #E4E8EA
 - `--acc` (menta) #54BFA3 / #6FD3B8 · `--blue` #7099DE / #84ABEC
 - `--warn` (durazno) #E2A06E / #E8B583 · `--danger` (rosa) #DE7B81 / #E89399
-- Tokens auxiliares: `--acc-rgb/--blue-rgb/--warn-rgb/--danger-rgb` (para tintes
-  `rgba(var(--x-rgb), α)` en pills/badges/foco/ok-error — siguen la paleta en ambos temas),
-  `--on-acc` (texto sobre el acento), `--header-bg` (fondo del header con blur).
-- Toggle ◐/◑ persiste en `localStorage` key `ct_theme` (default = claro).
+- Tokens RGB `--acc-rgb`/`--blue-rgb`/etc. para tintes `rgba(var(--x-rgb), α)`; `--on-acc`
+  (#0C2A22, texto sobre el acento); `--header-bg` (fondo del header con blur).
 
-## Fase A — qué se entregó (referencia, ya commiteado)
+## Documentos de referencia
 
-email_hash end-to-end: el escritorio lo calcula al publicar; el cloud lo guarda
-(`PublishedResult.email_hash`, nullable+indexado, con migración suave `_ensure_email_hash_column`
-en startup); auto-vincula resultados al perfil en register/login (helper `_autolink`, no rompe
-auth ante error) y vía `POST /api/me/autolink` (botón manual). Harness de tests en `cloud/tests/`
-(11 tests, todos verdes). Revisión final: SHIP, sin issues críticos.
+- **Diseño:** `docs/superpowers/specs/2026-06-07-portal-redesign-design.md`
+- **Plan de implementación (código paso a paso):** `docs/superpowers/plans/2026-06-07-portal-redesign.md`
+- Memoria: `portal-redesign-progreso.md` y `proyecto-chronotrack.md`.
