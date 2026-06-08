@@ -130,6 +130,17 @@
   .dist-tabs button { background:transparent; border:1.5px solid var(--border); color:var(--mut); padding:7px 16px; border-radius:9px; font-size:13px; font-weight:600; transition:all .15s; }
   .dist-tabs button.on { border-color:var(--acc); color:var(--acc); background:rgba(var(--acc-rgb),.14); }
 
+  .podium { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:6px 0 20px; }
+  .podium .p { background:var(--panel); border:1px solid var(--border); border-radius:13px; padding:16px 12px; text-align:center; box-shadow:var(--shadow); }
+  .podium .p .medal { font-size:26px; }
+  .podium .p .nm { font-weight:700; font-size:14px; margin:6px 0 2px; }
+  .podium .p .tm { font-family:ui-monospace,monospace; color:var(--acc); font-weight:600; font-size:13px; }
+  .podium .p1 { border-color:rgba(var(--acc-rgb),.45); }
+  .race-filter { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:9px;
+    padding:10px 13px; color:var(--txt); font-size:14px; outline:none; margin-bottom:12px; }
+  .race-filter:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(var(--acc-rgb),.12); }
+  @media (max-width:680px){ .podium { grid-template-columns:1fr; } }
+
   .err { background:rgba(var(--danger-rgb),.12); color:var(--danger); border:1px solid rgba(var(--danger-rgb),.30); border-radius:9px; padding:11px 13px; font-size:13px; margin-bottom:12px; }
   .ok { background:rgba(var(--acc-rgb),.12); color:var(--acc); border:1px solid rgba(var(--acc-rgb),.28); border-radius:9px; padding:11px 13px; font-size:13px; margin-bottom:12px; }
   .empty { text-align:center; padding:50px 20px; color:var(--dim); }

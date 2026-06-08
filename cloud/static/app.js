@@ -271,7 +271,11 @@ async function viewRace(code){
     let list = finishers;
     if(dists.length) list = finishers.filter(r=>r.distance_km===state.distFilter);
     list = [...list].sort((a,b)=>(a.net_time_ns||a.finish_time_ns||9e18)-(b.net_time_ns||b.finish_time_ns||9e18));
-    const rows = list.map((r,i)=>{
+    const tf = (state.textFilter||"").toLowerCase();
+    const ranked = list;  // posición = orden por tiempo, antes de filtrar texto
+    if(tf) list = list.filter(r=> r.full_name.toLowerCase().includes(tf) || String(r.bib_number).toLowerCase().includes(tf));
+    const rows = list.map((r)=>{
+      const i = ranked.indexOf(r);
       const idx = race.results.indexOf(r);
       return `<tr>
         <td class="pos ${i<3?'medal'+i:''}">${i<3?["🥇","🥈","🥉"][i]:i+1}</td>
@@ -295,7 +299,9 @@ async function viewRace(code){
       <div class="stat"><div class="v" style="color:var(--txt)">${race.results.length}</div><div class="l">Total</div></div>
       <div class="stat"><div class="v" style="color:var(--warn)">${dnf.length}</div><div class="l">DNF/DNS/DQ</div></div>
     </div>
+    <div id="podium"></div>
     ${dists.length>1?`<div class="dist-tabs" id="dtabs">${dists.map(d=>`<button class="${d===state.distFilter?'on':''}" onclick="setDist(${d})">${d} km</button>`).join("")}</div>`:""}
+    <input class="race-filter" id="rfilter" placeholder="🔎 Filtrar por nombre o dorsal…" oninput="filterRace()">
     <div class="card" style="padding:6px" id="tbl">${renderTable()}</div>
     ${dnf.length?`
       <h2 style="margin-top:24px;font-size:16px">No finalizaron <span class="muted" style="font-weight:400">· ${dnf.length}</span></h2>
@@ -309,8 +315,19 @@ async function viewRace(code){
           <td><span class="pill warn" title="${r.status==='DNS'?'No largó':r.status==='DNF'?'No finalizó':r.status==='DQ'?'Descalificado':''}">${esc(r.status)}</span></td>
         </tr>`).join("")}</tbody></table></div>`:""}`;
   state._renderTable = renderTable;
+  state.textFilter = "";
+  renderPodium();
 }
-function setDist(d){ state.distFilter=d; $("tbl").innerHTML = state._renderTable(); document.querySelectorAll("#dtabs button").forEach(b=>b.classList.toggle("on", b.textContent===d+" km")); }
+function filterRace(){ const el=document.getElementById("rfilter"); state.textFilter = el?el.value:""; document.getElementById("tbl").innerHTML = state._renderTable(); }
+function renderPodium(){
+  const el = document.getElementById("podium"); if(!el || !state.curRace) return;
+  const fin = state.curRace.results.filter(r=>r.status==="FINISHER" && (state.distFilter==null || r.distance_km===state.distFilter));
+  const top = [...fin].sort((a,b)=>(a.net_time_ns||a.finish_time_ns||9e18)-(b.net_time_ns||b.finish_time_ns||9e18)).slice(0,3);
+  if(top.length < 3){ el.innerHTML=""; return; }
+  const m=["🥇","🥈","🥉"];
+  el.innerHTML = `<div class="podium">${top.map((r,i)=>`<div class="p ${i===0?'p1':''}"><div class="medal">${m[i]}</div><div class="nm">${esc(r.full_name)}</div><div class="tm">${fmtNs(r.net_time_ns||r.finish_time_ns)}</div></div>`).join("")}</div>`;
+}
+function setDist(d){ state.distFilter=d; state.textFilter=""; const rf=document.getElementById("rfilter"); if(rf) rf.value=""; $("tbl").innerHTML = state._renderTable(); renderPodium(); document.querySelectorAll("#dtabs button").forEach(b=>b.classList.toggle("on", b.textContent===d+" km")); }
 function certRace(idx){ const r=state.curRace.results[idx]; printCertificate(r, state.curRace.name, state.curRace.race_date, state.curRace.location, state.curRace.code); }
 
 // ── Certificado PDF (se genera e imprime en el navegador) ─────────────────────
