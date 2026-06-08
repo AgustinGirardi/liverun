@@ -38,6 +38,22 @@ async function api(method, path, body, auth){
 }
 
 function setSession(d){ TOKEN=d.token; USER={email:d.email,full_name:d.full_name}; localStorage.setItem("ct_token",TOKEN); localStorage.setItem("ct_user",JSON.stringify(USER)); }
+
+function toast(msg, kind){
+  let t = document.getElementById("ctToast");
+  if(!t){ t = document.createElement("div"); t.id="ctToast"; t.className="toast"; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.className = "toast show" + (kind==="warn" ? " warn" : "");
+  clearTimeout(t._h); t._h = setTimeout(()=>{ t.className="toast"; }, 3500);
+}
+async function manualAutolink(btn){
+  const orig = btn.textContent; btn.disabled=true; btn.textContent="Buscando…";
+  try {
+    const d = await api("POST","/api/me/autolink", null, true);
+    if(d.linked > 0){ toast(`Vinculamos ${d.linked} resultado${d.linked===1?"":"s"} 🎉`); viewDashboard(); }
+    else { toast("No encontramos resultados nuevos con tu email.", "warn"); btn.disabled=false; btn.textContent=orig; }
+  } catch(e){ toast(e.message, "warn"); btn.disabled=false; btn.textContent=orig; }
+}
 function logout(){ TOKEN=null; USER=null; localStorage.removeItem("ct_token"); localStorage.removeItem("ct_user"); go("home"); }
 
 function renderNav(){
@@ -148,7 +164,11 @@ async function viewDashboard(){
       ? `<div class="card"><h2>Mejores marcas</h2><div class="row">${d.personal_bests.map(p=>`<div class="stat" style="min-width:120px"><div class="v">${fmtNs(p.net_time_ns)}</div><div class="l">${p.distance_km} km</div></div>`).join("")}</div></div>`
       : "";
     const hist = d.results.length
-      ? `<h2 style="margin-top:24px">Mis carreras</h2><div class="card" style="padding:6px"><table>
+      ? `<div class="row" style="justify-content:space-between;margin-top:24px;align-items:center">
+           <h2 style="margin:0">Mis carreras</h2>
+           <button class="btn ghost sm" onclick="manualAutolink(this)">🔄 Buscar por email</button>
+         </div>
+         <div class="card" style="padding:6px"><table>
           <thead><tr><th>Carrera</th><th class="hide-sm">Dist.</th><th>Pos.</th><th style="text-align:right">Tiempo</th><th></th></tr></thead>
           <tbody>${d.results.map((r,i)=>`<tr>
             <td><a style="color:var(--acc)" onclick="event.stopPropagation();go('race','${r.race_code}')">${esc(r.race_name)}</a><div class="dim">${esc(fmtDate(r.race_date))}${r.distance_km?` · ${r.distance_km} km`:""}</div></td>
@@ -157,7 +177,7 @@ async function viewDashboard(){
             <td class="time">${fmtNs(r.net_time_ns)}</td>
             <td style="text-align:right">${r.status==="FINISHER"?`<a class="lnk" onclick="certMe(${i})">🏅 PDF</a>`:""}</td></tr>`).join("")}
           </tbody></table></div>`
-      : `<div class="empty" style="padding:34px"><div class="ic">🏃</div>Todavía no guardaste resultados.<br><span class="dim">Buscá tu nombre arriba para agregar tus carreras.</span></div>`;
+      : `<div class="empty" style="padding:34px"><div class="ic">🏃</div>Todavía no guardaste resultados.<br><span class="dim">Buscá tu nombre arriba, o</span> <button class="btn ghost sm" onclick="manualAutolink(this)" style="margin-top:10px">🔄 Buscar mis resultados por email</button></div>`;
     $("dashMe").innerHTML = `<div class="stats">
         <div class="stat"><div class="v">${d.total_races}</div><div class="l">Carreras</div></div>
         <div class="stat"><div class="v">${d.personal_bests.length}</div><div class="l">Distancias</div></div>
@@ -406,6 +426,7 @@ async function doAuth(mode){
     const body = reg ? { email, password:pw, full_name:$("fn").value.trim()||null } : { email, password:pw };
     const d = await api("POST", reg?"/api/auth/register":"/api/auth/login", body);
     setSession(d); go("home");
+    if(d.linked > 0) toast(`Vinculamos ${d.linked} resultado${d.linked===1?"":"s"} a tu perfil 🎉`);
   } catch(e){ showAuthErr(e.message); b.disabled=false; }
 }
 
