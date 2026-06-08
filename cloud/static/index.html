@@ -10,6 +10,9 @@
 <body>
 <header>
   <div class="logo" onclick="go('home')"><span class="dot"></span>CHRONO<span>TRACK</span></div>
+  <div class="header-search" id="headerSearch">
+    <input id="hq" placeholder="🔎 Buscar corredor o carrera…" onkeydown="if(event.key==='Enter')headerSearch()">
+  </div>
   <div class="nav" id="nav"></div>
   <button id="themeBtn" class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema claro u oscuro">◐</button>
 </header>

@@ -57,6 +57,10 @@ function go(view, arg){
   state.view = view; state.arg = arg; state.distFilter = null;
   window.scrollTo(0,0);
   renderNav();
+  const hs = document.getElementById("headerSearch");
+  if(hs) hs.style.display = (view === "home") ? "none" : "block";
+  const hq = document.getElementById("hq");
+  if(hq && view === "search") hq.value = arg || "";
   if(view==="home")     return viewHome();
   if(view==="search")   return viewSearch(arg);
   if(view==="race")     return viewRace(arg);
@@ -92,6 +96,7 @@ function viewHome(){
     </section>`;
 }
 function homeSearch(){ const q=$("q").value.trim(); if(q.length>=2) go("search", q); }
+function headerSearch(){ const el=document.getElementById("hq"); const q=(el?el.value:"").trim(); if(q.length>=2) go("search", q); }
 
 function raceCard(r){
   return `<div class="card click" onclick="go('race','${r.code}')">

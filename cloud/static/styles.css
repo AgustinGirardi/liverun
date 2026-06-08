@@ -49,6 +49,12 @@
     width:36px; height:36px; border-radius:9px; font-size:16px; line-height:1; margin-left:8px;
     transition:all .15s; }
   .theme-toggle:hover { border-color:var(--acc); color:var(--acc); }
+  .header-search { flex:1; max-width:420px; }
+  .header-search input { width:100%; background:var(--panel2); border:1px solid var(--border);
+    border-radius:9px; padding:9px 13px; color:var(--txt); font-size:13px; outline:none;
+    transition:border-color .15s, box-shadow .15s; }
+  .header-search input:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(var(--acc-rgb),.18); }
+  @media (max-width:680px){ .header-search { max-width:none; } .logo span { display:none; } }
 
   main { max-width:920px; margin:0 auto; padding:30px 20px 40px; }
   h1 { font-size:26px; font-weight:800; letter-spacing:-.5px; margin-bottom:6px; }
