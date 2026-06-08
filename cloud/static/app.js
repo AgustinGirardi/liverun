@@ -93,7 +93,20 @@ function viewHome(){
         <div class="feature"><div class="ic">🏅</div><h3>Certificado al instante</h3><p>Descargá tu certificado de finisher en PDF con un clic.</p></div>
         <div class="feature"><div class="ic">📈</div><h3>Tu progreso</h3><p>Guardá tus resultados y mirá tus mejores marcas por distancia.</p></div>
       </div>
-    </section>`;
+    </section>
+    <h2 style="text-align:center;margin-top:36px">Carreras recientes</h2>
+    <div class="sub" style="text-align:center">Explorá los últimos resultados publicados.</div>
+    <div id="homeRaces"><div class="empty">Cargando…</div></div>`;
+  loadHomeRaces();
+}
+async function loadHomeRaces(){
+  const box = $("homeRaces"); if(!box) return;
+  try {
+    const races = await api("GET","/api/races");
+    box.innerHTML = races.length
+      ? races.slice(0, 9).map(raceCard).join("")
+      : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
+  } catch(e){ box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 function homeSearch(){ const q=$("q").value.trim(); if(q.length>=2) go("search", q); }
 function headerSearch(){ const el=document.getElementById("hq"); const q=(el?el.value:"").trim(); if(q.length>=2) go("search", q); }
