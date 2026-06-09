@@ -89,30 +89,22 @@ function go(view, arg){
 function viewHome(){
   if(USER) return viewDashboard();
   $("app").innerHTML = `
-    <section class="hero">
-      <div class="badge">Resultados oficiales</div>
-      <h1 class="hero-title">Encontrá tu tiempo,<br><span class="accent">descargá tu certificado</span>.</h1>
-      <p class="hero-sub">Buscá tu nombre y accedé a tus resultados al instante. Creá tu cuenta para guardar tu historial y seguir tu progreso.</p>
-      <div class="search-hero">
-        <input id="q" placeholder="Buscá tu nombre o el de la carrera…" onkeydown="if(event.key==='Enter')homeSearch()">
-        <button class="btn sm" onclick="homeSearch()">Buscar</button>
+    <div class="home-split">
+      <div class="home-hero">
+        <span class="badge">Resultados oficiales</span>
+        <h1 class="home-title">Encontrá tu tiempo,<br><span class="grad-text">seguí tu progreso</span>.</h1>
+        <p class="home-lead">Buscá tu nombre y accedé a tus resultados al instante.</p>
+        <div class="home-search">
+          <input id="q" placeholder="Buscá tu nombre…" onkeydown="if(event.key==='Enter')homeSearch()">
+          <button class="btn sm" onclick="homeSearch()">Buscar</button>
+        </div>
+        <div class="home-note">También podés escribir el <b>código de la carrera</b>.</div>
       </div>
-      <div class="hero-cta">
-        ${USER ? `<button class="btn sm" onclick="go('me')">Ver mi perfil →</button>`
-               : `<button class="btn sm" onclick="go('register')">Crear cuenta</button>
-                  <button class="btn ghost sm" onclick="go('login')">Ingresar</button>`}
+      <div class="home-recent">
+        <div class="home-recent-label">Carreras recientes</div>
+        <div id="homeRaces"><div class="empty">Cargando…</div></div>
       </div>
-      <div class="hero-note">También podés escribir el <b>código de la carrera</b> en el buscador.</div>
-
-      <div class="features">
-        <div class="feature"><div class="ic">🔎</div><h3>Buscá por nombre</h3><p>Sin códigos ni dorsales: escribí tu nombre y encontrá tus carreras.</p></div>
-        <div class="feature"><div class="ic">🏅</div><h3>Certificado al instante</h3><p>Descargá tu certificado de finisher en PDF con un clic.</p></div>
-        <div class="feature"><div class="ic">📈</div><h3>Tu progreso</h3><p>Guardá tus resultados y mirá tus mejores marcas por distancia.</p></div>
-      </div>
-    </section>
-    <h2 style="text-align:center;margin-top:36px">Carreras recientes</h2>
-    <div class="sub" style="text-align:center">Explorá los últimos resultados publicados.</div>
-    <div id="homeRaces"><div class="empty">Cargando…</div></div>`;
+    </div>`;
   loadHomeRaces();
 }
 async function loadHomeRaces(){
@@ -145,7 +137,7 @@ function raceCard(r){
 async function viewDashboard(){
   const first = esc((USER.full_name || USER.email).split(" ")[0]);
   $("app").innerHTML = `
-    <h1>Hola, ${first} 👋</h1>
+    <h1>Hola, <span class="grad-text">${first}</span> 👋</h1>
     <div class="sub">Tu historial personal y todas las carreras publicadas.</div>
     <div class="search-hero" style="max-width:560px;margin-bottom:24px">
       <input id="q" placeholder="Buscá tu nombre para agregar un resultado…" onkeydown="if(event.key==='Enter')homeSearch()">
@@ -197,7 +189,7 @@ async function viewDashboard(){
 // ── Búsqueda ───────────────────────────────────────────────────────────────
 async function viewSearch(q){
   $("app").innerHTML = `<a class="back" onclick="go('home')">← Inicio</a>
-    <h1>Buscar resultados</h1>
+    <h1>Buscar <span class="grad-text">resultados</span></h1>
     <div class="search-hero" style="max-width:560px;margin:14px 0 22px">
       <input id="q" value="${esc(q)}" placeholder="Tu nombre o el de la carrera…" onkeydown="if(event.key==='Enter')homeSearch()">
       <button class="btn sm" onclick="homeSearch()">Buscar</button>
@@ -234,7 +226,7 @@ async function viewSearch(q){
           <div class="row">
             <button class="btn ghost sm" onclick="go('race','${r.race_code}')">Ver carrera</button>
             ${r.status==="FINISHER"?`<button class="btn ghost sm" onclick="certSearch(${i})">🏅 Certificado</button>`:""}
-            <button class="btn sm" onclick="saveResult(${r.result_id}, this)">${USER?"Guardar en mi perfil":"Crear cuenta y guardar"}</button>
+            <button class="btn sm${USER?"":" grad"}" onclick="saveResult(${r.result_id}, this)">${USER?"Guardar en mi perfil":"Crear cuenta y guardar"}</button>
           </div>
         </div>`).join("");
     }
@@ -385,7 +377,7 @@ function viewAuth(mode){
   const reg = mode==="register";
   $("app").innerHTML = `
     <div style="max-width:400px;margin:24px auto">
-      <h1>${reg?"Crear cuenta":"Ingresar"}</h1>
+      <h1>${reg?`Crear <span class="grad-text">cuenta</span>`:`<span class="grad-text">Ingresar</span>`}</h1>
       <div class="sub">${reg?"Guardá tus resultados y seguí tu progreso.":"Accedé a tu historial de carreras."}</div>
       <div class="card">
         <div id="amsg"></div>
@@ -398,7 +390,7 @@ function viewAuth(mode){
           </div>
           ${reg?`<div class="pw-meter"><div class="pw-bar"><i id="pwFill"></i></div><span class="pw-lbl" id="pwLbl"></span></div>`:""}
         </div>
-        <button class="btn" id="abtn" onclick="doAuth('${mode}')">${reg?"Crear cuenta":"Ingresar"}</button>
+        <button class="btn grad" id="abtn" onclick="doAuth('${mode}')">${reg?"Crear cuenta":"Ingresar"}</button>
         <div style="text-align:center;margin-top:15px" class="muted">
           ${reg?`¿Ya tenés cuenta? <a style="color:var(--acc)" onclick="go('login')">Ingresá</a>`
                 :`¿Sos nuevo? <a style="color:var(--acc)" onclick="go('register')">Creá tu cuenta</a>`}
