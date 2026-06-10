@@ -1185,7 +1185,7 @@ function TimingPage({ race }) {
         </div>
         <div style={{ ...CARD }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#8a9299", marginBottom: 12, display: "flex", alignItems: "center" }}>
-            Clasificación final
+            Clasificación <span style={{ marginLeft: 4 }}><OpGrad>final</OpGrad></span>
             <span style={{ marginLeft: "auto", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length} finishers</span>
           </div>
           {finishers.length === 0
@@ -1305,7 +1305,7 @@ function TimingPage({ race }) {
       {/* Columna derecha: Clasificación en vivo */}
       <div style={{ ...CARD, overflow: "auto" }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#8a9299", marginBottom: 12, display: "flex", alignItems: "center" }}>
-          Clasificación en vivo
+          Clasificación <span style={{ marginLeft: 4 }}><OpGrad>en vivo</OpGrad></span>
           <span style={{ marginLeft: "auto", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length}</span>
         </div>
         {finishers.length === 0
@@ -1433,7 +1433,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
           <button onClick={onBack} style={{ ...BTN_GHOST, flexShrink: 0, marginTop: 2 }}>← Carreras</button>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{race.name}</div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}><OpGrad>{race.name}</OpGrad></div>
             <div style={{ fontSize: 12, color: "#525a60", marginTop: 2 }}>
               {[race.race_date, race.location].filter(Boolean).join(" · ")}
             </div>
@@ -1777,7 +1777,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 0 }}>
         <button onClick={onBack} style={{ ...BTN_GHOST, marginTop: 4, flexShrink: 0 }}>← Carreras</button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 20 }}>{race.name}</div>
+          <div style={{ fontWeight: 700, fontSize: 20 }}><OpGrad>{race.name}</OpGrad></div>
           <div style={{ fontSize: 12, color: "#525a60", marginTop: 3 }}>
             {[race.race_date, race.location].filter(Boolean).join(" · ")}
           </div>
@@ -1791,7 +1791,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
           </button>
           <button onClick={publish} disabled={publishing}
             title="Publicar los resultados en el portal público (sin DNI ni fecha de nacimiento)"
-            style={{ padding: "5px 12px", background: "#00e5a015", color: "#00e5a0", border: "1px solid #00e5a030", borderRadius: 6, cursor: publishing ? "default" : "pointer", fontSize: 12, fontWeight: 600, opacity: publishing ? 0.6 : 1 }}>
+            style={{ padding: "5px 12px", background: OP_GRAD, color: "#000", border: "none", borderRadius: 6, cursor: publishing ? "default" : "pointer", fontSize: 12, fontWeight: 700, opacity: publishing ? 0.6 : 1 }}>
             {publishing ? "Publicando…" : "☁ Publicar"}
           </button>
           <button onClick={sendResults} disabled={sending}
