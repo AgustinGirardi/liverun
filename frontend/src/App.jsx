@@ -430,12 +430,14 @@ function autoCategory(birthDate, gender) {
 
 // ── Estilos compartidos ───────────────────────────────────────────────────────
 
+// Degradado sobrio mint→teal — acento de marca del operador (títulos + acciones principales).
+const OP_GRAD = "linear-gradient(110deg, #00bf85, #00e5a0)"
 const INPUT = {
   background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6,
   padding: "7px 10px", color: "#e8eaeb", fontSize: 13, outline: "none", width: "100%",
 }
 const BTN_PRIMARY = {
-  padding: "6px 16px", background: "#00e5a0", border: "none",
+  padding: "6px 16px", background: OP_GRAD, border: "none",
   borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12, color: "#000",
 }
 const BTN_GHOST = {
@@ -448,6 +450,11 @@ const BTN_DANGER = {
 }
 const CARD = {
   background: "#141618", border: "1px solid #2a2e31", borderRadius: 8, padding: 16,
+}
+
+// Acento de marca: degradado mint→teal clippeado a texto, para una palabra/frase de un título.
+function OpGrad({ children }) {
+  return <span style={{ background: OP_GRAD, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{children}</span>
 }
 
 // ── StatusBadge ───────────────────────────────────────────────────────────────
@@ -1234,7 +1241,7 @@ function TimingPage({ race }) {
       {/* Columna izquierda */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <button onClick={capture}
-          style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 700, background: "#00e5a0", border: "none", borderRadius: 8, cursor: "pointer", color: "#000", letterSpacing: 2 }}>
+          style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 700, background: OP_GRAD, border: "none", borderRadius: 8, cursor: "pointer", color: "#000", letterSpacing: 2 }}>
           ⏱ CAPTURAR LLEGADA
         </button>
 
@@ -1876,7 +1883,7 @@ function DashboardPage({ onNavigate }) {
             {dayName}, {dateStr}
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#e8eaeb" }}>
-            Panel de Control
+            Panel de <OpGrad>Control</OpGrad>
           </div>
           <div style={{ fontSize: 13, color: "#525a60", marginTop: 4 }}>
             Sistema de cronometraje de carreras · ChronoTrack v2.0
@@ -2055,7 +2062,7 @@ function RacesPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Carreras</span>
+          <span style={{ fontWeight: 700, fontSize: 16 }}><OpGrad>Carreras</OpGrad></span>
           <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{races.length}</span>
         </div>
         <button onClick={() => { setShowForm(!showForm); setError("") }} style={BTN_PRIMARY}>+ Nueva Carrera</button>
@@ -2223,7 +2230,7 @@ function AthletesPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Atletas</span>
+          <span style={{ fontWeight: 700, fontSize: 16 }}><OpGrad>Atletas</OpGrad></span>
           <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{runners.length}</span>
           <span style={{ marginLeft: 8, fontSize: 12, color: "#525a60" }}>— base global de corredores</span>
         </div>
@@ -2412,7 +2419,7 @@ function HistorialPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Historial de Carreras</span>
+          <span style={{ fontWeight: 700, fontSize: 16 }}><OpGrad>Historial</OpGrad> de Carreras</span>
           <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
             {races.length} carrera{races.length !== 1 ? "s" : ""}
           </span>
