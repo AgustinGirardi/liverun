@@ -5,10 +5,8 @@ Roles:
   - Corredor:   crea cuenta, reclama sus resultados (dorsal + apellido) y ve su historial.
 """
 import os
-import time
 import hashlib
 import unicodedata
-from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -26,39 +24,13 @@ from sqlalchemy.orm import Session
 
 from cloud.db import get_db, init_db
 from cloud.models import PortalUser, PublishedRace, PublishedResult, Claim
-from cloud.security import hash_password, verify_password, make_token, verify_token
+from cloud.security import hash_password, verify_password, make_token
 
 PUBLISH_API_KEY = os.environ.get("CT_PUBLISH_KEY", "dev-publish-key-change-me")
 
-
-# ── Rate limiting simple en memoria (proceso único en Render starter) ─────────
-_RATE: dict[str, list[float]] = defaultdict(list)
-_LAST_SWEEP = [0.0]
-_SWEEP_EVERY = 300.0   # barrer como mucho cada 5 min
-_STALE_AFTER = 600.0   # una IP sin actividad en 10 min se olvida
-
-def _client_ip(request: Request) -> str:
-    # Detrás del proxy de Render el IP real viaja en X-Forwarded-For.
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-def rate_limit(request: Request, bucket: str, limit: int = 10, window: float = 60.0):
-    """Lanza 429 si se superan `limit` intentos por IP en `window` segundos."""
-    key = f"{bucket}:{_client_ip(request)}"
-    now = time.time()
-    # Purga periódica: sin esto el diccionario acumula IPs para siempre.
-    if now - _LAST_SWEEP[0] > _SWEEP_EVERY:
-        _LAST_SWEEP[0] = now
-        for k in list(_RATE):
-            if not any(now - t < _STALE_AFTER for t in _RATE[k]):
-                del _RATE[k]
-    hits = [t for t in _RATE[key] if now - t < window]
-    if len(hits) >= limit:
-        raise HTTPException(429, "Demasiados intentos. Esperá un minuto e intentá de nuevo.")
-    hits.append(now)
-    _RATE[key] = hits
+# Compartidos con la API móvil (cloud/run.py). _RATE y _LAST_SWEEP se re-exportan
+# porque los tests los manipulan vía `cloud.main` (limpiar estado / forzar barrido).
+from cloud.deps import _RATE, _LAST_SWEEP, current_user, rate_limit  # noqa: E402,F401
 
 
 # ── Coincidencia de nombre (para verificar identidad al guardar resultados) ───
@@ -78,6 +50,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _ensure_run_columns():
+    """Migración suave para SQLite: columnas de ChronoTrack Run en portal_users.
+    Mismo criterio que _ensure_email_hash_column. Idempotente."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(portal_users)"))]
+        if not cols:
+            return  # tabla inexistente: create_all la crea completa
+        wanted = {
+            "google_id":   "ALTER TABLE portal_users ADD COLUMN google_id VARCHAR(64)",
+            "username":    "ALTER TABLE portal_users ADD COLUMN username VARCHAR(30)",
+            "weekly_goal": "ALTER TABLE portal_users ADD COLUMN weekly_goal INTEGER NOT NULL DEFAULT 3",
+            "avatar_url":  "ALTER TABLE portal_users ADD COLUMN avatar_url VARCHAR(400)",
+        }
+        for col, ddl in wanted.items():
+            if col not in cols:
+                conn.execute(text(ddl))
+        # SQLite: UNIQUE de columnas nuevas via indices (ALTER no admite constraints)
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_portal_users_username ON portal_users (username)"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_portal_users_google_id ON portal_users (google_id)"))
 
 
 def _ensure_email_hash_column():
@@ -108,6 +103,7 @@ def _startup():
             )
     init_db()
     _ensure_email_hash_column()
+    _ensure_run_columns()
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
@@ -207,18 +203,6 @@ def _autolink(user: PortalUser, db: Session) -> int:
     if created:
         db.commit()
     return created
-
-
-def current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> PortalUser:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(401, "No autenticado")
-    uid = verify_token(authorization.split(" ", 1)[1])
-    if not uid:
-        raise HTTPException(401, "Sesión inválida o expirada")
-    user = db.get(PortalUser, uid)
-    if not user:
-        raise HTTPException(401, "Usuario no encontrado")
-    return user
 
 
 # ── Publicación (organizador) ────────────────────────────────────────────────
@@ -501,6 +485,13 @@ def unpublish(source_id: str, x_api_key: str = Header(None), db: Session = Depen
     db.delete(race)
     db.commit()
     return {"deleted": True, "code": code}
+
+
+# ── API de la app móvil (ChronoTrack Run) ─────────────────────────────────────
+
+from cloud.run import router as run_router  # noqa: E402
+
+app.include_router(run_router)
 
 
 # ── Portal estático (se monta al final para no tapar /api) ────────────────────

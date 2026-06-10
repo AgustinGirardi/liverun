@@ -5,7 +5,7 @@ Solo datos públicos de resultado: nombre, dorsal, categoría, club, tiempo, pos
 """
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Float, Date, DateTime,
+    Column, Integer, BigInteger, String, Float, Date, DateTime, Text,
     ForeignKey, UniqueConstraint, func,
 )
 from sqlalchemy.orm import relationship
@@ -19,7 +19,13 @@ class PortalUser(Base):
     password_hash = Column(String(255), nullable=False)
     full_name     = Column(String(200), nullable=True)
     created_at    = Column(DateTime, server_default=func.now())
+    # ── ChronoTrack Run (app móvil) ── cuenta unificada con el portal
+    google_id     = Column(String(64), nullable=True, unique=True)
+    username      = Column(String(30), nullable=True, unique=True, index=True)
+    weekly_goal   = Column(Integer, nullable=False, default=3, server_default="3")
+    avatar_url    = Column(String(400), nullable=True)
     claims        = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
+    activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
 
 
 class PublishedRace(Base):
@@ -52,6 +58,41 @@ class PublishedResult(Base):
     race           = relationship("PublishedRace", back_populates="results")
     claims         = relationship("Claim", back_populates="result", cascade="all, delete-orphan")
     __table_args__ = (UniqueConstraint("race_id", "bib_number", "distance_km", name="uq_race_bib_dist"),)
+
+
+class Activity(Base):
+    """Salida de running registrada desde la app móvil (ChronoTrack Run).
+
+    Los cálculos (distancia, ritmo, splits) los hace el teléfono; acá solo se
+    persisten. `client_uuid` lo genera la app para que la cola de sincronización
+    offline no duplique salidas al reintentar."""
+    __tablename__ = "run_activities"
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    user_id           = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_uuid       = Column(String(64), nullable=False)
+    started_at        = Column(DateTime, nullable=False, index=True)
+    duration_s        = Column(Integer, nullable=False)            # neto, sin pausas
+    distance_m        = Column(Float, nullable=False)
+    avg_pace_s_per_km = Column(Float, nullable=True)
+    splits            = Column(Text, nullable=True)                # JSON: [seg km1, seg km2, ...]
+    polyline          = Column(Text, nullable=True)                # encoded polyline del recorrido
+    created_at        = Column(DateTime, server_default=func.now())
+    user              = relationship("PortalUser", back_populates="activities")
+    __table_args__ = (UniqueConstraint("user_id", "client_uuid", name="uq_user_client_uuid"),)
+
+
+class Friendship(Base):
+    """Amistad entre corredores: solicitud → aceptación mutua.
+    Solo amigos aceptados comparten ranking y actividades (privacidad:
+    un recorrido revela dónde vive el usuario)."""
+    __tablename__ = "run_friendships"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    requester_id = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    addressee_id = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status       = Column(String(10), nullable=False, default="pending")  # pending/accepted
+    created_at   = Column(DateTime, server_default=func.now())
+    accepted_at  = Column(DateTime, nullable=True)
+    __table_args__ = (UniqueConstraint("requester_id", "addressee_id", name="uq_friendship_pair"),)
 
 
 class Claim(Base):

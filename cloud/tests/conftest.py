@@ -41,6 +41,18 @@ def db():
 PUBLISH_KEY = "test-publish-key"
 
 
+def make_user(client, email="runner@test.com", password="secreta123", username=None, full_name="Test Runner"):
+    """Helper: registra un usuario y devuelve los headers de auth.
+    Si se pasa `username`, lo setea en el perfil de Run."""
+    r = client.post("/api/auth/register", json={"email": email, "password": password, "full_name": full_name})
+    assert r.status_code == 200, r.text
+    headers = {"Authorization": f"Bearer {r.json()['token']}"}
+    if username:
+        r = client.patch("/api/run/profile", json={"username": username}, headers=headers)
+        assert r.status_code == 200, r.text
+    return headers
+
+
 def publish_race(client, source_id="ct-race-1", name="Maratón Test", results=None):
     """Helper: publica una carrera vía API y devuelve la respuesta JSON."""
     payload = {

@@ -1,0 +1,362 @@
+"""ChronoTrack Run — API de la app móvil (/api/run/...).
+
+Cuenta unificada con el portal: el mismo PortalUser que reclama resultados
+registra acá sus salidas. Auth con los endpoints existentes /api/auth/*.
+"""
+import json
+import re
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from cloud.db import get_db
+from cloud.deps import current_user, rate_limit
+from cloud.models import Activity, Friendship, PortalUser
+
+router = APIRouter(prefix="/api/run", tags=["Run"])
+
+USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,30}$")
+
+
+# ── Lógica pura (testeable sin DB) ────────────────────────────────────────────
+
+def week_start(d: date) -> date:
+    """Lunes de la semana de `d` (semana lunes–domingo)."""
+    return d - timedelta(days=d.weekday())
+
+
+def compute_streak(run_dates: set[date], weekly_goal: int, today: date) -> int:
+    """Racha = semanas consecutivas (hacia atrás desde la última semana cerrada)
+    en las que los días con al menos una salida alcanzaron la meta.
+    La semana en curso suma si ya cumplió, pero nunca rompe la racha."""
+    goal = max(1, weekly_goal)
+    cur = week_start(today)
+    streak = 0
+    if len({d for d in run_dates if cur <= d <= today}) >= goal:
+        streak += 1
+    w = cur - timedelta(days=7)
+    while len({d for d in run_dates if w <= d < w + timedelta(days=7)}) >= goal:
+        streak += 1
+        w -= timedelta(days=7)
+    return streak
+
+
+def _as_naive_utc(dt: datetime) -> datetime:
+    """Normaliza datetimes con tz a UTC naive (la DB guarda naive)."""
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+# ── Schemas ───────────────────────────────────────────────────────────────────
+
+class ProfileUpdate(BaseModel):
+    username: Optional[str] = None
+    weekly_goal: Optional[int] = Field(None, ge=1, le=7)
+    full_name: Optional[str] = Field(None, max_length=200)
+
+
+class ActivityIn(BaseModel):
+    client_uuid: str = Field(..., min_length=1, max_length=64)
+    started_at: datetime
+    duration_s: int = Field(..., ge=1)
+    distance_m: float = Field(..., ge=0)
+    avg_pace_s_per_km: Optional[float] = Field(None, gt=0)
+    splits: list[float] = []
+    polyline: Optional[str] = Field(None, max_length=100_000)
+
+
+class FriendRequestIn(BaseModel):
+    username: str
+
+
+class FriendAcceptIn(BaseModel):
+    friendship_id: int
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _activity_dict(a: Activity, full: bool = False) -> dict:
+    out = {
+        "id": a.id,
+        "client_uuid": a.client_uuid,
+        "started_at": a.started_at.isoformat(),
+        "duration_s": a.duration_s,
+        "distance_m": a.distance_m,
+        "avg_pace_s_per_km": a.avg_pace_s_per_km,
+    }
+    if full:
+        out["splits"] = json.loads(a.splits) if a.splits else []
+        out["polyline"] = a.polyline
+    return out
+
+
+def _user_public(u: PortalUser) -> dict:
+    return {"username": u.username, "full_name": u.full_name, "avatar_url": u.avatar_url}
+
+
+def _friend_ids(user_id: int, db: Session) -> set[int]:
+    rows = db.scalars(
+        select(Friendship).where(
+            ((Friendship.requester_id == user_id) | (Friendship.addressee_id == user_id))
+            & (Friendship.status == "accepted")
+        )
+    ).all()
+    return {f.addressee_id if f.requester_id == user_id else f.requester_id for f in rows}
+
+
+# ── Perfil ────────────────────────────────────────────────────────────────────
+
+@router.get("/profile")
+def get_profile(user: PortalUser = Depends(current_user)):
+    return {
+        "email": user.email,
+        "full_name": user.full_name,
+        "username": user.username,
+        "weekly_goal": user.weekly_goal or 3,
+        "avatar_url": user.avatar_url,
+    }
+
+
+@router.patch("/profile")
+def update_profile(body: ProfileUpdate, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    if body.username is not None:
+        username = body.username.strip().lower()
+        if not USERNAME_RE.match(username):
+            raise HTTPException(400, "Username inválido: 3-30 caracteres, solo letras, números, punto y guión bajo")
+        other = db.scalar(select(PortalUser).where(PortalUser.username == username, PortalUser.id != user.id))
+        if other:
+            raise HTTPException(409, "Ese username ya está en uso")
+        user.username = username
+    if body.weekly_goal is not None:
+        user.weekly_goal = body.weekly_goal
+    if body.full_name is not None:
+        user.full_name = body.full_name.strip() or None
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Ese username ya está en uso")
+    return get_profile(user)
+
+
+# ── Actividades ───────────────────────────────────────────────────────────────
+
+@router.post("/activities")
+def create_activity(body: ActivityIn, request: Request,
+                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    rate_limit(request, "run_activity", limit=60, window=60.0)
+    existing = db.scalar(select(Activity).where(
+        Activity.user_id == user.id, Activity.client_uuid == body.client_uuid
+    ))
+    if existing:
+        # Reintento de la cola de sincronización: idempotente, no duplica.
+        return {"duplicated": True, **_activity_dict(existing)}
+
+    pace = body.avg_pace_s_per_km
+    if pace is None and body.distance_m > 0:
+        pace = body.duration_s / (body.distance_m / 1000.0)
+
+    act = Activity(
+        user_id=user.id,
+        client_uuid=body.client_uuid,
+        started_at=_as_naive_utc(body.started_at),
+        duration_s=body.duration_s,
+        distance_m=body.distance_m,
+        avg_pace_s_per_km=pace,
+        splits=json.dumps(body.splits) if body.splits else None,
+        polyline=body.polyline,
+    )
+    db.add(act)
+    try:
+        db.commit()
+    except IntegrityError:
+        # Dos reintentos simultáneos: el segundo pierde contra el unique y devuelve el primero.
+        db.rollback()
+        existing = db.scalar(select(Activity).where(
+            Activity.user_id == user.id, Activity.client_uuid == body.client_uuid
+        ))
+        return {"duplicated": True, **_activity_dict(existing)}
+    return {"duplicated": False, **_activity_dict(act)}
+
+
+@router.get("/activities")
+def list_activities(limit: int = 30, offset: int = 0,
+                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    limit = max(1, min(limit, 100))
+    acts = db.scalars(
+        select(Activity).where(Activity.user_id == user.id)
+        .order_by(Activity.started_at.desc()).limit(limit).offset(max(0, offset))
+    ).all()
+    return [_activity_dict(a) for a in acts]
+
+
+@router.get("/activities/{activity_id}")
+def activity_detail(activity_id: int,
+                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    act = db.get(Activity, activity_id)
+    if not act or act.user_id != user.id:
+        raise HTTPException(404, "Actividad no encontrada")
+    return _activity_dict(act, full=True)
+
+
+# ── Resumen (pestaña Inicio): racha + semana + mes ────────────────────────────
+
+@router.get("/summary")
+def summary(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    acts = db.scalars(select(Activity).where(Activity.user_id == user.id)).all()
+    today = date.today()
+    goal = user.weekly_goal or 3
+    dates = {a.started_at.date() for a in acts}
+
+    wk = week_start(today)
+    week_acts = [a for a in acts if wk <= a.started_at.date() <= today]
+    month_acts = [a for a in acts if a.started_at.date().replace(day=1) == today.replace(day=1)]
+
+    return {
+        "streak_weeks": compute_streak(dates, goal, today),
+        "week": {
+            "days_run": len({a.started_at.date() for a in week_acts}),
+            "goal": goal,
+            "km": round(sum(a.distance_m for a in week_acts) / 1000.0, 2),
+        },
+        "month": {
+            "km": round(sum(a.distance_m for a in month_acts) / 1000.0, 2),
+            "activities": len(month_acts),
+            "days_run": len({a.started_at.date() for a in month_acts}),
+            "run_dates": sorted(d.isoformat() for d in {a.started_at.date() for a in month_acts}),
+        },
+    }
+
+
+# ── Amigos ────────────────────────────────────────────────────────────────────
+
+@router.get("/friends/search")
+def search_friends(q: str, request: Request,
+                   user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    rate_limit(request, "run_search", limit=30, window=60.0)
+    q = (q or "").strip().lower()
+    if len(q) < 3:
+        return []
+    users = db.scalars(
+        select(PortalUser).where(
+            PortalUser.username.is_not(None),
+            PortalUser.username.like(f"%{q}%"),
+            PortalUser.id != user.id,
+        ).limit(20)
+    ).all()
+    friends = _friend_ids(user.id, db)
+    pending = db.scalars(select(Friendship).where(
+        ((Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id))
+        & (Friendship.status == "pending")
+    )).all()
+    pending_ids = {f.addressee_id for f in pending} | {f.requester_id for f in pending}
+    out = []
+    for u in users:
+        relation = "friend" if u.id in friends else ("pending" if u.id in pending_ids else "none")
+        out.append({**_user_public(u), "relation": relation})
+    return out
+
+
+@router.post("/friends/request")
+def request_friend(body: FriendRequestIn, request: Request,
+                   user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    rate_limit(request, "run_friend", limit=30, window=60.0)
+    if not user.username:
+        raise HTTPException(400, "Primero elegí tu username en el perfil")
+    target = db.scalar(select(PortalUser).where(PortalUser.username == body.username.strip().lower()))
+    if not target:
+        raise HTTPException(404, "No existe un corredor con ese username")
+    if target.id == user.id:
+        raise HTTPException(400, "No podés agregarte a vos mismo")
+
+    existing = db.scalar(select(Friendship).where(
+        ((Friendship.requester_id == user.id) & (Friendship.addressee_id == target.id))
+        | ((Friendship.requester_id == target.id) & (Friendship.addressee_id == user.id))
+    ))
+    if existing:
+        if existing.status == "accepted":
+            raise HTTPException(409, "Ya son amigos")
+        if existing.requester_id == user.id:
+            raise HTTPException(409, "Ya le enviaste una solicitud")
+        # El otro ya me había pedido: pedirle de vuelta equivale a aceptar.
+        existing.status = "accepted"
+        existing.accepted_at = _as_naive_utc(datetime.now(timezone.utc))
+        db.commit()
+        return {"status": "accepted", "friend": _user_public(target)}
+
+    db.add(Friendship(requester_id=user.id, addressee_id=target.id, status="pending"))
+    db.commit()
+    return {"status": "pending", "friend": _user_public(target)}
+
+
+@router.post("/friends/accept")
+def accept_friend(body: FriendAcceptIn,
+                  user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    fr = db.get(Friendship, body.friendship_id)
+    if not fr or fr.addressee_id != user.id or fr.status != "pending":
+        raise HTTPException(404, "Solicitud no encontrada")
+    fr.status = "accepted"
+    fr.accepted_at = _as_naive_utc(datetime.now(timezone.utc))
+    db.commit()
+    requester = db.get(PortalUser, fr.requester_id)
+    return {"status": "accepted", "friend": _user_public(requester)}
+
+
+@router.get("/friends")
+def list_friends(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    rows = db.scalars(select(Friendship).where(
+        (Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id)
+    )).all()
+    friends, incoming, outgoing = [], [], []
+    for f in rows:
+        other = db.get(PortalUser, f.addressee_id if f.requester_id == user.id else f.requester_id)
+        if f.status == "accepted":
+            friends.append(_user_public(other))
+        elif f.addressee_id == user.id:
+            incoming.append({"friendship_id": f.id, **_user_public(other)})
+        else:
+            outgoing.append({"friendship_id": f.id, **_user_public(other)})
+    return {"friends": friends, "incoming": incoming, "outgoing": outgoing}
+
+
+# ── Ranking entre amigos ──────────────────────────────────────────────────────
+
+@router.get("/ranking")
+def ranking(period: str = "week",
+            user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Km y días corridos del usuario y sus amigos aceptados, en la semana o el
+    mes calendario en curso. El orden (por km o por días) lo elige la app."""
+    if period not in ("week", "month"):
+        raise HTTPException(400, "period debe ser 'week' o 'month'")
+    today = date.today()
+    since = week_start(today) if period == "week" else today.replace(day=1)
+
+    ids = _friend_ids(user.id, db) | {user.id}
+    acts = db.scalars(select(Activity).where(
+        Activity.user_id.in_(ids),
+        Activity.started_at >= datetime(since.year, since.month, since.day),
+    )).all()
+
+    by_user: dict[int, list[Activity]] = {}
+    for a in acts:
+        by_user.setdefault(a.user_id, []).append(a)
+
+    entries = []
+    for uid in ids:
+        u = db.get(PortalUser, uid)
+        user_acts = by_user.get(uid, [])
+        entries.append({
+            **_user_public(u),
+            "is_me": uid == user.id,
+            "km": round(sum(a.distance_m for a in user_acts) / 1000.0, 2),
+            "days_run": len({a.started_at.date() for a in user_acts}),
+            "activities": len(user_acts),
+        })
+    entries.sort(key=lambda e: e["km"], reverse=True)
+    return {"period": period, "since": since.isoformat(), "entries": entries}
