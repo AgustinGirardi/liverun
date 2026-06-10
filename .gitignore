@@ -7,6 +7,7 @@
 
 # ── Secretos / config local del portal ──
 chronotrack_cloud.json
+chronotrack_email.json
 .env
 .env.*
 
@@ -32,6 +33,7 @@ installer/*.exe
 # ── Config local de Claude / herramientas (máquina-específico) ──
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/launch.json
 .claude/*.lock
 
 # ── Logs / temporales ──
