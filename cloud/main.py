@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 from sqlalchemy import select, func, delete as sa_delete
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cloud.db import get_db, init_db
@@ -32,6 +33,9 @@ PUBLISH_API_KEY = os.environ.get("CT_PUBLISH_KEY", "dev-publish-key-change-me")
 
 # ── Rate limiting simple en memoria (proceso único en Render starter) ─────────
 _RATE: dict[str, list[float]] = defaultdict(list)
+_LAST_SWEEP = [0.0]
+_SWEEP_EVERY = 300.0   # barrer como mucho cada 5 min
+_STALE_AFTER = 600.0   # una IP sin actividad en 10 min se olvida
 
 def _client_ip(request: Request) -> str:
     # Detrás del proxy de Render el IP real viaja en X-Forwarded-For.
@@ -44,6 +48,12 @@ def rate_limit(request: Request, bucket: str, limit: int = 10, window: float = 6
     """Lanza 429 si se superan `limit` intentos por IP en `window` segundos."""
     key = f"{bucket}:{_client_ip(request)}"
     now = time.time()
+    # Purga periódica: sin esto el diccionario acumula IPs para siempre.
+    if now - _LAST_SWEEP[0] > _SWEEP_EVERY:
+        _LAST_SWEEP[0] = now
+        for k in list(_RATE):
+            if not any(now - t < _STALE_AFTER for t in _RATE[k]):
+                del _RATE[k]
     hits = [t for t in _RATE[key] if now - t < window]
     if len(hits) >= limit:
         raise HTTPException(429, "Demasiados intentos. Esperá un minuto e intentá de nuevo.")
@@ -228,14 +238,27 @@ def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session 
     race.race_date = payload.race_date
     race.distances = ",".join(str(d) for d in sorted(payload.distances)) if payload.distances else None
 
-    # Re-publicación idempotente: reemplaza los resultados.
+    # Re-publicación idempotente: reemplaza los resultados, pero los claims de los
+    # corredores deben sobrevivir (si no, cada corrección del organizador les
+    # vaciaría el perfil). Se preservan por (dorsal, distancia).
     db.flush()
+    old_claims: dict[tuple, list[int]] = {}
+    for old in race.results:
+        for cl in old.claims:
+            old_claims.setdefault((old.bib_number, old.distance_km), []).append(cl.user_id)
     for old in list(race.results):
         db.delete(old)
     db.flush()
 
+    new_results = []
     for r in payload.results:
-        db.add(PublishedResult(race_id=race.id, **r.model_dump()))
+        res = PublishedResult(race_id=race.id, **r.model_dump())
+        db.add(res)
+        new_results.append(res)
+    db.flush()
+    for res in new_results:
+        for uid in old_claims.get((res.bib_number, res.distance_km), []):
+            db.add(Claim(user_id=uid, result_id=res.id))
 
     db.commit()
     return {"code": race.code, "published_results": len(payload.results)}
@@ -297,7 +320,13 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(409, "Ya existe una cuenta con ese email")
     user = PortalUser(email=email, password_hash=hash_password(body.password), full_name=body.full_name)
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Dos registros simultáneos con el mismo email: el segundo pierde contra
+        # el unique de la tabla. Mismo mensaje que el chequeo previo, no un 500.
+        db.rollback()
+        raise HTTPException(409, "Ya existe una cuenta con ese email")
     try:
         linked = _autolink(user, db)
     except Exception:
