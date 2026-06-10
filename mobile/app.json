@@ -1,4 +1,4 @@
-﻿{
+{
   "expo": {
     "name": "ChronoTrack Run",
     "slug": "chronotrack-run",
@@ -34,7 +34,8 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
