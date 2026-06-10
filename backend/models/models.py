@@ -14,11 +14,6 @@ class RaceStatus(str, enum.Enum):
     ACTIVE = "ACTIVE"
     FINISHED = "FINISHED"
 
-class CheckpointType(str, enum.Enum):
-    START = "START"
-    SPLIT = "SPLIT"
-    FINISH = "FINISH"
-
 class CaptureStatus(str, enum.Enum):
     PENDING = "PENDING"
     ASSIGNED = "ASSIGNED"
@@ -60,7 +55,6 @@ class Race(Base):
     race_start_ns  = Column(BigInteger, nullable=True)
     created_at     = Column(DateTime, server_default=func.now())
     registrations  = relationship("Registration", back_populates="race")
-    checkpoints    = relationship("Checkpoint", back_populates="race", order_by="Checkpoint.sequence")
     captures       = relationship("TimestampCapture", back_populates="race")
 
 class Registration(Base):
@@ -80,17 +74,6 @@ class Registration(Base):
         Index("ix_registration_bib", "race_id", "bib_number"),
     )
 
-class Checkpoint(Base):
-    __tablename__ = "checkpoints"
-    id              = Column(Integer, primary_key=True, autoincrement=True)
-    race_id         = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
-    name            = Column(String(100), nullable=False)
-    checkpoint_type = Column(Enum(CheckpointType), nullable=False)
-    distance_km     = Column(Float, nullable=True)
-    sequence        = Column(Integer, nullable=False)
-    race            = relationship("Race", back_populates="checkpoints")
-    splits          = relationship("Split", back_populates="checkpoint")
-
 class TimestampCapture(Base):
     __tablename__ = "timestamp_captures"
     id             = Column(Integer, primary_key=True, autoincrement=True)
@@ -108,9 +91,7 @@ class Split(Base):
     id              = Column(Integer, primary_key=True, autoincrement=True)
     timestamp_id    = Column(Integer, ForeignKey("timestamp_captures.id", ondelete="RESTRICT"), nullable=False, unique=True)
     registration_id = Column(Integer, ForeignKey("registrations.id", ondelete="RESTRICT"), nullable=False)
-    checkpoint_id   = Column(Integer, ForeignKey("checkpoints.id", ondelete="RESTRICT"), nullable=True)
     assigned_by     = Column(String(100), nullable=True, default="operator-1")
     assigned_at     = Column(DateTime, server_default=func.now())
     timestamp_capture = relationship("TimestampCapture", back_populates="split")
     registration      = relationship("Registration", back_populates="splits")
-    checkpoint        = relationship("Checkpoint", back_populates="splits")

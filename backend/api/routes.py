@@ -96,6 +96,15 @@ async def delete_runner(runner_id: int, db: AsyncSession = Depends(get_db)):
     runner = await db.get(Runner, runner_id)
     if not runner:
         raise HTTPException(404, "Runner not found")
+    reg_count = (await db.execute(
+        select(func.count()).where(Registration.runner_id == runner_id)
+    )).scalar_one()
+    if reg_count:
+        raise HTTPException(
+            409,
+            f"El atleta tiene {reg_count} inscripción(es) en carreras. "
+            "Eliminá primero sus inscripciones (o eliminá la carrera) y volvé a intentar.",
+        )
     await db.delete(runner)
     await db.commit()
 
@@ -430,7 +439,7 @@ async def manual_capture(race_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/races/{race_id}/captures/{capture_id}/assign", response_model=AssignBibResponse, tags=["Timing"])
 async def assign_bib(race_id: int, capture_id: int, body: AssignBibRequest, db: AsyncSession = Depends(get_db)):
     try:
-        return await get_engine(race_id).assign_bib(db, capture_id, body.bib_number, None)
+        return await get_engine(race_id).assign_bib(db, capture_id, body.bib_number)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -579,7 +588,12 @@ async def export_csv(race_id: int, db: AsyncSession = Depends(get_db)):
         writer.writerow([])
         writer.writerow(["-- DNS / DNF / DQ --"])
         for row in data.dnf_list:
-            writer.writerow(["", row.bib_number, row.runner.full_name, row.runner.dni or "", row.category or "", row.club or "", row.status])
+            dist_label = f"{row.distance_km} km" if row.distance_km else ""
+            # Mismas columnas que el encabezado; el estado va en la columna "Pos".
+            writer.writerow([
+                row.status, dist_label, row.bib_number, row.runner.full_name, row.runner.dni or "",
+                row.category or "", row.club or "", "", "",
+            ])
 
     output.seek(0)
     return StreamingResponse(
@@ -935,7 +949,6 @@ async def timing_websocket(race_id: int, ws: WebSocket):
                             db,
                             capture_id=msg["capture_id"],
                             bib_number=msg["bib"],
-                            checkpoint_id=None,
                         )
 
                     elif action == "undo_assign":

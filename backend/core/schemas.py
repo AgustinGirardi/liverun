@@ -133,7 +133,6 @@ class AssignBibResponse(BaseModel):
     capture_ns:      int
     bib_number:      str
     runner:          RunnerOut
-    checkpoint_name: Optional[str] = None
     net_time_ns:     Optional[int] = None
     position:        Optional[int] = None
     model_config = {"from_attributes": True}

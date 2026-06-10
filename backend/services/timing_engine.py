@@ -114,7 +114,6 @@ class TimingEngine:
         db: AsyncSession,
         capture_id: int,
         bib_number: str,
-        checkpoint_id: Optional[int] = None,   # reservado para uso futuro
         operator: str = "operator-1",
     ) -> AssignBibResponse:
         capture = await db.get(TimestampCapture, capture_id)
@@ -148,7 +147,6 @@ class TimingEngine:
         split = Split(
             timestamp_id=capture.id,
             registration_id=registration.id,
-            checkpoint_id=None,
             assigned_by=operator,
         )
         capture.status = CaptureStatus.ASSIGNED
@@ -181,7 +179,6 @@ class TimingEngine:
             capture_ns=capture.captured_ns,
             bib_number=bib_number.strip(),
             runner=self._runner_out(registration.runner),
-            checkpoint_name="Meta",
             net_time_ns=net_time_ns,
             position=position,
         )
