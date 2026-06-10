@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 
 const API = "/api/v1"
+const APP_VERSION = __APP_VERSION__ // inyectada por Vite desde version.txt
 
 function getWsBase() {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:"
@@ -208,7 +209,7 @@ function printCertificate({ race, runner, bib_number, position, net_time_ns, cat
   <div class="footer">
     <div>
       <div class="footer-logo">CHRONO<span>TRACK</span></div>
-      <div style="font-size:9px;color:#9ca3af;margin-top:2px;letter-spacing:1px">RACE TIMING SYSTEM · v2.0.0</div>
+      <div style="font-size:9px;color:#9ca3af;margin-top:2px;letter-spacing:1px">RACE TIMING SYSTEM · v${APP_VERSION}</div>
     </div>
     <div class="footer-info">
       Generado el ${generated}<br>
@@ -1886,7 +1887,7 @@ function DashboardPage({ onNavigate }) {
             Panel de <OpGrad>Control</OpGrad>
           </div>
           <div style={{ fontSize: 13, color: "#525a60", marginTop: 4 }}>
-            Sistema de cronometraje de carreras · ChronoTrack v2.0
+            Sistema de cronometraje de carreras · ChronoTrack v{APP_VERSION}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -2806,7 +2807,7 @@ export default function App() {
               <BackupControls />
             </div>
           )}
-          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center", marginTop: 8 }}>v2.4</div>
+          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center", marginTop: 8 }}>v{APP_VERSION}</div>
         </div>
       </div>
 
