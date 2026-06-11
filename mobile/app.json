@@ -35,7 +35,13 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ChronoTrack Run usa tu ubicación para registrar el recorrido, la distancia y el ritmo de tus salidas."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
