@@ -5,10 +5,12 @@
 
 ## Estado en una línea
 
-**Backend `/api/run` completo, testeado (43 passed) y en producción en Render.
-App Expo con login + 4 pantallas conectadas a la API real (Inicio, Historial,
-Ranking, Perfil), commiteado y pusheado.** Falta: pantalla **Correr** (tracking
-GPS), que es el corazón de la app.
+**Backend `/api/run` en producción (43 tests). App con las 5 pantallas
+funcionando: login + Inicio/Historial/Ranking/Perfil conectadas a la API, y
+Correr con GPS foreground, splits con voz, auto-pausa y cola offline
+(15 tests Jest).** OJO: el proyecto se bajó a **Expo SDK 54** (2026-06-11)
+porque Expo Go del App Store de iOS no soporta SDK 56 aún y el usuario prueba
+en un iPhone 13 Pro Max — ver nota en `mobile/AGENTS.md`.
 
 - **Spec aprobada:** `docs/superpowers/specs/2026-06-09-mobile-run-app-design.md`
 - **Backend:** `cloud/run.py` (router), `cloud/deps.py` (rate_limit/current_user
@@ -21,16 +23,19 @@ GPS), que es el corazón de la app.
 
 ## Próximos pasos (en orden)
 
-1. **Pantalla Correr** — tracking GPS con `expo-location` foreground primero
-   (funciona en Expo Go); luego background con `expo-task-manager` (requiere
-   development build, NO funciona en Expo Go). Lógica pura en `src/lib/tracking.ts`:
-   haversine, splits, auto-pausa — con tests Jest según la spec.
-2. **Cola de sincronización offline** — guardar la salida local primero
-   (expo-sqlite), subir con `client_uuid` (el backend ya deduplica).
-3. **Detalle de salida** en Historial (splits; mapa cuando haya tracking).
-4. **Login con Google** — endpoint backend que verifica el id_token + vincula
+1. **Detalle de salida** en Historial (splits por km; el polyline ya se sube,
+   el mapa espera al development build).
+2. **Login con Google** — endpoint backend que verifica el id_token + vincula
    por email (campo `google_id` ya existe), `expo-auth-session` en la app.
-5. **Avisos de voz** por km (`expo-speech`, es-AR) y tarjeta compartible.
+3. **Tarjeta compartible** de la salida (`react-native-view-shot` + share sheet).
+4. **Development build** (Android primero): GPS en background con
+   `expo-task-manager` + mapa en vivo con MapLibre (no funcionan en Expo Go).
+5. Ajustes en Perfil: voz on/off, unidades.
+
+La lógica de tracking vive en `src/lib/tracking.ts` (pura, 15 tests en
+`src/lib/__tests__/tracking.test.ts`; `npm test` corre Jest con preset
+jest-expo). Cola offline en `src/lib/run-store.ts` (AsyncStorage; se
+sincroniza al abrir la app y al guardar).
 
 ## Cómo probar hoy
 
