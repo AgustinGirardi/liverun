@@ -29,6 +29,9 @@ export default function InicioScreen() {
   const card = [styles.card, { backgroundColor: theme.backgroundElement }];
   const week = summary?.week;
   const goalMet = week ? week.days_run >= week.goal : false;
+  const hasData = summary
+    ? summary.streak_weeks > 0 || summary.week.days_run > 0 || summary.month.activities > 0
+    : false;
 
   return (
     <ThemedView style={styles.container}>
@@ -65,50 +68,77 @@ export default function InicioScreen() {
             <ThemedText type="small" style={styles.error}>{error}</ThemedText>
           )}
 
-          {/* Racha */}
-          <View style={[card, styles.streakCard]}>
-            <ThemedText style={styles.streakNumber}>
-              {summary ? summary.streak_weeks : '–'}
-            </ThemedText>
-            <ThemedText type="smallBold">
-              {summary?.streak_weeks === 1 ? 'semana de racha' : 'semanas de racha'} 🔥
-            </ThemedText>
-          </View>
+          {/* Sin salidas todavía: bienvenida en lugar de tarjetas en cero */}
+          {summary && !hasData && (
+            <View style={[card, styles.welcomeCard]}>
+              <ThemedText style={styles.welcomeEmoji}>👟</ThemedText>
+              <ThemedText type="smallBold" style={styles.welcomeTitle}>
+                Tu resumen aparecerá acá
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.welcomeText}>
+                Cuando registres tu primera salida vas a ver tu racha, el progreso
+                de la semana y los kilómetros del mes.
+              </ThemedText>
+            </View>
+          )}
 
-          {/* Semana */}
-          <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-              ESTA SEMANA
-            </ThemedText>
-            <View style={styles.row}>
-              <Stat value={week ? `${week.days_run}/${week.goal}` : '–'} label="días (meta)" highlight={goalMet} />
-              <Stat value={week ? week.km.toFixed(1).replace('.', ',') : '–'} label="km" />
-            </View>
-            <View style={styles.dots}>
-              {week &&
-                Array.from({ length: week.goal }, (_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.dot,
-                      { backgroundColor: i < week.days_run ? BrandAccent : theme.backgroundSelected },
-                    ]}
-                  />
-                ))}
-            </View>
-          </View>
+          {/* Con datos: semana destacada + fila compacta de racha y mes */}
+          {summary && hasData && (
+            <>
+              <View style={card}>
+                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+                  ESTA SEMANA
+                </ThemedText>
+                <View style={styles.weekRow}>
+                  <View style={styles.weekDays}>
+                    <ThemedText type="subtitle" style={goalMet ? { color: BrandAccent } : undefined}>
+                      {week!.days_run}
+                      <ThemedText type="small" themeColor="textSecondary"> de {week!.goal} días</ThemedText>
+                    </ThemedText>
+                    <View style={styles.dots}>
+                      {Array.from({ length: week!.goal }, (_, i) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.dot,
+                            { backgroundColor: i < week!.days_run ? BrandAccent : theme.backgroundSelected },
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  <Stat value={week!.km.toFixed(1).replace('.', ',')} label="km" />
+                </View>
+              </View>
 
-          {/* Mes */}
-          <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-              ESTE MES
-            </ThemedText>
-            <View style={styles.row}>
-              <Stat value={summary ? summary.month.km.toFixed(1).replace('.', ',') : '–'} label="km" />
-              <Stat value={summary ? String(summary.month.activities) : '–'} label="salidas" />
-              <Stat value={summary ? String(summary.month.days_run) : '–'} label="días" />
-            </View>
-          </View>
+              <View style={styles.miniRow}>
+                <View style={[card, styles.miniCard]}>
+                  <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+                    RACHA
+                  </ThemedText>
+                  <ThemedText type="subtitle" style={{ color: BrandAccent }}>
+                    {summary.streak_weeks} 🔥
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {summary.streak_weeks === 1 ? 'semana' : 'semanas'}
+                  </ThemedText>
+                </View>
+                <View style={[card, styles.miniCard]}>
+                  <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+                    ESTE MES
+                  </ThemedText>
+                  <ThemedText type="subtitle">
+                    {summary.month.km.toFixed(1).replace('.', ',')}
+                    <ThemedText type="small" themeColor="textSecondary"> km</ThemedText>
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {summary.month.activities} {summary.month.activities === 1 ? 'salida' : 'salidas'} ·{' '}
+                    {summary.month.days_run} {summary.month.days_run === 1 ? 'día' : 'días'}
+                  </ThemedText>
+                </View>
+              </View>
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -164,11 +194,16 @@ const styles = StyleSheet.create({
   heroButtonText: { color: '#00e5a0', fontWeight: '900', letterSpacing: 1, fontSize: 14 },
   error: { color: '#ff6b6b', textAlign: 'center' },
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
-  streakCard: { alignItems: 'center' },
-  streakNumber: { fontSize: 64, lineHeight: 72, fontWeight: '900', color: BrandAccent },
   cardTitle: { letterSpacing: 2 },
-  row: { flexDirection: 'row', gap: Spacing.four },
-  stat: { gap: 2 },
+  stat: { gap: 2, alignItems: 'flex-end' },
   dots: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.one },
   dot: { width: 14, height: 14, borderRadius: 7 },
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  weekDays: { gap: 2 },
+  miniRow: { flexDirection: 'row', gap: Spacing.three },
+  miniCard: { flex: 1 },
+  welcomeCard: { alignItems: 'center', paddingVertical: Spacing.five },
+  welcomeEmoji: { fontSize: 40, lineHeight: 48 },
+  welcomeTitle: { marginTop: Spacing.one },
+  welcomeText: { textAlign: 'center', paddingHorizontal: Spacing.three },
 });

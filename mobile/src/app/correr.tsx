@@ -1,8 +1,10 @@
 import * as Crypto from 'expo-crypto';
 import { useKeepAwake } from 'expo-keep-awake';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import { useFocusEffect } from 'expo-router';
 import * as Speech from 'expo-speech';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,7 +12,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDuration, formatPace } from '@/lib/format';
+import { api, type Activity } from '@/lib/api';
+import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
 import { saveActivity } from '@/lib/run-store';
 import {
   addPoint,
@@ -32,6 +35,16 @@ export default function CorrerScreen() {
   const [elapsedS, setElapsedS] = useState(0);
   const [tracker, setTracker] = useState<TrackerState>(newTracker());
   const [gpsReady, setGpsReady] = useState<boolean | null>(null);
+  const [lastActivity, setLastActivity] = useState<Activity | null>(null);
+
+  // Última salida para la pantalla de reposo (best-effort).
+  useFocusEffect(
+    useCallback(() => {
+      if (phaseRef.current === 'idle') {
+        api.activities(1).then((a) => setLastActivity(a[0] ?? null)).catch(() => {});
+      }
+    }, []),
+  );
 
   // Refs para que el callback del GPS y el timer vean el estado vigente.
   const phaseRef = useRef(phase);
@@ -181,21 +194,64 @@ export default function CorrerScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         {phase === 'idle' ? (
-          <View style={styles.center}>
-            <ThemedText style={styles.brand}>
-              CHRONO<ThemedText style={[styles.brand, { color: BrandAccent }]}>TRACK</ThemedText> RUN
-            </ThemedText>
-            <Pressable style={styles.bigButton} onPress={start}>
-              <ThemedText style={styles.bigButtonText}>INICIAR</ThemedText>
-            </Pressable>
-            {gpsReady === false && (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
-                Falta el permiso de ubicación.
+          <View style={styles.idleWrap}>
+            <View style={styles.idleTop}>
+              <ThemedText style={styles.brand}>
+                CHRONO<ThemedText style={[styles.brand, { color: BrandAccent }]}>TRACK</ThemedText> RUN
               </ThemedText>
+              <ThemedText type="subtitle" style={styles.idleTitle}>¿Listo para salir?</ThemedText>
+            </View>
+
+            {lastActivity ? (
+              <View style={[styles.lastCard, { backgroundColor: theme.backgroundElement }]}>
+                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.lastTitle}>
+                  TU ÚLTIMA SALIDA
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {formatWhen(lastActivity.started_at)}
+                </ThemedText>
+                <View style={styles.lastRow}>
+                  <ThemedText type="subtitle" style={{ color: BrandAccent }}>
+                    {formatKm(lastActivity.distance_m)}
+                  </ThemedText>
+                  <View style={styles.lastMetrics}>
+                    <ThemedText type="smallBold">{formatDuration(lastActivity.duration_s)}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {formatPace(lastActivity.avg_pace_s_per_km)}
+                    </ThemedText>
+                  </View>
+                </View>
+                <ThemedText type="small" themeColor="textSecondary">¿La superamos hoy?</ThemedText>
+              </View>
+            ) : (
+              <View style={[styles.lastCard, { backgroundColor: theme.backgroundElement }]}>
+                <ThemedText style={styles.lastEmoji}>🏃</ThemedText>
+                <ThemedText type="smallBold" style={styles.lastCenter}>Tu primera salida te espera</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.lastCenter}>
+                  Tiempo, distancia, ritmo y splits por km, con avisos de voz.
+                </ThemedText>
+              </View>
             )}
-            <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
-              Llevá el teléfono con la app abierta durante la salida.
-            </ThemedText>
+
+            <View style={styles.idleBottom}>
+              {gpsReady === false && (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
+                  Falta el permiso de ubicación.
+                </ThemedText>
+              )}
+              <Pressable onPress={start}>
+                <LinearGradient
+                  colors={['#00bf85', '#00e5a0']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.startButton}>
+                  <ThemedText style={styles.startButtonText}>▶  INICIAR SALIDA</ThemedText>
+                </LinearGradient>
+              </Pressable>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
+                Llevá el teléfono con la app abierta durante la salida.
+              </ThemedText>
+            </View>
           </View>
         ) : (
           <View style={styles.center}>
@@ -270,15 +326,22 @@ const styles = StyleSheet.create({
   },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.three },
   brand: { fontSize: 12, fontWeight: '900', letterSpacing: 3 },
-  bigButton: {
-    backgroundColor: BrandAccent,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+  idleWrap: { flex: 1, paddingHorizontal: Spacing.three, justifyContent: 'space-between' },
+  idleTop: { alignItems: 'center', gap: Spacing.two, paddingTop: Spacing.four },
+  idleTitle: { textAlign: 'center' },
+  lastCard: { borderRadius: 16, padding: Spacing.four, gap: Spacing.one },
+  lastTitle: { letterSpacing: 2 },
+  lastRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  lastMetrics: { alignItems: 'flex-end' },
+  lastEmoji: { fontSize: 40, lineHeight: 48, textAlign: 'center' },
+  lastCenter: { textAlign: 'center' },
+  idleBottom: { gap: Spacing.two, paddingBottom: Spacing.two },
+  startButton: {
+    borderRadius: 99,
+    paddingVertical: 18,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  bigButtonText: { color: '#000', fontSize: 24, fontWeight: '900', letterSpacing: 2 },
+  startButtonText: { color: '#06281d', fontSize: 17, fontWeight: '900', letterSpacing: 1.5 },
   gpsHint: { textAlign: 'center', paddingHorizontal: Spacing.four },
   badge: { paddingHorizontal: Spacing.three, paddingVertical: 6, borderRadius: 99 },
   time: { fontSize: 72, lineHeight: 80, fontWeight: '900', fontVariant: ['tabular-nums'] },
