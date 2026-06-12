@@ -1,17 +1,21 @@
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { ApiError } from '@/lib/api';
+import { API_BASE, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+
+WebBrowser.maybeCompleteAuthSession();
 
 /** Login / registro con email y contraseña (cuenta unificada con el portal). */
 export function LoginScreen() {
-  const { login, register } = useAuth();
+  const { login, register, loginWithToken } = useAuth();
   const theme = useTheme();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -22,6 +26,28 @@ export function LoginScreen() {
 
   const inputStyle = [styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }];
   const canSubmit = email.trim().length > 3 && password.length >= 8 && !busy;
+
+  async function googleLogin() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const appRedirect = Linking.createURL('auth');
+      const startUrl = `${API_BASE}/api/run/auth/google/start?app_redirect=${encodeURIComponent(appRedirect)}`;
+      const result = await WebBrowser.openAuthSessionAsync(startUrl, appRedirect);
+      if (result.type === 'success' && result.url) {
+        const { queryParams } = Linking.parse(result.url);
+        const token = typeof queryParams?.token === 'string' ? queryParams.token : null;
+        const err = typeof queryParams?.error === 'string' ? queryParams.error : null;
+        if (token) await loginWithToken(token);
+        else if (err && err !== 'cancelado') setError(`No se pudo iniciar sesión con Google (${err}).`);
+      }
+    } catch {
+      setError('No se pudo iniciar sesión con Google. Intentá de nuevo.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit() {
     if (!canSubmit) return;
@@ -102,6 +128,19 @@ export function LoginScreen() {
             )}
           </Pressable>
 
+          <View style={styles.dividerRow}>
+            <View style={[styles.divider, { backgroundColor: theme.backgroundElement }]} />
+            <ThemedText type="small" themeColor="textSecondary">o</ThemedText>
+            <View style={[styles.divider, { backgroundColor: theme.backgroundElement }]} />
+          </View>
+
+          <Pressable
+            style={[styles.googleButton, { backgroundColor: theme.backgroundElement }]}
+            onPress={googleLogin}
+            disabled={busy}>
+            <ThemedText type="smallBold">Continuar con Google</ThemedText>
+          </Pressable>
+
           <Pressable onPress={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null); }}>
             <ThemedText type="link" themeColor="textSecondary" style={styles.switch}>
               {mode === 'login' ? '¿No tenés cuenta? Crear una' : '¿Ya tenés cuenta? Iniciar sesión'}
@@ -168,5 +207,17 @@ const styles = StyleSheet.create({
   switch: {
     textAlign: 'center',
     marginTop: Spacing.two,
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginVertical: Spacing.one,
+  },
+  divider: { flex: 1, height: 1 },
+  googleButton: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
   },
 });

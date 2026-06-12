@@ -31,6 +31,8 @@ type AuthContextValue = {
   status: AuthStatus;
   login: (email: string, password: string) => Promise<Session>;
   register: (email: string, password: string, fullName?: string) => Promise<Session>;
+  /** Sesión emitida por el backend fuera del login normal (ej: Google). */
+  loginWithToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -57,6 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status,
     login: (email, password) => api.login(email, password).then(applySession),
     register: (email, password, fullName) => api.register(email, password, fullName).then(applySession),
+    loginWithToken: async (token) => {
+      setToken(token);
+      await storeToken(token);
+      setStatus('authenticated');
+    },
     logout: async () => {
       setToken(null);
       await storeToken(null);

@@ -7,6 +7,9 @@
 
 const BASE = process.env.EXPO_PUBLIC_API_URL ?? 'https://chronotrack-portal.onrender.com';
 
+/** Base pública de la API (la usa el flujo de login con Google). */
+export const API_BASE = BASE;
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
