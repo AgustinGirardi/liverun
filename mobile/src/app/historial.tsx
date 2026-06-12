@@ -3,6 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
+import { ShareCard } from '@/components/share-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -16,6 +17,7 @@ export default function HistorialScreen() {
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [details, setDetails] = useState<Record<number, ActivityDetail | 'loading'>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [sharing, setSharing] = useState<Activity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -79,12 +81,22 @@ export default function HistorialScreen() {
                   </View>
                 </View>
                 {expanded === item.id && (
-                  <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
+                  <>
+                    <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
+                    <Pressable
+                      style={[styles.shareRow, { backgroundColor: theme.backgroundSelected }]}
+                      onPress={() => setSharing(item)}>
+                      <ThemedText type="smallBold" style={{ color: BrandAccent }}>
+                        ↗ Compartir tarjeta
+                      </ThemedText>
+                    </Pressable>
+                  </>
                 )}
               </View>
             </Pressable>
           )}
         />
+        {sharing && <ShareCard activity={sharing} onClose={() => setSharing(null)} />}
       </SafeAreaView>
     </ThemedView>
   );
@@ -148,4 +160,10 @@ const styles = StyleSheet.create({
   splitBarTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
   splitBar: { height: 8, borderRadius: 4, backgroundColor: BrandAccent },
   splitTime: { width: 52, textAlign: 'right' },
+  shareRow: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: Spacing.two,
+  },
 });
