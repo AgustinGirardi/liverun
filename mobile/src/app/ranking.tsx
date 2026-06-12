@@ -3,11 +3,12 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
+import { Avatar } from '@/components/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { api, type Ranking, type RankingEntry } from '@/lib/api';
+import { api, type Ranking, type RankingEntry, type RankingScope } from '@/lib/api';
 
 type Period = 'week' | 'month';
 type OrderBy = 'km' | 'days_run';
@@ -16,21 +17,26 @@ type OrderBy = 'km' | 'days_run';
 export default function RankingScreen() {
   const theme = useTheme();
   const [period, setPeriod] = useState<Period>('week');
+  const [scope, setScope] = useState<RankingScope>('friends');
   const [orderBy, setOrderBy] = useState<OrderBy>('km');
   const [ranking, setRanking] = useState<Ranking | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(() => {
-    api.ranking(period)
+    api.ranking(period, scope)
       .then((r) => { setRanking(r); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => setRefreshing(false));
-  }, [period]);
+  }, [period, scope]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const entries = [...(ranking?.entries ?? [])].sort((a, b) => b[orderBy] - a[orderBy]);
+  // En el global manda la posición real del servidor; ordenar por días es local.
+  const entries =
+    scope === 'global' && orderBy === 'km'
+      ? (ranking?.entries ?? [])
+      : [...(ranking?.entries ?? [])].sort((a, b) => b[orderBy] - a[orderBy]);
 
   const segmented = (
     options: { key: string; label: string }[],
@@ -51,29 +57,33 @@ export default function RankingScreen() {
     </View>
   );
 
-  const renderRow = ({ item, index }: { item: RankingEntry; index: number }) => (
-    <View
-      style={[
-        styles.rowCard,
-        { backgroundColor: theme.backgroundElement },
-        item.is_me && { borderColor: BrandAccent, borderWidth: 1 },
-      ]}>
-      <ThemedText type="subtitle" style={styles.position}>{index + 1}</ThemedText>
-      <View style={styles.who}>
-        <ThemedText type="smallBold">
-          {item.username ?? item.full_name ?? 'corredor'}
-          {item.is_me ? '  (vos)' : ''}
-        </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          {item.days_run} {item.days_run === 1 ? 'día' : 'días'} · {item.activities}{' '}
-          {item.activities === 1 ? 'salida' : 'salidas'}
+  const renderRow = ({ item, index }: { item: RankingEntry; index: number }) => {
+    const pos = scope === 'global' && orderBy === 'km' ? item.position : index + 1;
+    return (
+      <View
+        style={[
+          styles.rowCard,
+          { backgroundColor: theme.backgroundElement },
+          item.is_me && { borderColor: BrandAccent, borderWidth: 1 },
+        ]}>
+        <ThemedText type="subtitle" style={styles.position}>{pos ?? '–'}</ThemedText>
+        <Avatar url={item.avatar_url} name={item.username ?? item.full_name} size={40} />
+        <View style={styles.who}>
+          <ThemedText type="smallBold">
+            {item.username ?? item.full_name ?? 'corredor'}
+            {item.is_me ? '  (vos)' : ''}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            {item.days_run} {item.days_run === 1 ? 'día' : 'días'} · {item.activities}{' '}
+            {item.activities === 1 ? 'salida' : 'salidas'}
+          </ThemedText>
+        </View>
+        <ThemedText type="smallBold" style={{ color: BrandAccent }}>
+          {item.km.toFixed(1).replace('.', ',')} km
         </ThemedText>
       </View>
-      <ThemedText type="smallBold" style={{ color: BrandAccent }}>
-        {item.km.toFixed(1).replace('.', ',')} km
-      </ThemedText>
-    </View>
-  );
+    );
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -82,10 +92,17 @@ export default function RankingScreen() {
 
         <View style={styles.controls}>
           {segmented(
+            [{ key: 'friends', label: 'Amigos' }, { key: 'global', label: '🌎 Mundial' }],
+            scope,
+            (v) => setScope(v as RankingScope),
+          )}
+          {segmented(
             [{ key: 'week', label: 'Semana' }, { key: 'month', label: 'Mes' }],
             period,
             (v) => setPeriod(v as Period),
           )}
+        </View>
+        <View style={styles.controls}>
           {segmented(
             [{ key: 'km', label: 'por km' }, { key: 'days_run', label: 'por días' }],
             orderBy,

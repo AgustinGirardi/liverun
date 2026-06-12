@@ -1,7 +1,8 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -37,9 +38,28 @@ export default function InicioScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
           }>
-          <ThemedText style={styles.brand}>
-            CHRONO<ThemedText style={[styles.brand, { color: BrandAccent }]}>TRACK</ThemedText> RUN
-          </ThemedText>
+          {/* Hero de marca: degradado mint→teal con sombra interna */}
+          <LinearGradient
+            colors={['#00bf85', '#00e5a0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.hero}>
+            <View style={styles.heroShade} />
+            <ThemedText style={styles.heroBrand}>CHRONOTRACK RUN</ThemedText>
+            <ThemedText style={styles.heroTitle}>
+              {goalMet ? '¡Meta de la semana cumplida! 💪' : '¿Salimos a correr hoy?'}
+            </ThemedText>
+            <ThemedText style={styles.heroSub}>
+              {summary && summary.streak_weeks > 0
+                ? `Llevás ${summary.streak_weeks} ${summary.streak_weeks === 1 ? 'semana' : 'semanas'} de racha 🔥 — no la cortes.`
+                : 'Cada salida suma. Arrancá tu racha esta semana.'}
+            </ThemedText>
+            <Link href="/correr" asChild>
+              <Pressable style={styles.heroButton}>
+                <ThemedText style={styles.heroButtonText}>▶  EMPEZAR UNA SALIDA</ThemedText>
+              </Pressable>
+            </Link>
+          </LinearGradient>
 
           {error && (
             <ThemedText type="small" style={styles.error}>{error}</ThemedText>
@@ -117,6 +137,31 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   brand: { fontSize: 12, fontWeight: '900', letterSpacing: 3, textAlign: 'center', marginVertical: Spacing.two },
+  hero: {
+    borderRadius: 20,
+    padding: Spacing.four,
+    gap: Spacing.two,
+    overflow: 'hidden',
+  },
+  heroShade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  heroBrand: { fontSize: 11, fontWeight: '900', letterSpacing: 3, color: 'rgba(0,0,0,0.65)' },
+  heroTitle: { fontSize: 28, lineHeight: 33, fontWeight: '900', color: '#06281d' },
+  heroSub: { fontSize: 14, lineHeight: 19, color: 'rgba(2,40,29,0.85)' },
+  heroButton: {
+    backgroundColor: '#06281d',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    marginTop: Spacing.two,
+  },
+  heroButtonText: { color: '#00e5a0', fontWeight: '900', letterSpacing: 1, fontSize: 14 },
   error: { color: '#ff6b6b', textAlign: 'center' },
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
   streakCard: { alignItems: 'center' },

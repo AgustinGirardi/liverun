@@ -4,23 +4,43 @@ Cuenta unificada con el portal: el mismo PortalUser que reclama resultados
 registra acá sus salidas. Auth con los endpoints existentes /api/auth/*.
 """
 import json
+import os
 import re
+import time
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from cloud.db import get_db
+from cloud.db import DB_URL, get_db
 from cloud.deps import current_user, rate_limit
 from cloud.models import Activity, Friendship, PortalUser
 
 router = APIRouter(prefix="/api/run", tags=["Run"])
 
 USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,30}$")
+
+PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
+
+# Avatares: archivos chicos en el mismo disco persistente que la DB.
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
+AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+
+
+def avatar_dir() -> Path:
+    """Carpeta de avatares junto a la base SQLite (en Render: /var/data/avatars)."""
+    if DB_URL.startswith("sqlite:///"):
+        base = Path(DB_URL.removeprefix("sqlite:///")).parent
+    else:
+        base = Path(".")
+    d = base / "avatars"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 # ── Lógica pura (testeable sin DB) ────────────────────────────────────────────
@@ -142,6 +162,31 @@ def update_profile(body: ProfileUpdate, user: PortalUser = Depends(current_user)
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, "Ese username ya está en uso")
+    return get_profile(user)
+
+
+@router.post("/profile/avatar")
+def upload_avatar(request: Request, file: UploadFile = File(...),
+                  user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Sube la foto de perfil (la app la achica antes de mandarla). Reemplaza
+    la default de Google; queda servida en /avatars/<id>.<ext>."""
+    rate_limit(request, "run_avatar", limit=10, window=60.0)
+    ext = AVATAR_TYPES.get((file.content_type or "").lower())
+    if not ext:
+        raise HTTPException(400, "Formato no soportado: mandá JPG, PNG o WebP")
+    data = file.file.read(AVATAR_MAX_BYTES + 1)
+    if len(data) > AVATAR_MAX_BYTES:
+        raise HTTPException(413, "La imagen es muy pesada (máximo 2 MB)")
+    if not data:
+        raise HTTPException(400, "Archivo vacío")
+    d = avatar_dir()
+    # Un solo archivo por usuario: borrar variantes con otra extensión.
+    for old in d.glob(f"{user.id}.*"):
+        old.unlink(missing_ok=True)
+    (d / f"{user.id}.{ext}").write_bytes(data)
+    # ?v= rompe el caché de la app cuando se cambia la foto.
+    user.avatar_url = f"{PUBLIC_URL}/avatars/{user.id}.{ext}?v={int(time.time())}"
+    db.commit()
     return get_profile(user)
 
 
@@ -327,20 +372,65 @@ def list_friends(user: PortalUser = Depends(current_user), db: Session = Depends
 
 # ── Ranking entre amigos ──────────────────────────────────────────────────────
 
+GLOBAL_TOP = 50
+
+
 @router.get("/ranking")
-def ranking(period: str = "week",
+def ranking(period: str = "week", scope: str = "friends",
             user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
-    """Km y días corridos del usuario y sus amigos aceptados, en la semana o el
-    mes calendario en curso. El orden (por km o por días) lo elige la app."""
+    """Km y días corridos en la semana o el mes calendario en curso.
+    scope=friends: el usuario y sus amigos aceptados.
+    scope=global: top 50 de todos los corredores (el usuario aparece igual,
+    con su posición real, aunque no esté en el top)."""
     if period not in ("week", "month"):
         raise HTTPException(400, "period debe ser 'week' o 'month'")
+    if scope not in ("friends", "global"):
+        raise HTTPException(400, "scope debe ser 'friends' o 'global'")
     today = date.today()
     since = week_start(today) if period == "week" else today.replace(day=1)
+    since_dt = datetime(since.year, since.month, since.day)
+
+    def entry(u: PortalUser, km: float, days: int, count: int, position: Optional[int] = None) -> dict:
+        return {
+            **_user_public(u),
+            "is_me": u.id == user.id,
+            "km": round(km, 2),
+            "days_run": days,
+            "activities": count,
+            "position": position,
+        }
+
+    if scope == "global":
+        rows = db.execute(
+            select(
+                Activity.user_id,
+                func.sum(Activity.distance_m),
+                func.count(func.distinct(func.date(Activity.started_at))),
+                func.count(),
+            )
+            .where(Activity.started_at >= since_dt)
+            .group_by(Activity.user_id)
+            .order_by(func.sum(Activity.distance_m).desc())
+        ).all()
+        entries = []
+        me_position = None
+        for pos, (uid, dist_m, days, count) in enumerate(rows, start=1):
+            if uid == user.id:
+                me_position = pos
+            if pos <= GLOBAL_TOP:
+                entries.append(entry(db.get(PortalUser, uid), (dist_m or 0) / 1000.0, days, count, pos))
+        if me_position is None:
+            # Sin actividades en el período: igual aparece, último y en cero.
+            entries.append(entry(user, 0.0, 0, 0, None))
+        elif me_position > GLOBAL_TOP:
+            uid, dist_m, days, count = rows[me_position - 1]
+            entries.append(entry(user, (dist_m or 0) / 1000.0, days, count, me_position))
+        return {"period": period, "scope": scope, "since": since.isoformat(), "entries": entries}
 
     ids = _friend_ids(user.id, db) | {user.id}
     acts = db.scalars(select(Activity).where(
         Activity.user_id.in_(ids),
-        Activity.started_at >= datetime(since.year, since.month, since.day),
+        Activity.started_at >= since_dt,
     )).all()
 
     by_user: dict[int, list[Activity]] = {}
@@ -351,12 +441,13 @@ def ranking(period: str = "week",
     for uid in ids:
         u = db.get(PortalUser, uid)
         user_acts = by_user.get(uid, [])
-        entries.append({
-            **_user_public(u),
-            "is_me": uid == user.id,
-            "km": round(sum(a.distance_m for a in user_acts) / 1000.0, 2),
-            "days_run": len({a.started_at.date() for a in user_acts}),
-            "activities": len(user_acts),
-        })
+        entries.append(entry(
+            u,
+            sum(a.distance_m for a in user_acts) / 1000.0,
+            len({a.started_at.date() for a in user_acts}),
+            len(user_acts),
+        ))
     entries.sort(key=lambda e: e["km"], reverse=True)
-    return {"period": period, "since": since.isoformat(), "entries": entries}
+    for pos, e in enumerate(entries, start=1):
+        e["position"] = pos
+    return {"period": period, "scope": scope, "since": since.isoformat(), "entries": entries}

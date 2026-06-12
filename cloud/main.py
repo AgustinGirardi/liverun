@@ -496,7 +496,11 @@ app.include_router(run_router)
 app.include_router(google_router)
 
 
-# ── Portal estático (se monta al final para no tapar /api) ────────────────────
+# ── Estáticos: avatares y portal (al final para no tapar /api) ────────────────
+
+from cloud.run import avatar_dir  # noqa: E402
+
+app.mount("/avatars", StaticFiles(directory=str(avatar_dir())), name="avatars")
 
 _static = Path(__file__).parent / "static"
 if _static.exists():

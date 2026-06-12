@@ -94,8 +94,15 @@ export type SearchedUser = PublicUser & { relation: 'friend' | 'pending' | 'none
 export type FriendRequest = PublicUser & { friendship_id: number };
 export type FriendLists = { friends: PublicUser[]; incoming: FriendRequest[]; outgoing: FriendRequest[] };
 
-export type RankingEntry = PublicUser & { is_me: boolean; km: number; days_run: number; activities: number };
-export type Ranking = { period: 'week' | 'month'; since: string; entries: RankingEntry[] };
+export type RankingEntry = PublicUser & {
+  is_me: boolean;
+  km: number;
+  days_run: number;
+  activities: number;
+  position: number | null;
+};
+export type RankingScope = 'friends' | 'global';
+export type Ranking = { period: 'week' | 'month'; scope: RankingScope; since: string; entries: RankingEntry[] };
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 
@@ -132,5 +139,25 @@ export const api = {
       body: { friendship_id: friendshipId },
     }),
   friends: () => request<FriendLists>('/api/run/friends'),
-  ranking: (period: 'week' | 'month') => request<Ranking>(`/api/run/ranking?period=${period}`),
+  ranking: (period: 'week' | 'month', scope: RankingScope = 'friends') =>
+    request<Ranking>(`/api/run/ranking?period=${period}&scope=${scope}`),
+
+  /** Sube la foto de perfil (multipart; la imagen ya viene achicada del picker). */
+  uploadAvatar: async (uri: string): Promise<Profile> => {
+    const form = new FormData();
+    // @ts-expect-error — el objeto file de React Native no matchea el tipo DOM
+    form.append('file', { uri, name: 'avatar.jpg', type: 'image/jpeg' });
+    const headers: Record<string, string> = {};
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+    const res = await fetch(`${BASE}/api/run/profile/avatar`, { method: 'POST', headers, body: form });
+    if (!res.ok) {
+      let detail = `Error ${res.status}`;
+      try {
+        const data = await res.json();
+        if (typeof data?.detail === 'string') detail = data.detail;
+      } catch { /* cuerpo no-JSON */ }
+      throw new ApiError(res.status, detail);
+    }
+    return (await res.json()) as Profile;
+  },
 };

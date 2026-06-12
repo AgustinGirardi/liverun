@@ -1,8 +1,10 @@
+import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
+import { Avatar } from '@/components/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -52,6 +54,23 @@ export default function PerfilScreen() {
     }
   }
 
+  async function changeAvatar() {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    try {
+      const p = await api.uploadAvatar(result.assets[0].uri);
+      setProfile(p);
+      flash('Foto actualizada');
+    } catch (e) {
+      Alert.alert('Ups', e instanceof ApiError ? e.message : 'No se pudo subir la foto.');
+    }
+  }
+
   async function search(q: string) {
     setQuery(q);
     if (q.trim().length < 3) {
@@ -85,8 +104,19 @@ export default function PerfilScreen() {
           {/* Cuenta */}
           <View style={card}>
             <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>CUENTA</ThemedText>
-            <ThemedText>{profile?.full_name ?? '—'}</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">{profile?.email ?? ''}</ThemedText>
+            <View style={styles.accountRow}>
+              <Pressable onPress={changeAvatar}>
+                <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.username} size={72} />
+                <View style={styles.avatarBadge}>
+                  <ThemedText style={styles.avatarBadgeText}>✎</ThemedText>
+                </View>
+              </Pressable>
+              <View style={styles.flex}>
+                <ThemedText>{profile?.full_name ?? '—'}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">{profile?.email ?? ''}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">Tocá la foto para cambiarla.</ThemedText>
+              </View>
+            </View>
             <View style={styles.inline}>
               <TextInput
                 style={[inputStyle, styles.flex]}
@@ -215,6 +245,19 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
   cardTitle: { letterSpacing: 2 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  accountRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: BrandAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarBadgeText: { color: '#000', fontSize: 14, fontWeight: '800' },
   flex: { flex: 1 },
   input: { borderRadius: 10, paddingHorizontal: Spacing.three, paddingVertical: 10, fontSize: 15 },
   smallButton: {
