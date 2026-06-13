@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
@@ -29,6 +29,29 @@ export default function HistorialScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  function confirmDelete(item: Activity) {
+    Alert.alert(
+      'Eliminar salida',
+      `¿Borrar la salida de ${formatKm(item.distance_m)} del ${formatWhen(item.started_at)}? También deja de contar para tu racha y los rankings.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteActivity(item.id);
+              setExpanded(null);
+              setActivities((a) => a?.filter((x) => x.id !== item.id) ?? null);
+            } catch (e) {
+              Alert.alert('Ups', e instanceof Error ? e.message : 'No se pudo eliminar.');
+            }
+          },
+        },
+      ],
+    );
+  }
 
   function toggle(id: number) {
     if (expanded === id) {
@@ -83,13 +106,22 @@ export default function HistorialScreen() {
                 {expanded === item.id && (
                   <>
                     <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
-                    <Pressable
-                      style={[styles.shareRow, { backgroundColor: theme.backgroundSelected }]}
-                      onPress={() => setSharing(item)}>
-                      <ThemedText type="smallBold" style={{ color: BrandAccent }}>
-                        ↗ Compartir tarjeta
-                      </ThemedText>
-                    </Pressable>
+                    <View style={styles.actionsRow}>
+                      <Pressable
+                        style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
+                        onPress={() => setSharing(item)}>
+                        <ThemedText type="smallBold" style={{ color: BrandAccent }}>
+                          ↗ Compartir
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
+                        onPress={() => confirmDelete(item)}>
+                        <ThemedText type="smallBold" style={styles.deleteText}>
+                          🗑 Eliminar
+                        </ThemedText>
+                      </Pressable>
+                    </View>
                   </>
                 )}
               </View>
@@ -166,4 +198,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginTop: Spacing.two,
   },
+  actionsRow: { flexDirection: 'row', gap: Spacing.two },
+  actionFlex: { flex: 1 },
+  deleteText: { color: '#ff6b6b' },
 });

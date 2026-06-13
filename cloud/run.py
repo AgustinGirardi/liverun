@@ -250,6 +250,18 @@ def activity_detail(activity_id: int,
     return _activity_dict(act, full=True)
 
 
+@router.delete("/activities/{activity_id}")
+def delete_activity(activity_id: int,
+                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Elimina una salida propia (sale del historial, la racha y los rankings)."""
+    act = db.get(Activity, activity_id)
+    if not act or act.user_id != user.id:
+        raise HTTPException(404, "Actividad no encontrada")
+    db.delete(act)
+    db.commit()
+    return {"deleted": True, "id": activity_id}
+
+
 # ── Resumen (pestaña Inicio): racha + semana + mes ────────────────────────────
 
 @router.get("/summary")

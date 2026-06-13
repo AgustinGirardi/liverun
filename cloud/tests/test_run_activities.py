@@ -66,6 +66,26 @@ def test_actividad_ajena_404(client):
     assert client.get(f"/api/run/activities/{act_id}", headers=h2).status_code == 404
 
 
+def test_eliminar_actividad_propia(client):
+    h = make_user(client)
+    act_id = crear(client, h).json()["id"]
+    r = client.delete(f"/api/run/activities/{act_id}", headers=h)
+    assert r.status_code == 200
+    assert r.json()["deleted"] is True
+    assert client.get("/api/run/activities", headers=h).json() == []
+    # Idempotencia: ya no existe.
+    assert client.delete(f"/api/run/activities/{act_id}", headers=h).status_code == 404
+
+
+def test_eliminar_actividad_ajena_404(client):
+    h1 = make_user(client, email="a@test.com")
+    h2 = make_user(client, email="b@test.com")
+    act_id = crear(client, h1).json()["id"]
+    assert client.delete(f"/api/run/activities/{act_id}", headers=h2).status_code == 404
+    # Sigue existiendo para su dueño.
+    assert len(client.get("/api/run/activities", headers=h1).json()) == 1
+
+
 def test_summary_semana_y_mes(client):
     h = make_user(client)
     now = datetime.now()

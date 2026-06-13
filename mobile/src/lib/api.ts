@@ -124,6 +124,8 @@ export const api = {
   activities: (limit = 30, offset = 0) =>
     request<Activity[]>(`/api/run/activities?limit=${limit}&offset=${offset}`),
   activityDetail: (id: number) => request<ActivityDetail>(`/api/run/activities/${id}`),
+  deleteActivity: (id: number) =>
+    request<{ deleted: boolean; id: number }>(`/api/run/activities/${id}`, { method: 'DELETE' }),
   summary: () => request<Summary>('/api/run/summary'),
 
   // Amigos y ranking
