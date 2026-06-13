@@ -104,6 +104,26 @@ function viewHome(){
         <div class="home-recent-label">Carreras recientes</div>
         <div id="homeRaces"><div class="empty">Cargando…</div></div>
       </div>
+    </div>
+    <div class="eco">
+      <div class="eco-label">El ecosistema <span class="grad-text">ChronoTrack</span></div>
+      <div class="eco-grid">
+        <div class="card eco-card">
+          <div class="eco-ic">📱</div>
+          <h2>ChronoTrack <span class="grad-text">Run</span></h2>
+          <p class="muted">La app para salir a correr: tracking GPS con splits por km y avisos de voz,
+          racha semanal, ranking con amigos y mundial. Tu cuenta del portal, tus carreras y tus
+          entrenamientos, todo en un solo lugar.</p>
+          <span class="pill">Muy pronto · acceso anticipado</span>
+        </div>
+        <div class="card eco-card">
+          <div class="eco-ic">🖥️</div>
+          <h2>ChronoTrack <span class="grad-text">Escritorio</span></h2>
+          <p class="muted">El sistema de cronometraje para organizadores: inscripciones, cronómetro
+          de precisión, resultados al instante y publicación en este portal con un clic.</p>
+          <span class="pill">Para organizadores · consultanos</span>
+        </div>
+      </div>
     </div>`;
   loadHomeRaces();
 }
@@ -391,6 +411,11 @@ function viewAuth(mode){
           ${reg?`<div class="pw-meter"><div class="pw-bar"><i id="pwFill"></i></div><span class="pw-lbl" id="pwLbl"></span></div>`:""}
         </div>
         <button class="btn grad" id="abtn" onclick="doAuth('${mode}')">${reg?"Crear cuenta":"Ingresar"}</button>
+        <div class="auth-divider">o</div>
+        <button class="btn google" onclick="googleLogin()">
+          <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.5 30.2 0 24 0 14.6 0 6.5 5.4 2.5 13.2l7.8 6.1C12.2 13.4 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.3 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.5-5.8c-2.1 1.4-4.7 2.2-7.7 2.2-6.4 0-11.8-3.9-13.7-9.3l-7.8 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+          Continuar con Google
+        </button>
         <div style="text-align:center;margin-top:15px" class="muted">
           ${reg?`¿Ya tenés cuenta? <a style="color:var(--acc)" onclick="go('login')">Ingresá</a>`
                 :`¿Sos nuevo? <a style="color:var(--acc)" onclick="go('register')">Creá tu cuenta</a>`}
@@ -497,6 +522,25 @@ async function doFind(){
   } catch(e){ $("findRes").innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 
+// ── Login con Google (mismo flujo server-side que la app móvil) ────────────
+function googleLogin(){
+  location.href = "/api/run/auth/google/start?app_redirect=" + encodeURIComponent(location.origin + "/");
+}
+async function handleGoogleReturn(){
+  const p = new URLSearchParams(location.search);
+  const token = p.get("token"), err = p.get("error");
+  if(!token && !err) return false;
+  history.replaceState(null, "", location.pathname);   // limpia la URL (el token no queda en el historial)
+  if(err){ toast(err==="cancelado" ? "Login cancelado." : "No se pudo iniciar sesión con Google.", "warn"); return false; }
+  TOKEN = token; localStorage.setItem("ct_token", TOKEN);
+  try {
+    const prof = await api("GET","/api/run/profile",null,true);
+    USER = { email: prof.email, full_name: prof.full_name };
+  } catch { USER = { email: p.get("email")||"", full_name: null }; }
+  localStorage.setItem("ct_user", JSON.stringify(USER));
+  toast("¡Bienvenido! 🎉");
+  return true;
+}
+
 // init
-renderNav();
-go("home");
+handleGoogleReturn().finally(()=>{ renderNav(); go("home"); });

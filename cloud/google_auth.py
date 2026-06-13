@@ -42,8 +42,13 @@ router = APIRouter(prefix="/api/run/auth/google", tags=["Run"])
 # ── Helpers puros (testeables) ────────────────────────────────────────────────
 
 def valid_app_redirect(url: str) -> bool:
-    scheme = urllib.parse.urlparse(url or "").scheme.lower()
-    return scheme in ALLOWED_SCHEMES
+    """Deep link de la app móvil, o el propio portal web (mismo origen)."""
+    parsed = urllib.parse.urlparse(url or "")
+    if parsed.scheme.lower() in ALLOWED_SCHEMES:
+        return True
+    # Portal web: https + mismo host que PUBLIC_URL (evita open redirect).
+    public = urllib.parse.urlparse(PUBLIC_URL)
+    return parsed.scheme == public.scheme and parsed.netloc == public.netloc
 
 
 def make_state(app_redirect: str, now: Optional[float] = None) -> str:

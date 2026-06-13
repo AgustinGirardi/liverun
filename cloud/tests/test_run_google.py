@@ -27,6 +27,14 @@ def test_state_rechaza_esquemas_no_permitidos():
     assert ga.valid_app_redirect("chronotrackrun://auth")
 
 
+def test_redirect_al_propio_portal_permitido():
+    assert ga.valid_app_redirect(ga.PUBLIC_URL + "/")
+    assert ga.valid_app_redirect(ga.PUBLIC_URL + "/?cualquier=cosa")
+    # Mismo host con otro esquema u otro host: no.
+    assert not ga.valid_app_redirect("http://" + ga.PUBLIC_URL.split("://", 1)[1])
+    assert not ga.valid_app_redirect("https://chronotrack-portal.onrender.com.evil.com/")
+
+
 # ── upsert ────────────────────────────────────────────────────────────────────
 
 def test_upsert_crea_usuario_nuevo(db):

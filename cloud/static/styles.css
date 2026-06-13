@@ -133,6 +133,19 @@
   .btn.grad:hover { background:var(--grad); filter:brightness(1.06); }
   /* Acento de marca: una palabra/frase en degradado mint→teal */
   .grad-text { background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .btn.google { background:var(--panel2); color:var(--txt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; gap:9px; }
+  .btn.google:hover { background:var(--panel); border-color:var(--mut); }
+  .auth-divider { display:flex; align-items:center; gap:10px; color:var(--mut); font-size:13px; margin:14px 0; }
+  .auth-divider::before, .auth-divider::after { content:""; flex:1; height:1px; background:var(--border); }
+  /* Vidriera del ecosistema (home pública) */
+  .eco { margin-top:56px; }
+  .eco-label { font-size:13px; text-transform:uppercase; letter-spacing:3px; color:var(--mut); margin-bottom:16px; font-weight:700; }
+  .eco-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:720px){ .eco-grid { grid-template-columns:1fr; } }
+  .eco-card { display:flex; flex-direction:column; gap:8px; align-items:flex-start; }
+  .eco-card h2 { margin:0; }
+  .eco-card p { margin:0 0 6px; line-height:1.55; }
+  .eco-ic { font-size:28px; }
   .pw-wrap { position:relative; }
   .pw-wrap input { padding-right:44px; }
   .pw-eye { position:absolute; right:6px; top:50%; transform:translateY(-50%); background:transparent; border:none; color:var(--mut); font-size:16px; line-height:1; padding:6px 8px; border-radius:6px; cursor:pointer; }
