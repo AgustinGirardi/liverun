@@ -721,6 +721,91 @@ async def set_cloud_config(body: CloudConfigIn):
     }
 
 
+# ── Cuenta del organizador (sesión del portal: email/contraseña o Google) ─────
+
+from backend.core import account as account_mod  # noqa: E402
+from fastapi.responses import HTMLResponse  # noqa: E402
+
+# Puerto del backend local (el launcher levanta uvicorn en 8001).
+_LOOPBACK = f"http://127.0.0.1:{os.environ.get('CT_DESKTOP_PORT', '8001')}"
+
+
+class AccountLoginIn(_BaseModel):
+    email: str
+    password: str
+    full_name: Optional[str] = None
+
+
+@router.get("/account/me", tags=["Cuenta"])
+async def account_me():
+    """Sesión actual (sin el token) o null si no hay nadie logueado."""
+    return account_mod.public_session()
+
+
+@router.post("/account/login", tags=["Cuenta"])
+async def account_login(body: AccountLoginIn):
+    try:
+        s = await anyio.to_thread.run_sync(account_mod.login, body.email.strip(), body.password)
+    except ValueError as e:
+        raise HTTPException(401, str(e))
+    return {"email": s["email"], "full_name": s["full_name"]}
+
+
+@router.post("/account/register", tags=["Cuenta"])
+async def account_register(body: AccountLoginIn):
+    try:
+        s = await anyio.to_thread.run_sync(
+            account_mod.register, body.email.strip(), body.password, body.full_name
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"email": s["email"], "full_name": s["full_name"]}
+
+
+@router.post("/account/logout", tags=["Cuenta"])
+async def account_logout():
+    account_mod.clear_session()
+    return {"ok": True}
+
+
+@router.post("/account/google/start", tags=["Cuenta"])
+async def account_google_start():
+    """Abre el navegador del sistema en la pantalla de Google y devuelve la URL
+    (por si el navegador no abriera solo). La UI hace polling de /account/me."""
+    redirect = f"{_LOOPBACK}/api/v1/account/google/callback"
+    url = account_mod.google_auth_url(redirect)
+    try:
+        import webbrowser
+        webbrowser.open(url)
+    except Exception:
+        pass
+    return {"auth_url": url}
+
+
+@router.get("/account/google/callback", response_class=HTMLResponse, tags=["Cuenta"])
+async def account_google_callback(token: Optional[str] = None, email: Optional[str] = None,
+                                  error: Optional[str] = None):
+    """Recibe el token del portal tras el login con Google y guarda la sesión.
+    Devuelve una página simple que le dice al usuario que vuelva a ChronoTrack."""
+    ok = False
+    if token and not error:
+        try:
+            await anyio.to_thread.run_sync(account_mod.complete_google, token)
+            ok = True
+        except ValueError:
+            ok = False
+    msg = ("¡Listo! Ya iniciaste sesión.<br>Podés cerrar esta pestaña y volver a ChronoTrack."
+           if ok else
+           "No se pudo completar el inicio de sesión.<br>Volvé a ChronoTrack e intentá de nuevo.")
+    color = "#00b483" if ok else "#e5484d"
+    return f"""<!doctype html><meta charset="utf-8"><title>ChronoTrack</title>
+<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
+background:#0d0f10;color:#e8eaeb;font-family:Arial,sans-serif;text-align:center">
+<div><div style="font-size:42px;margin-bottom:12px">{'✓' if ok else '✕'}</div>
+<div style="font-size:17px;font-weight:700;color:{color};line-height:1.6">{msg}</div></div>
+</body>"""
+
+
 def _email_hash(email):
     """sha256 del email normalizado (privacy-preserving). DEBE coincidir byte a byte
     con cloud/main.py::_email_hash — si cambia uno, cambiar el otro."""

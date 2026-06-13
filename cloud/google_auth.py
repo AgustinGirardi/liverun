@@ -42,13 +42,21 @@ router = APIRouter(prefix="/api/run/auth/google", tags=["Run"])
 # ── Helpers puros (testeables) ────────────────────────────────────────────────
 
 def valid_app_redirect(url: str) -> bool:
-    """Deep link de la app móvil, o el propio portal web (mismo origen)."""
+    """Destinos de retorno permitidos tras el login con Google:
+    - deep link de la app móvil (exp/exps/chronotrackrun),
+    - el propio portal web (mismo origen que PUBLIC_URL),
+    - loopback de la app de escritorio (http://127.0.0.1 o localhost, cualquier
+      puerto): estándar seguro para apps nativas (RFC 8252)."""
     parsed = urllib.parse.urlparse(url or "")
-    if parsed.scheme.lower() in ALLOWED_SCHEMES:
+    scheme = parsed.scheme.lower()
+    if scheme in ALLOWED_SCHEMES:
+        return True
+    # Loopback de escritorio: solo http hacia la máquina local del usuario.
+    if scheme == "http" and parsed.hostname in ("127.0.0.1", "localhost"):
         return True
     # Portal web: https + mismo host que PUBLIC_URL (evita open redirect).
     public = urllib.parse.urlparse(PUBLIC_URL)
-    return parsed.scheme == public.scheme and parsed.netloc == public.netloc
+    return scheme == public.scheme and parsed.netloc == public.netloc
 
 
 def make_state(app_redirect: str, now: Optional[float] = None) -> str:

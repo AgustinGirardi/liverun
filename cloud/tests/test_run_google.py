@@ -35,6 +35,14 @@ def test_redirect_al_propio_portal_permitido():
     assert not ga.valid_app_redirect("https://chronotrack-portal.onrender.com.evil.com/")
 
 
+def test_redirect_loopback_escritorio_permitido():
+    assert ga.valid_app_redirect("http://127.0.0.1:8001/api/v1/account/google/callback")
+    assert ga.valid_app_redirect("http://localhost:5173/cb")
+    # Loopback solo por http y solo al host local; nada de IPs externas.
+    assert not ga.valid_app_redirect("http://192.168.0.50:8001/cb")
+    assert not ga.valid_app_redirect("https://127.0.0.1.evil.com/cb")
+
+
 # ── upsert ────────────────────────────────────────────────────────────────────
 
 def test_upsert_crea_usuario_nuevo(db):
