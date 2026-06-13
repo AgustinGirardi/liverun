@@ -83,6 +83,8 @@ a = Analysis(
         'pythonnet',
         'proxy_tools',
         'bottle',
+        # login con cuenta del portal (account.py usa webbrowser de forma diferida)
+        'webbrowser',
     ],
     hookspath=[WEBVIEW_HOOKS],
     hooksconfig={},
