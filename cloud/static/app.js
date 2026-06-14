@@ -59,7 +59,9 @@ function logout(){ TOKEN=null; USER=null; localStorage.removeItem("ct_token"); l
 function renderNav(){
   const n = $("nav");
   if(USER){
+    const adminBtn = USER.is_admin ? `<button onclick="go('admin')">⚙ Admin</button>` : "";
     n.innerHTML = `<button onclick="go('home')">🏠 Inicio</button>
+      ${adminBtn}
       <span class="who hide-sm">${esc((USER.full_name||USER.email).split(" ")[0])}</span>
       <button onclick="logout()">Salir</button>`;
   } else {
@@ -82,6 +84,7 @@ function go(view, arg){
   if(view==="race")     return viewRace(arg);
   if(view==="login")    return viewAuth("login");
   if(view==="register") return viewAuth("register");
+  if(view==="admin")    return viewAdmin();
   if(view==="me")       return viewHome();   // el perfil ahora vive en el inicio (dashboard)
 }
 
@@ -459,7 +462,7 @@ async function doAuth(mode){
   try {
     const body = reg ? { email, password:pw, full_name:$("fn").value.trim()||null } : { email, password:pw };
     const d = await api("POST", reg?"/api/auth/register":"/api/auth/login", body);
-    setSession(d); go("home");
+    setSession(d); await refreshAdminFlag(); renderNav(); go("home");
     if(d.linked > 0) toast(`Vinculamos ${d.linked} resultado${d.linked===1?"":"s"} a tu perfil 🎉`);
   } catch(e){ showAuthErr(e.message); b.disabled=false; }
 }
@@ -522,6 +525,58 @@ async function doFind(){
   } catch(e){ $("findRes").innerHTML=`<div class="err">${esc(e.message)}</div>`; }
 }
 
+// ── Panel de administración (solo is_admin) ────────────────────────────────
+async function refreshAdminFlag(){
+  try { const p = await api("GET","/api/run/profile",null,true); USER.is_admin = !!p.is_admin; localStorage.setItem("ct_user", JSON.stringify(USER)); }
+  catch { /* sin /api/run/profile no pasa nada */ }
+}
+async function viewAdmin(){
+  if(!USER){ return go("login"); }
+  if(!USER.is_admin){ await refreshAdminFlag(); if(!USER.is_admin) return go("home"); renderNav(); }
+  $("app").innerHTML = `<h1>Panel de <span class="grad-text">administración</span></h1>
+    <div class="sub">Usuarios, pruebas y premium. Tu cuenta tiene acceso ilimitado.</div>
+    <div id="adminStats" class="stats" style="margin-bottom:16px"></div>
+    <div class="search-hero" style="max-width:none;margin-bottom:16px">
+      <input id="aq" placeholder="Buscar por email, nombre o username…" onkeydown="if(event.key==='Enter')adminLoad()">
+      <button class="btn sm" onclick="adminLoad()">Buscar</button>
+    </div>
+    <div id="adminList"><div class="empty">Cargando…</div></div>`;
+  adminLoad();
+}
+async function adminLoad(){
+  const q = ($("aq")?.value || "").trim();
+  try {
+    const d = await api("GET","/api/run/admin/users?q="+encodeURIComponent(q), null, true);
+    $("adminStats").innerHTML = `<div class="stat"><div class="v">${d.total}</div><div class="l">Usuarios</div></div>
+      <div class="stat"><div class="v">${d.premium_active}</div><div class="l">Premium activos</div></div>`;
+    if(!d.users.length){ $("adminList").innerHTML = `<div class="empty">Sin resultados.</div>`; return; }
+    $("adminList").innerHTML = `<div class="card" style="padding:6px"><table><thead><tr>
+      <th>Usuario</th><th class="hide-sm">Plan</th><th class="hide-sm">Premium hasta</th><th style="text-align:right">Acciones</th>
+      </tr></thead><tbody>${d.users.map(u=>adminRow(u)).join("")}</tbody></table></div>`;
+  } catch(e){ $("adminList").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function adminRow(u){
+  const planPill = u.is_admin ? `<span class="pill">admin</span>`
+    : u.plan==="premium" ? `<span class="pill" style="color:var(--acc)">premium</span>`
+    : u.plan==="trial" ? `<span class="pill">prueba</span>`
+    : `<span class="pill warn">vencido</span>`;
+  const until = u.premium_until ? fmtDate(u.premium_until.slice(0,10)) : "—";
+  return `<tr>
+    <td><div style="font-weight:600">${esc(u.full_name||u.username||u.email)}</div><div class="dim">${esc(u.email)}</div></td>
+    <td class="hide-sm">${planPill}</td>
+    <td class="hide-sm">${until}</td>
+    <td style="text-align:right;white-space:nowrap">
+      <a class="lnk" onclick="adminGrant(${u.id},{months:1})">+1m</a>
+      <a class="lnk" onclick="adminGrant(${u.id},{months:12})">+12m</a>
+      <a class="lnk" onclick="adminGrant(${u.id},{unlimited:true})">∞</a>
+      <a class="lnk" style="color:var(--mut)" onclick="adminGrant(${u.id},{revoke:true})">quitar</a>
+    </td></tr>`;
+}
+async function adminGrant(id, body){
+  try { await api("POST","/api/run/admin/users/"+id+"/grant", body, true); toast("Listo ✓"); adminLoad(); }
+  catch(e){ toast(e.message, "warn"); }
+}
+
 // ── Login con Google (mismo flujo server-side que la app móvil) ────────────
 function googleLogin(){
   location.href = "/api/run/auth/google/start?app_redirect=" + encodeURIComponent(location.origin + "/");
@@ -535,7 +590,7 @@ async function handleGoogleReturn(){
   TOKEN = token; localStorage.setItem("ct_token", TOKEN);
   try {
     const prof = await api("GET","/api/run/profile",null,true);
-    USER = { email: prof.email, full_name: prof.full_name };
+    USER = { email: prof.email, full_name: prof.full_name, is_admin: !!prof.is_admin };
   } catch { USER = { email: p.get("email")||"", full_name: null }; }
   localStorage.setItem("ct_user", JSON.stringify(USER));
   toast("¡Bienvenido! 🎉");

@@ -50,6 +50,26 @@ def week_start(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+TRIAL_DAYS = 182  # ~6 meses de prueba gratis desde el alta
+
+
+def access_status(is_admin: bool, created_at: Optional[datetime],
+                  premium_until: Optional[datetime], now: datetime) -> dict:
+    """Fuente de verdad del acceso premium, sin importar cómo se pagó.
+    admin = ilimitado; si no, vale el premium pagado o la prueba gratis."""
+    if is_admin:
+        return {"access": True, "plan": "admin", "since": None, "until": None, "trial_ends_at": None}
+    trial_end = (created_at + timedelta(days=TRIAL_DAYS)) if created_at else None
+    if premium_until and premium_until > now:
+        return {"access": True, "plan": "premium", "until": premium_until.isoformat(),
+                "trial_ends_at": trial_end.isoformat() if trial_end else None}
+    if trial_end and trial_end > now:
+        return {"access": True, "plan": "trial", "until": trial_end.isoformat(),
+                "trial_ends_at": trial_end.isoformat()}
+    return {"access": False, "plan": "expired", "until": None,
+            "trial_ends_at": trial_end.isoformat() if trial_end else None}
+
+
 def compute_streak(run_dates: set[date], weekly_goal: int, today: date) -> int:
     """Racha = semanas consecutivas (hacia atrás desde la última semana cerrada)
     en las que los días con al menos una salida alcanzaron la meta.
@@ -134,13 +154,86 @@ def _friend_ids(user_id: int, db: Session) -> set[int]:
 
 @router.get("/profile")
 def get_profile(user: PortalUser = Depends(current_user)):
+    acc = access_status(bool(user.is_admin), user.created_at, user.premium_until,
+                        datetime.now(timezone.utc).replace(tzinfo=None))
     return {
         "email": user.email,
         "full_name": user.full_name,
         "username": user.username,
         "weekly_goal": user.weekly_goal or 3,
         "avatar_url": user.avatar_url,
+        "is_admin": bool(user.is_admin),
+        "access": acc["access"],
+        "plan": acc["plan"],
+        "premium_until": user.premium_until.isoformat() if user.premium_until else None,
+        "trial_ends_at": acc["trial_ends_at"],
     }
+
+
+# ── Admin (solo cuentas marcadas is_admin) ────────────────────────────────────
+
+def require_admin(user: PortalUser = Depends(current_user)) -> PortalUser:
+    if not user.is_admin:
+        raise HTTPException(403, "Acceso solo para administradores")
+    return user
+
+
+class GrantIn(BaseModel):
+    months: Optional[int] = Field(None, ge=1, le=120)
+    unlimited: bool = False
+    revoke: bool = False
+
+
+def _admin_user_dict(u: PortalUser, now: datetime) -> dict:
+    acc = access_status(bool(u.is_admin), u.created_at, u.premium_until, now)
+    return {
+        "id": u.id, "email": u.email, "full_name": u.full_name, "username": u.username,
+        "is_admin": bool(u.is_admin), "plan": acc["plan"], "access": acc["access"],
+        "premium_until": u.premium_until.isoformat() if u.premium_until else None,
+        "created_at": u.created_at.isoformat() if u.created_at else None,
+    }
+
+
+@router.get("/admin/users")
+def admin_list_users(q: str = "", limit: int = 50,
+                     admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    stmt = select(PortalUser).order_by(PortalUser.created_at.desc())
+    ql = (q or "").strip().lower()
+    if ql:
+        like = f"%{ql}%"
+        stmt = stmt.where(
+            func.lower(PortalUser.email).like(like)
+            | func.lower(PortalUser.full_name).like(like)
+            | func.lower(PortalUser.username).like(like)
+        )
+    users = db.scalars(stmt.limit(max(1, min(limit, 200)))).all()
+    total = db.scalar(select(func.count()).select_from(PortalUser))
+    premium = db.scalar(select(func.count()).select_from(PortalUser).where(PortalUser.premium_until > now))
+    return {"total": total, "premium_active": premium, "users": [_admin_user_dict(u, now) for u in users]}
+
+
+@router.post("/admin/users/{user_id}/grant")
+def admin_grant(user_id: int, body: GrantIn,
+                admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+    """Da, extiende o quita premium manualmente (sin cobro). Para regalos,
+    soporte o tu propia cuenta. unlimited = 100 años; revoke = sin premium."""
+    target = db.get(PortalUser, user_id)
+    if not target:
+        raise HTTPException(404, "Usuario no encontrado")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if body.revoke:
+        target.premium_until = None
+    elif body.unlimited:
+        target.premium_until = now + timedelta(days=365 * 100)
+    elif body.months:
+        # Extiende desde hoy o desde el vencimiento futuro (lo que sea mayor).
+        base = target.premium_until if (target.premium_until and target.premium_until > now) else now
+        target.premium_until = base + timedelta(days=30 * body.months)
+    else:
+        raise HTTPException(400, "Indicá months, unlimited o revoke")
+    db.commit()
+    return _admin_user_dict(target, now)
 
 
 @router.patch("/profile")

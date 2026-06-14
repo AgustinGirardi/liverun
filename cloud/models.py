@@ -24,6 +24,12 @@ class PortalUser(Base):
     username      = Column(String(30), nullable=True, unique=True, index=True)
     weekly_goal   = Column(Integer, nullable=False, default=3, server_default="3")
     avatar_url    = Column(String(400), nullable=True)
+    # ── Suscripción / acceso ──
+    # access = is_admin OR premium_until>now OR (created_at + prueba) > now.
+    # La prueba gratis se computa desde created_at (no se almacena); premium_until
+    # lo extienden los pagos (web/tienda), los cupones o un admin.
+    is_admin      = Column(Integer, nullable=False, default=0, server_default="0")
+    premium_until = Column(DateTime, nullable=True)
     claims        = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
     activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
 

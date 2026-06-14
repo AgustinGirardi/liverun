@@ -62,10 +62,12 @@ def _ensure_run_columns():
         if not cols:
             return  # tabla inexistente: create_all la crea completa
         wanted = {
-            "google_id":   "ALTER TABLE portal_users ADD COLUMN google_id VARCHAR(64)",
-            "username":    "ALTER TABLE portal_users ADD COLUMN username VARCHAR(30)",
-            "weekly_goal": "ALTER TABLE portal_users ADD COLUMN weekly_goal INTEGER NOT NULL DEFAULT 3",
-            "avatar_url":  "ALTER TABLE portal_users ADD COLUMN avatar_url VARCHAR(400)",
+            "google_id":     "ALTER TABLE portal_users ADD COLUMN google_id VARCHAR(64)",
+            "username":      "ALTER TABLE portal_users ADD COLUMN username VARCHAR(30)",
+            "weekly_goal":   "ALTER TABLE portal_users ADD COLUMN weekly_goal INTEGER NOT NULL DEFAULT 3",
+            "avatar_url":    "ALTER TABLE portal_users ADD COLUMN avatar_url VARCHAR(400)",
+            "is_admin":      "ALTER TABLE portal_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+            "premium_until": "ALTER TABLE portal_users ADD COLUMN premium_until DATETIME",
         }
         for col, ddl in wanted.items():
             if col not in cols:
@@ -73,6 +75,19 @@ def _ensure_run_columns():
         # SQLite: UNIQUE de columnas nuevas via indices (ALTER no admite constraints)
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_portal_users_username ON portal_users (username)"))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_portal_users_google_id ON portal_users (google_id)"))
+
+
+def _ensure_admins():
+    """Marca como admin a los emails de CT_ADMIN_EMAILS (CSV). Idempotente:
+    corre en cada arranque, así agregar un admin es solo setear la env var."""
+    emails = [e.strip().lower() for e in os.environ.get("CT_ADMIN_EMAILS", "").split(",") if e.strip()]
+    if not emails:
+        return
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        for e in emails:
+            conn.execute(text("UPDATE portal_users SET is_admin=1 WHERE lower(email)=:e"), {"e": e})
 
 
 def _ensure_email_hash_column():
@@ -104,6 +119,7 @@ def _startup():
     init_db()
     _ensure_email_hash_column()
     _ensure_run_columns()
+    _ensure_admins()
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────
