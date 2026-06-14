@@ -162,6 +162,7 @@ async function viewDashboard(){
   $("app").innerHTML = `
     <h1>Hola, <span class="grad-text">${first}</span> 👋</h1>
     <div class="sub">Tu historial personal y todas las carreras publicadas.</div>
+    <div id="dashSub"></div>
     <div class="search-hero" style="max-width:560px;margin-bottom:24px">
       <input id="q" placeholder="Buscá tu nombre para agregar un resultado…" onkeydown="if(event.key==='Enter')homeSearch()">
       <button class="btn sm" onclick="homeSearch()">Buscar</button>
@@ -200,6 +201,9 @@ async function viewDashboard(){
       </div>${pb}${hist}`;
   } catch(e){ $("dashMe").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 
+  // Estado de la suscripción de ChronoTrack Run (si la cuenta lo tiene)
+  loadDashSub();
+
   // Todas las carreras publicadas
   try {
     const races = await api("GET","/api/races");
@@ -207,6 +211,39 @@ async function viewDashboard(){
       ? races.map(raceCard).join("")
       : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
   } catch(e){ $("dashRaces").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+async function loadDashSub(){
+  const box = $("dashSub"); if(!box) return;
+  try {
+    const p = await api("GET","/api/run/profile", null, true);
+    if(p.plan === "admin"){ box.innerHTML = ""; return; }  // tu cuenta: sin banner
+    const daysLeft = (iso)=> iso ? Math.ceil((new Date(iso)-Date.now())/86400000) : null;
+    let cls="sub-trial", title, detail, cta=false;
+    if(p.plan === "premium"){
+      const d = daysLeft(p.premium_until);
+      title = "⭐ Premium activo"; detail = d!=null?`Te quedan ${d} día${d===1?'':'s'} de premium.`:"Suscripción activa.";
+    } else if(p.plan === "trial"){
+      const d = daysLeft(p.trial_ends_at);
+      title = "🎁 Prueba gratis"; detail = d!=null?`Te ${d===1?'queda':'quedan'} ${d} día${d===1?'':'s'} de prueba. ¡Disfrutá ChronoTrack Run!`:"Estás en tu prueba gratis.";
+      cta = true; if(d!=null && d<=14) cls="sub-warn";
+    } else {
+      title = "⏰ Prueba terminada"; detail = "Pasate a premium para seguir usando ChronoTrack Run."; cta = true; cls="sub-warn";
+    }
+    box.innerHTML = `<div class="card subcard ${cls}">
+      <div><div style="font-weight:700">${title}</div><div class="dim" style="font-size:13px;margin-top:2px">${detail}</div></div>
+      ${cta?`<button class="btn sm" onclick="goPremium(this)">⭐ Hacerme premium</button>`:""}
+    </div>`;
+  } catch { box.innerHTML = ""; }  // sin cuenta Run o error: no mostramos nada
+}
+async function goPremium(btn){
+  btn.disabled = true; const orig = btn.textContent; btn.textContent = "Abriendo…";
+  try {
+    const info = await api("GET","/api/run/billing/info", null, true);
+    if(!info.available){ toast("El pago todavía no está habilitado.", "warn"); btn.disabled=false; btn.textContent=orig; return; }
+    const d = await api("POST","/api/run/billing/subscribe", null, true);
+    location.href = d.init_point;
+  } catch(e){ toast(e.message, "warn"); btn.disabled=false; btn.textContent=orig; }
 }
 
 // ── Búsqueda ───────────────────────────────────────────────────────────────

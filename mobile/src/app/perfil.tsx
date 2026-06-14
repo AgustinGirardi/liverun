@@ -1,4 +1,5 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ function daysUntil(iso: string | null): number | null {
 /** Tarjeta de estado de la suscripción. Muro "suave": informa y anima, no bloquea. */
 function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: any; card: any[] }) {
   const left = daysUntil(profile.plan === 'premium' ? profile.premium_until : profile.trial_ends_at);
+  const [busy, setBusy] = useState(false);
 
   let title: string;
   let detail: string;
@@ -40,14 +42,42 @@ function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: a
     if (left != null && left <= 14) accent = '#f5a524';
   } else {
     title = '⏰ Prueba terminada';
-    detail = 'Tu prueba gratis terminó. Pronto vas a poder pasarte a premium para seguir.';
+    detail = 'Tu prueba gratis terminó. Pasate a premium para seguir disfrutando todo.';
     accent = '#f5a524';
+  }
+
+  // El botón de pago aparece para quien no es admin ni tiene premium vigente.
+  const canSubscribe = profile.plan === 'trial' || profile.plan === 'expired';
+
+  async function goPremium() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const info = await api.billingInfo();
+      if (!info.available) {
+        Alert.alert('Muy pronto', 'El pago todavía no está habilitado. ¡Avisaremos cuando se pueda!');
+        return;
+      }
+      const { init_point } = await api.subscribe();
+      await WebBrowser.openBrowserAsync(init_point);
+    } catch (e) {
+      Alert.alert('Ups', e instanceof ApiError ? e.message : 'No se pudo abrir el pago.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <View style={[card, { borderWidth: 1, borderColor: `${accent}55` }]}>
       <ThemedText type="smallBold" style={{ color: accent }}>{title}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">{detail}</ThemedText>
+      {canSubscribe && (
+        <Pressable style={[styles.premiumButton, busy && { opacity: 0.6 }]} onPress={goPremium} disabled={busy}>
+          <ThemedText type="smallBold" style={styles.buttonText}>
+            {busy ? 'Abriendo…' : '⭐ Hacerme premium'}
+          </ThemedText>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -350,6 +380,13 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   buttonText: { color: '#000' },
+  premiumButton: {
+    backgroundColor: BrandAccent,
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+    marginTop: Spacing.one,
+  },
   goalRow: { flexDirection: 'row', gap: Spacing.two },
   goalChip: {
     width: 38,

@@ -155,6 +155,13 @@ export const api = {
       { method: 'POST', body: { code } },
     ),
 
+  billingInfo: () =>
+    request<{ available: boolean; price: number; base_price: number; currency: string; discount_percent: number | null }>(
+      '/api/run/billing/info',
+    ),
+  subscribe: () =>
+    request<{ init_point: string; amount: number; currency: string }>('/api/run/billing/subscribe', { method: 'POST' }),
+
   /** Sube la foto de perfil (multipart; la imagen ya viene achicada del picker). */
   uploadAvatar: async (uri: string): Promise<Profile> => {
     const form = new FormData();
