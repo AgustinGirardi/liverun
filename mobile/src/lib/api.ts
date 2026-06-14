@@ -60,6 +60,11 @@ export type Profile = {
   username: string | null;
   weekly_goal: number;
   avatar_url: string | null;
+  is_admin: boolean;
+  access: boolean;
+  plan: 'admin' | 'premium' | 'trial' | 'expired';
+  premium_until: string | null;
+  trial_ends_at: string | null;
 };
 
 export type Activity = {
@@ -143,6 +148,12 @@ export const api = {
   friends: () => request<FriendLists>('/api/run/friends'),
   ranking: (period: 'week' | 'month', scope: RankingScope = 'friends') =>
     request<Ranking>(`/api/run/ranking?period=${period}&scope=${scope}`),
+
+  redeemCoupon: (code: string) =>
+    request<{ message: string; kind: 'free_months' | 'discount'; months?: number; percent_off?: number }>(
+      '/api/run/coupons/redeem',
+      { method: 'POST', body: { code } },
+    ),
 
   /** Sube la foto de perfil (multipart; la imagen ya viene achicada del picker). */
   uploadAvatar: async (uri: string): Promise<Profile> => {

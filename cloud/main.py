@@ -68,6 +68,7 @@ def _ensure_run_columns():
             "avatar_url":    "ALTER TABLE portal_users ADD COLUMN avatar_url VARCHAR(400)",
             "is_admin":      "ALTER TABLE portal_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
             "premium_until": "ALTER TABLE portal_users ADD COLUMN premium_until DATETIME",
+            "pending_discount_percent": "ALTER TABLE portal_users ADD COLUMN pending_discount_percent INTEGER",
         }
         for col, ddl in wanted.items():
             if col not in cols:

@@ -534,7 +534,16 @@ async function viewAdmin(){
   if(!USER){ return go("login"); }
   if(!USER.is_admin){ await refreshAdminFlag(); if(!USER.is_admin) return go("home"); renderNav(); }
   $("app").innerHTML = `<h1>Panel de <span class="grad-text">administración</span></h1>
-    <div class="sub">Usuarios, pruebas y premium. Tu cuenta tiene acceso ilimitado.</div>
+    <div class="sub">Usuarios, pruebas, premium y cupones. Tu cuenta tiene acceso ilimitado.</div>
+    <div class="tabbar"><button class="on" id="tUsers" onclick="adminTab('users')">Usuarios</button><button id="tCoup" onclick="adminTab('coupons')">Cupones</button></div>
+    <div id="adminBody"><div class="empty">Cargando…</div></div>`;
+  adminTab('users');
+}
+function adminTab(tab){
+  $("tUsers").classList.toggle("on", tab==="users");
+  $("tCoup").classList.toggle("on", tab==="coupons");
+  if(tab==="coupons") return adminCoupons();
+  $("adminBody").innerHTML = `
     <div id="adminStats" class="stats" style="margin-bottom:16px"></div>
     <div class="search-hero" style="max-width:none;margin-bottom:16px">
       <input id="aq" placeholder="Buscar por email, nombre o username…" onkeydown="if(event.key==='Enter')adminLoad()">
@@ -574,6 +583,55 @@ function adminRow(u){
 }
 async function adminGrant(id, body){
   try { await api("POST","/api/run/admin/users/"+id+"/grant", body, true); toast("Listo ✓"); adminLoad(); }
+  catch(e){ toast(e.message, "warn"); }
+}
+async function adminCoupons(){
+  $("adminBody").innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <h2>Crear cupón</h2>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div><label>Código</label><input id="cpCode" placeholder="VERANO2026" style="text-transform:uppercase"></div>
+        <div><label>Tipo</label><select id="cpKind" onchange="cpKindChange()"><option value="free_months">Meses gratis</option><option value="discount">Descuento %</option></select></div>
+        <div id="cpMonthsW"><label>Meses</label><input id="cpMonths" type="number" min="1" value="1" style="width:80px"></div>
+        <div id="cpPctW" style="display:none"><label>% off</label><input id="cpPct" type="number" min="1" max="100" value="20" style="width:80px"></div>
+        <div><label>Usos máx. (opcional)</label><input id="cpMax" type="number" min="1" placeholder="∞" style="width:90px"></div>
+        <button class="btn sm" onclick="adminCreateCoupon()">Crear</button>
+      </div>
+    </div>
+    <div id="cpList"><div class="empty">Cargando…</div></div>`;
+  loadCoupons();
+}
+function cpKindChange(){
+  const disc = $("cpKind").value === "discount";
+  $("cpMonthsW").style.display = disc ? "none" : "";
+  $("cpPctW").style.display = disc ? "" : "none";
+}
+async function adminCreateCoupon(){
+  const kind = $("cpKind").value;
+  const body = { code: $("cpCode").value.trim().toUpperCase(), kind };
+  if(kind==="free_months") body.months = parseInt($("cpMonths").value)||1;
+  else body.percent_off = parseInt($("cpPct").value)||10;
+  const mx = parseInt($("cpMax").value); if(mx>0) body.max_redemptions = mx;
+  try { await api("POST","/api/run/admin/coupons", body, true); toast("Cupón creado ✓"); $("cpCode").value=""; loadCoupons(); }
+  catch(e){ toast(e.message, "warn"); }
+}
+async function loadCoupons(){
+  try {
+    const d = await api("GET","/api/run/admin/coupons", null, true);
+    if(!d.coupons.length){ $("cpList").innerHTML = `<div class="empty">Todavía no creaste cupones.</div>`; return; }
+    $("cpList").innerHTML = `<div class="card" style="padding:6px"><table><thead><tr>
+      <th>Código</th><th>Beneficio</th><th>Usos</th><th class="hide-sm">Estado</th><th style="text-align:right"></th>
+      </tr></thead><tbody>${d.coupons.map(c=>{
+        const benefit = c.kind==="free_months" ? `${c.months} ${c.months===1?'mes':'meses'} gratis` : `${c.percent_off}% off`;
+        const uses = `${c.redeemed_count}${c.max_redemptions?'/'+c.max_redemptions:''}`;
+        const st = c.active ? `<span class="pill" style="color:var(--acc)">activo</span>` : `<span class="pill warn">inactivo</span>`;
+        return `<tr><td><b>${esc(c.code)}</b></td><td>${benefit}</td><td>${uses}</td><td class="hide-sm">${st}</td>
+          <td style="text-align:right"><a class="lnk" onclick="adminToggleCoupon(${c.id})">${c.active?'desactivar':'activar'}</a></td></tr>`;
+      }).join("")}</tbody></table></div>`;
+  } catch(e){ $("cpList").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+async function adminToggleCoupon(id){
+  try { await api("POST","/api/run/admin/coupons/"+id+"/toggle", null, true); loadCoupons(); }
   catch(e){ toast(e.message, "warn"); }
 }
 

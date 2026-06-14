@@ -119,8 +119,8 @@
 
   label { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--dim); margin:0 0 6px; }
   .field { margin-bottom:13px; }
-  input[type=text],input[type=email],input[type=password] { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:9px; padding:11px 13px; color:var(--txt); font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s; }
-  input:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(var(--acc-rgb),.16); }
+  input[type=text],input[type=email],input[type=password],input[type=number],select { width:100%; background:var(--panel2); border:1px solid var(--border); border-radius:9px; padding:11px 13px; color:var(--txt); font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s; }
+  input:focus,select:focus { border-color:var(--acc); box-shadow:0 0 0 3px rgba(var(--acc-rgb),.16); }
   .btn { background:var(--acc); color:var(--on-acc); border:none; padding:11px 18px; border-radius:9px; font-weight:700; font-size:14px; width:100%; transition:background .15s, transform .1s, opacity .15s; }
   .btn:hover { background:var(--acc2); }
   .btn:active { transform:translateY(1px); }

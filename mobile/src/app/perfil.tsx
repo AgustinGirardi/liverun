@@ -12,6 +12,46 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError, type FriendLists, type Profile, type SearchedUser } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
+/** Días enteros desde hoy hasta `iso` (negativo si ya pasó). */
+function daysUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const ms = new Date(iso).getTime() - Date.now();
+  return Math.ceil(ms / 86400000);
+}
+
+/** Tarjeta de estado de la suscripción. Muro "suave": informa y anima, no bloquea. */
+function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: any; card: any[] }) {
+  const left = daysUntil(profile.plan === 'premium' ? profile.premium_until : profile.trial_ends_at);
+
+  let title: string;
+  let detail: string;
+  let accent = BrandAccent;
+  if (profile.plan === 'admin') {
+    title = '⭐ Cuenta ilimitada';
+    detail = 'Tenés acceso total a ChronoTrack Run.';
+  } else if (profile.plan === 'premium') {
+    title = '⭐ Premium activo';
+    detail = left != null ? `Te quedan ${left} ${left === 1 ? 'día' : 'días'} de premium.` : 'Suscripción activa.';
+  } else if (profile.plan === 'trial') {
+    title = '🎁 Prueba gratis';
+    detail = left != null
+      ? `Te ${left === 1 ? 'queda' : 'quedan'} ${left} ${left === 1 ? 'día' : 'días'} de prueba. ¡Disfrutá todo!`
+      : 'Estás en tu período de prueba.';
+    if (left != null && left <= 14) accent = '#f5a524';
+  } else {
+    title = '⏰ Prueba terminada';
+    detail = 'Tu prueba gratis terminó. Pronto vas a poder pasarte a premium para seguir.';
+    accent = '#f5a524';
+  }
+
+  return (
+    <View style={[card, { borderWidth: 1, borderColor: `${accent}55` }]}>
+      <ThemedText type="smallBold" style={{ color: accent }}>{title}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">{detail}</ThemedText>
+    </View>
+  );
+}
+
 /** Perfil: datos, username, meta semanal, búsqueda de amigos y solicitudes. */
 export default function PerfilScreen() {
   const theme = useTheme();
@@ -24,6 +64,8 @@ export default function PerfilScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [coupon, setCoupon] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([api.profile(), api.friends()])
@@ -51,6 +93,22 @@ export default function PerfilScreen() {
       load();
     } catch (e) {
       Alert.alert('Ups', e instanceof ApiError ? e.message : 'Algo salió mal.');
+    }
+  }
+
+  async function redeem() {
+    const code = coupon.trim();
+    if (!code || redeeming) return;
+    setRedeeming(true);
+    try {
+      const r = await api.redeemCoupon(code);
+      setCoupon('');
+      load();
+      Alert.alert('¡Cupón canjeado!', r.message);
+    } catch (e) {
+      Alert.alert('Cupón', e instanceof ApiError ? e.message : 'No se pudo canjear.');
+    } finally {
+      setRedeeming(false);
     }
   }
 
@@ -130,6 +188,31 @@ export default function PerfilScreen() {
                 style={styles.smallButton}
                 onPress={() => run(() => api.updateProfile({ username: username.trim() }), 'Username guardado')}>
                 <ThemedText type="smallBold" style={styles.buttonText}>Guardar</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Suscripción (muro suave: informa, todavía no bloquea) */}
+          {profile && <SubscriptionCard profile={profile} theme={theme} card={card} />}
+
+          {/* Canjear cupón */}
+          <View style={card}>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+              CANJEAR CUPÓN
+            </ThemedText>
+            <View style={styles.inline}>
+              <TextInput
+                style={[inputStyle, styles.flex, { textTransform: 'uppercase' }]}
+                placeholder="Código (ej. VERANO2026)"
+                placeholderTextColor={theme.textSecondary}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                value={coupon}
+                onChangeText={setCoupon}
+                onSubmitEditing={redeem}
+              />
+              <Pressable style={[styles.smallButton, redeeming && { opacity: 0.6 }]} onPress={redeem} disabled={redeeming}>
+                <ThemedText type="smallBold" style={styles.buttonText}>{redeeming ? '…' : 'Canjear'}</ThemedText>
               </Pressable>
             </View>
           </View>

@@ -30,6 +30,8 @@ class PortalUser(Base):
     # lo extienden los pagos (web/tienda), los cupones o un admin.
     is_admin      = Column(Integer, nullable=False, default=0, server_default="0")
     premium_until = Column(DateTime, nullable=True)
+    # Descuento pendiente dejado por un cupón "discount"; lo consume el checkout.
+    pending_discount_percent = Column(Integer, nullable=True)
     claims        = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
     activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
 
@@ -99,6 +101,36 @@ class Friendship(Base):
     created_at   = Column(DateTime, server_default=func.now())
     accepted_at  = Column(DateTime, nullable=True)
     __table_args__ = (UniqueConstraint("requester_id", "addressee_id", name="uq_friendship_pair"),)
+
+
+class Coupon(Base):
+    """Cupón para promocionar la app. Dos tipos:
+    - free_months: al canjear, suma N meses de premium al instante.
+    - discount: deja un % de descuento pendiente en la cuenta para el próximo
+      pago (lo consume el checkout cuando exista el cobro)."""
+    __tablename__ = "run_coupons"
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    code            = Column(String(32), nullable=False, unique=True, index=True)
+    kind            = Column(String(16), nullable=False)            # free_months | discount
+    months          = Column(Integer, nullable=True)               # para free_months
+    percent_off     = Column(Integer, nullable=True)               # para discount (1..100)
+    max_redemptions = Column(Integer, nullable=True)               # null = ilimitado
+    redeemed_count  = Column(Integer, nullable=False, default=0, server_default="0")
+    expires_at      = Column(DateTime, nullable=True)
+    active          = Column(Integer, nullable=False, default=1, server_default="1")
+    created_at      = Column(DateTime, server_default=func.now())
+    redemptions     = relationship("CouponRedemption", back_populates="coupon", cascade="all, delete-orphan")
+
+
+class CouponRedemption(Base):
+    """Un canje de cupón por un usuario (un usuario no puede canjear el mismo dos veces)."""
+    __tablename__ = "run_coupon_redemptions"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    coupon_id   = Column(Integer, ForeignKey("run_coupons.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id     = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    redeemed_at = Column(DateTime, server_default=func.now())
+    coupon      = relationship("Coupon", back_populates="redemptions")
+    __table_args__ = (UniqueConstraint("coupon_id", "user_id", name="uq_coupon_user"),)
 
 
 class Claim(Base):

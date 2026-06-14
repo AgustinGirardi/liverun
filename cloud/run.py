@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from cloud.db import DB_URL, get_db
 from cloud.deps import current_user, rate_limit
-from cloud.models import Activity, Friendship, PortalUser
+from cloud.models import Activity, Coupon, CouponRedemption, Friendship, PortalUser
 
 router = APIRouter(prefix="/api/run", tags=["Run"])
 
@@ -234,6 +234,128 @@ def admin_grant(user_id: int, body: GrantIn,
         raise HTTPException(400, "Indicá months, unlimited o revoke")
     db.commit()
     return _admin_user_dict(target, now)
+
+
+# ── Cupones ───────────────────────────────────────────────────────────────────
+
+COUPON_RE = re.compile(r"^[A-Z0-9]{4,32}$")
+
+
+def coupon_redeemable(coupon: Optional[Coupon], already: bool, now: datetime) -> Optional[str]:
+    """Devuelve un mensaje de error si el cupón no se puede canjear, o None si sí.
+    Pura: no toca la DB (recibe el cupón y si el usuario ya lo canjeó)."""
+    if coupon is None:
+        return "Ese código no existe."
+    if not coupon.active:
+        return "Ese cupón ya no está activo."
+    if coupon.expires_at and coupon.expires_at < now:
+        return "Ese cupón venció."
+    if coupon.max_redemptions is not None and coupon.redeemed_count >= coupon.max_redemptions:
+        return "Ese cupón ya alcanzó el máximo de usos."
+    if already:
+        return "Ya usaste este cupón."
+    return None
+
+
+class CouponCreate(BaseModel):
+    code: str = Field(..., min_length=4, max_length=32)
+    kind: str  # free_months | discount
+    months: Optional[int] = Field(None, ge=1, le=120)
+    percent_off: Optional[int] = Field(None, ge=1, le=100)
+    max_redemptions: Optional[int] = Field(None, ge=1)
+    expires_at: Optional[datetime] = None
+
+
+class RedeemIn(BaseModel):
+    code: str
+
+
+def _coupon_dict(c: Coupon) -> dict:
+    return {
+        "id": c.id, "code": c.code, "kind": c.kind, "months": c.months,
+        "percent_off": c.percent_off, "max_redemptions": c.max_redemptions,
+        "redeemed_count": c.redeemed_count, "active": bool(c.active),
+        "expires_at": c.expires_at.isoformat() if c.expires_at else None,
+    }
+
+
+@router.post("/admin/coupons")
+def admin_create_coupon(body: CouponCreate,
+                        admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+    code = body.code.strip().upper()
+    if not COUPON_RE.match(code):
+        raise HTTPException(400, "El código debe tener 4-32 caracteres (letras y números)")
+    if body.kind not in ("free_months", "discount"):
+        raise HTTPException(400, "kind debe ser 'free_months' o 'discount'")
+    if body.kind == "free_months" and not body.months:
+        raise HTTPException(400, "Indicá months para un cupón de meses gratis")
+    if body.kind == "discount" and not body.percent_off:
+        raise HTTPException(400, "Indicá percent_off para un cupón de descuento")
+    if db.scalar(select(Coupon).where(Coupon.code == code)):
+        raise HTTPException(409, "Ya existe un cupón con ese código")
+    c = Coupon(
+        code=code, kind=body.kind,
+        months=body.months if body.kind == "free_months" else None,
+        percent_off=body.percent_off if body.kind == "discount" else None,
+        max_redemptions=body.max_redemptions, expires_at=body.expires_at,
+    )
+    db.add(c)
+    db.commit()
+    return _coupon_dict(c)
+
+
+@router.get("/admin/coupons")
+def admin_list_coupons(admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+    coupons = db.scalars(select(Coupon).order_by(Coupon.created_at.desc())).all()
+    return {"coupons": [_coupon_dict(c) for c in coupons]}
+
+
+@router.post("/admin/coupons/{coupon_id}/toggle")
+def admin_toggle_coupon(coupon_id: int,
+                        admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+    c = db.get(Coupon, coupon_id)
+    if not c:
+        raise HTTPException(404, "Cupón no encontrado")
+    c.active = 0 if c.active else 1
+    db.commit()
+    return _coupon_dict(c)
+
+
+@router.post("/coupons/redeem")
+def redeem_coupon(body: RedeemIn, request: Request,
+                  user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Canjea un cupón. free_months suma premium al instante; discount deja el
+    descuento pendiente para el próximo pago."""
+    rate_limit(request, "redeem", limit=20, window=60.0)
+    code = (body.code or "").strip().upper()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    c = db.scalar(select(Coupon).where(Coupon.code == code))
+    already = bool(c and db.scalar(
+        select(CouponRedemption).where(CouponRedemption.coupon_id == c.id,
+                                       CouponRedemption.user_id == user.id)
+    ))
+    err = coupon_redeemable(c, already, now)
+    if err:
+        raise HTTPException(400, err)
+
+    db.add(CouponRedemption(coupon_id=c.id, user_id=user.id))
+    c.redeemed_count = (c.redeemed_count or 0) + 1
+    if c.kind == "free_months":
+        base = user.premium_until if (user.premium_until and user.premium_until > now) else now
+        user.premium_until = base + timedelta(days=30 * c.months)
+        msg = f"¡Listo! Sumaste {c.months} {'mes' if c.months == 1 else 'meses'} de premium."
+        result = {"kind": "free_months", "months": c.months,
+                  "premium_until": user.premium_until.isoformat()}
+    else:
+        user.pending_discount_percent = c.percent_off
+        msg = f"¡Listo! Tenés {c.percent_off}% de descuento para tu próxima suscripción."
+        result = {"kind": "discount", "percent_off": c.percent_off}
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Ya usaste este cupón.")
+    return {"message": msg, **result}
 
 
 @router.patch("/profile")
