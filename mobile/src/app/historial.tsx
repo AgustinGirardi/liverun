@@ -9,6 +9,8 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity, type ActivityDetail } from '@/lib/api';
+import { goPremium } from '@/lib/billing';
+import { useEntitlement } from '@/lib/entitlement';
 import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
 
 /** Historial: lista de salidas; tocar una despliega los splits km a km. */
@@ -18,6 +20,19 @@ export default function HistorialScreen() {
   const [details, setDetails] = useState<Record<number, ActivityDetail | 'loading'>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
   const [sharing, setSharing] = useState<Activity | null>(null);
+  const { access } = useEntitlement();
+
+  function tryShare(item: Activity) {
+    if (access) {
+      setSharing(item);
+    } else {
+      Alert.alert(
+        '🖼 Compartir es premium',
+        'Las tarjetas para compartir tus salidas son premium. ¿Querés pasarte a premium?',
+        [{ text: 'Ahora no', style: 'cancel' }, { text: '⭐ Hacerme premium', onPress: goPremium }],
+      );
+    }
+  }
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -109,9 +124,9 @@ export default function HistorialScreen() {
                     <View style={styles.actionsRow}>
                       <Pressable
                         style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
-                        onPress={() => setSharing(item)}>
+                        onPress={() => tryShare(item)}>
                         <ThemedText type="smallBold" style={{ color: BrandAccent }}>
-                          ↗ Compartir
+                          ↗ Compartir{access ? '' : ' ⭐'}
                         </ThemedText>
                       </Pressable>
                       <Pressable

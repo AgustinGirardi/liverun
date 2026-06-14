@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +11,8 @@ import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constan
 import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError, type FriendLists, type Profile, type SearchedUser } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { goPremium } from '@/lib/billing';
+import { useEntitlement } from '@/lib/entitlement';
 
 /** Días enteros desde hoy hasta `iso` (negativo si ya pasó). */
 function daysUntil(iso: string | null): number | null {
@@ -49,30 +50,15 @@ function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: a
   // El botón de pago aparece para quien no es admin ni tiene premium vigente.
   const canSubscribe = profile.plan === 'trial' || profile.plan === 'expired';
 
-  async function goPremium() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const info = await api.billingInfo();
-      if (!info.available) {
-        Alert.alert('Muy pronto', 'El pago todavía no está habilitado. ¡Avisaremos cuando se pueda!');
-        return;
-      }
-      const { init_point } = await api.subscribe();
-      await WebBrowser.openBrowserAsync(init_point);
-    } catch (e) {
-      Alert.alert('Ups', e instanceof ApiError ? e.message : 'No se pudo abrir el pago.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   return (
     <View style={[card, { borderWidth: 1, borderColor: `${accent}55` }]}>
       <ThemedText type="smallBold" style={{ color: accent }}>{title}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">{detail}</ThemedText>
       {canSubscribe && (
-        <Pressable style={[styles.premiumButton, busy && { opacity: 0.6 }]} onPress={goPremium} disabled={busy}>
+        <Pressable
+          style={[styles.premiumButton, busy && { opacity: 0.6 }]}
+          disabled={busy}
+          onPress={async () => { setBusy(true); await goPremium(); setBusy(false); }}>
           <ThemedText type="smallBold" style={styles.buttonText}>
             {busy ? 'Abriendo…' : '⭐ Hacerme premium'}
           </ThemedText>
@@ -86,6 +72,7 @@ function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: a
 export default function PerfilScreen() {
   const theme = useTheme();
   const { logout } = useAuth();
+  const { refresh: refreshEntitlement } = useEntitlement();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [friends, setFriends] = useState<FriendLists | null>(null);
   const [username, setUsername] = useState('');
@@ -134,6 +121,7 @@ export default function PerfilScreen() {
       const r = await api.redeemCoupon(code);
       setCoupon('');
       load();
+      refreshEntitlement(); // que el resto de la app vea el nuevo acceso
       Alert.alert('¡Cupón canjeado!', r.message);
     } catch (e) {
       Alert.alert('Cupón', e instanceof ApiError ? e.message : 'No se pudo canjear.');

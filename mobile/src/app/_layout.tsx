@@ -6,6 +6,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { EntitlementProvider } from '@/lib/entitlement';
 import { syncPending } from '@/lib/run-store';
 
 function Gate() {
@@ -17,7 +18,12 @@ function Gate() {
   }, [status]);
 
   if (status === 'loading') return null; // el splash sigue visible
-  return status === 'authenticated' ? <AppTabs /> : <LoginScreen />;
+  if (status !== 'authenticated') return <LoginScreen />;
+  return (
+    <EntitlementProvider>
+      <AppTabs />
+    </EntitlementProvider>
+  );
 }
 
 export default function TabLayout() {

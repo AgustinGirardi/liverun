@@ -70,6 +70,13 @@ def access_status(is_admin: bool, created_at: Optional[datetime],
             "trial_ends_at": trial_end.isoformat() if trial_end else None}
 
 
+def user_has_access(user: PortalUser, now: Optional[datetime] = None) -> bool:
+    """True si el usuario puede usar funciones premium (admin, premium pagado o
+    prueba vigente). Lo usan los gates premium del servidor."""
+    n = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    return access_status(bool(user.is_admin), user.created_at, user.premium_until, n)["access"]
+
+
 def compute_streak(run_dates: set[date], weekly_goal: int, today: date) -> int:
     """Racha = semanas consecutivas (hacia atrás desde la última semana cerrada)
     en las que los días con al menos una salida alcanzaron la meta.
@@ -613,6 +620,9 @@ def ranking(period: str = "week", scope: str = "friends",
         raise HTTPException(400, "period debe ser 'week' o 'month'")
     if scope not in ("friends", "global"):
         raise HTTPException(400, "scope debe ser 'friends' o 'global'")
+    # El ranking de amigos es gratis; el mundial (premios) es premium.
+    if scope == "global" and not user_has_access(user):
+        raise HTTPException(402, "El ranking mundial es premium. Pasate a premium para competir por premios.")
     today = date.today()
     since = week_start(today) if period == "week" else today.replace(day=1)
     since_dt = datetime(since.year, since.month, since.day)

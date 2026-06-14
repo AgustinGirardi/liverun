@@ -13,6 +13,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity } from '@/lib/api';
+import { useEntitlement } from '@/lib/entitlement';
 import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
 import { saveActivity } from '@/lib/run-store';
 import {
@@ -36,6 +37,9 @@ export default function CorrerScreen() {
   const [tracker, setTracker] = useState<TrackerState>(newTracker());
   const [gpsReady, setGpsReady] = useState<boolean | null>(null);
   const [lastActivity, setLastActivity] = useState<Activity | null>(null);
+  const { access } = useEntitlement();
+  const accessRef = useRef(access);
+  accessRef.current = access;
 
   // Última salida para la pantalla de reposo (best-effort).
   useFocusEffect(
@@ -69,6 +73,7 @@ export default function CorrerScreen() {
   useEffect(() => () => { watcherRef.current?.remove(); }, []);
 
   function announceKm(km: number, splits: number[]) {
+    if (!accessRef.current) return; // avisos de voz = premium
     const splitS = splits[splits.length - 1];
     const total = formatDuration(elapsedRef.current).replace(':', ' minutos ') + ' segundos';
     const pace = formatPace(splitS).replace(':', ' ').replace(' /km', ' por kilómetro');
@@ -127,7 +132,7 @@ export default function CorrerScreen() {
       onLocation,
     );
     setPhase('running');
-    Speech.speak('Salida iniciada. ¡Vamos!', { language: 'es' });
+    if (accessRef.current) Speech.speak('Salida iniciada. ¡Vamos!', { language: 'es' });
   }
 
   function togglePause() {
@@ -250,6 +255,7 @@ export default function CorrerScreen() {
               </Pressable>
               <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
                 Llevá el teléfono con la app abierta durante la salida.
+                {!access ? ' Los avisos de voz por km son premium ⭐' : ''}
               </ThemedText>
             </View>
           </View>

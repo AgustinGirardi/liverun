@@ -4,11 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { PremiumUpsell } from '@/components/premium-upsell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { api, type Ranking, type RankingEntry, type RankingScope } from '@/lib/api';
+import { api, ApiError, type Ranking, type RankingEntry, type RankingScope } from '@/lib/api';
+import { useEntitlement } from '@/lib/entitlement';
 
 type Period = 'week' | 'month';
 type OrderBy = 'km' | 'days_run';
@@ -21,14 +23,23 @@ export default function RankingScreen() {
   const [orderBy, setOrderBy] = useState<OrderBy>('km');
   const [ranking, setRanking] = useState<Ranking | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const { access } = useEntitlement();
+
+  // Mundial es premium: si no hay acceso, mostramos el muro sin llamar al server.
+  const globalLocked = scope === 'global' && !access;
 
   const load = useCallback(() => {
+    if (scope === 'global' && !access) { setLocked(true); setRefreshing(false); return; }
     api.ranking(period, scope)
-      .then((r) => { setRanking(r); setError(null); })
-      .catch((e) => setError(e.message))
+      .then((r) => { setRanking(r); setError(null); setLocked(false); })
+      .catch((e) => {
+        if (e instanceof ApiError && e.status === 402) setLocked(true);
+        else setError(e.message);
+      })
       .finally(() => setRefreshing(false));
-  }, [period, scope]);
+  }, [period, scope, access]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -112,6 +123,13 @@ export default function RankingScreen() {
 
         {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
 
+        {globalLocked || locked ? (
+          <PremiumUpsell
+            emoji="🌎"
+            title="Ranking mundial"
+            detail="Competí con corredores de todo el mundo y participá por premios. El ranking mundial es premium; el de amigos es gratis."
+          />
+        ) : (
         <FlatList
           data={entries}
           keyExtractor={(e, i) => e.username ?? String(i)}
@@ -128,6 +146,7 @@ export default function RankingScreen() {
           }
           renderItem={renderRow}
         />
+        )}
       </SafeAreaView>
     </ThemedView>
   );
