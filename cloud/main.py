@@ -508,9 +508,11 @@ def unpublish(source_id: str, x_api_key: str = Header(None), db: Session = Depen
 
 from cloud.run import router as run_router  # noqa: E402
 from cloud.google_auth import router as google_router  # noqa: E402
+from cloud.billing_routes import router as billing_router  # noqa: E402
 
 app.include_router(run_router)
 app.include_router(google_router)
+app.include_router(billing_router)
 
 
 # ── Estáticos: avatares y portal (al final para no tapar /api) ────────────────

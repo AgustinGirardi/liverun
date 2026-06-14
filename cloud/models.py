@@ -133,6 +133,29 @@ class CouponRedemption(Base):
     __table_args__ = (UniqueConstraint("coupon_id", "user_id", name="uq_coupon_user"),)
 
 
+class BillingSubscription(Base):
+    """Suscripción de Mercado Pago (preapproval) de un usuario. Mapea el id de
+    MP a nuestro usuario para procesar los cobros recurrentes del webhook."""
+    __tablename__ = "run_billing_subscriptions"
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    user_id           = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    mp_preapproval_id = Column(String(64), nullable=False, unique=True, index=True)
+    status            = Column(String(20), nullable=False, default="pending")  # pending/authorized/cancelled
+    created_at        = Column(DateTime, server_default=func.now())
+
+
+class BillingPayment(Base):
+    """Cada cobro aprobado de Mercado Pago. mp_payment_id único = idempotencia:
+    el webhook puede reintentar y nunca extendemos premium dos veces."""
+    __tablename__ = "run_billing_payments"
+    id            = Column(Integer, primary_key=True, autoincrement=True)
+    user_id       = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    mp_payment_id = Column(String(64), nullable=False, unique=True, index=True)
+    amount        = Column(Float, nullable=True)
+    status        = Column(String(20), nullable=True)
+    created_at    = Column(DateTime, server_default=func.now())
+
+
 class Claim(Base):
     __tablename__ = "claims"
     id         = Column(Integer, primary_key=True, autoincrement=True)
