@@ -41,6 +41,10 @@ def price_for(discount_percent: Optional[int]) -> float:
     return round(p, 2)
 
 
+class MPError(Exception):
+    """Error de la API de Mercado Pago, con el mensaje que ellos devuelven."""
+
+
 def mp_request(method: str, path: str, body: Optional[dict] = None) -> dict:
     """Llamada a la API de Mercado Pago. Se monkeypatchea en tests."""
     data = json.dumps(body).encode() if body is not None else None
@@ -48,8 +52,18 @@ def mp_request(method: str, path: str, body: Optional[dict] = None) -> dict:
         MP_API + path, data=data, method=method,
         headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        try:
+            payload = json.loads(e.read())
+            detail = payload.get("message") or payload.get("error") or str(payload)
+        except Exception:
+            detail = f"HTTP {e.code}"
+        # Visible en los logs de Render para diagnosticar configuraciones.
+        print(f"[MP] {method} {path} -> {e.code}: {detail}", flush=True)
+        raise MPError(detail)
 
 
 def create_subscription(user: PortalUser, db: Session) -> dict:

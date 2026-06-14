@@ -30,6 +30,9 @@ def subscribe(request: Request, user: PortalUser = Depends(current_user), db: Se
         raise HTTPException(503, "El cobro todavía no está habilitado.")
     try:
         return billing.create_subscription(user, db)
+    except billing.MPError as e:
+        # Mensaje real de Mercado Pago (útil para diagnosticar la config).
+        raise HTTPException(502, f"Mercado Pago rechazó la suscripción: {e}")
     except Exception:
         raise HTTPException(502, "No se pudo iniciar el pago. Intentá de nuevo en un rato.")
 
