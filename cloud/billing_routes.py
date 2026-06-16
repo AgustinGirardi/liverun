@@ -10,6 +10,15 @@ from sqlalchemy.orm import Session
 router = APIRouter(prefix="/api/run/billing", tags=["Billing"])
 
 
+@router.get("/mode")
+def billing_mode():
+    """Modo del cobro según el prefijo del token (sin exponer el secreto):
+    test = credenciales TEST-, prod = APP_USR-, none = sin configurar."""
+    t = billing.MP_ACCESS_TOKEN
+    mode = "test" if t.startswith("TEST-") else ("prod" if t.startswith("APP_USR") else "none")
+    return {"mode": mode}
+
+
 @router.get("/info")
 def billing_info(user: PortalUser = Depends(current_user)):
     """Precio y disponibilidad del cobro para mostrar en la app/web. El precio
