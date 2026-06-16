@@ -131,14 +131,19 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
     }
     res = mp_request("POST", "/preapproval", payload)
     pre_id = str(res.get("id") or "")
-    init_point = res.get("init_point") or res.get("sandbox_init_point")
+    # En modo prueba MP devuelve sandbox_init_point (checkout de sandbox); en
+    # producción solo init_point. Preferimos el de sandbox cuando existe para
+    # poder probar con cuentas de prueba, y de paso saber que estamos en test.
+    sandbox = res.get("sandbox_init_point")
+    init_point = sandbox or res.get("init_point")
     if not pre_id or not init_point:
         raise RuntimeError("Mercado Pago no devolvió la suscripción")
     sub = db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == pre_id))
     if not sub:
         db.add(BillingSubscription(user_id=user.id, mp_preapproval_id=pre_id, status="pending"))
         db.commit()
-    return {"init_point": init_point, "amount": amount, "currency": CURRENCY}
+    return {"init_point": init_point, "amount": amount, "currency": CURRENCY,
+            "sandbox": bool(sandbox)}
 
 
 def _user_for_payment(payment: dict, db: Session) -> Optional[PortalUser]:
