@@ -12,12 +12,14 @@ router = APIRouter(prefix="/api/run/billing", tags=["Billing"])
 
 @router.get("/info")
 def billing_info(user: PortalUser = Depends(current_user)):
-    """Precio y disponibilidad del cobro para mostrar en la app/web."""
+    """Precio y disponibilidad del cobro para mostrar en la app/web. El precio
+    en pesos se calcula al dólar del día (USD fijo como fuente de verdad)."""
     return {
         "available": billing.is_configured(),
         "price": billing.price_for(user.pending_discount_percent),
-        "base_price": billing.PRICE,
+        "base_price": billing.base_price_ars(),
         "currency": billing.CURRENCY,
+        "usd": billing.PRICE_USD,
         "discount_percent": user.pending_discount_percent,
     }
 

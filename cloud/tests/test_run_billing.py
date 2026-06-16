@@ -11,17 +11,45 @@ from cloud.tests.conftest import make_user
 
 # ── Precio puro ───────────────────────────────────────────────────────────────
 
-def test_precio_con_y_sin_descuento(monkeypatch):
-    monkeypatch.setattr(billing, "PRICE", 1000.0)
-    assert billing.price_for(None) == 1000.0
-    assert billing.price_for(25) == 750.0
+def test_precio_al_dolar_del_dia(monkeypatch):
+    # USD 2.00 a un dólar de 1000 → 2000 ARS (redondeado a la decena).
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
+    monkeypatch.setattr(billing, "PRICE_USD", 2.0)
+    monkeypatch.setattr(billing, "usd_ars_rate", lambda: 1000.0)
+    assert billing.base_price_ars() == 2000.0
+    assert billing.price_for(None) == 2000.0
+    assert billing.price_for(25) == 1500.0
     assert billing.price_for(100) == 0.0
+
+
+def test_precio_redondea_hacia_arriba_a_la_decena(monkeypatch):
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
+    monkeypatch.setattr(billing, "PRICE_USD", 1.99)
+    monkeypatch.setattr(billing, "usd_ars_rate", lambda: 1007.0)  # 1.99*1007 = 2003.93
+    assert billing.base_price_ars() == 2010.0
+
+
+def test_precio_fijo_override_ignora_dolar(monkeypatch):
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", "2800")
+    assert billing.base_price_ars() == 2800.0
+
+
+def test_rate_usa_fallback_si_la_api_falla(monkeypatch):
+    monkeypatch.setattr(billing, "MANUAL_RATE", None)
+    monkeypatch.setattr(billing, "RATE_FALLBACK", 1234.0)
+    billing._rate_cache["rate"] = 0.0
+    def boom():
+        raise RuntimeError("sin red")
+    monkeypatch.setattr(billing, "_fetch_usd_ars_rate", boom)
+    assert billing.usd_ars_rate() == 1234.0
 
 
 # ── Alta de suscripción ───────────────────────────────────────────────────────
 
 def test_subscribe_devuelve_init_point_y_guarda(client, db, monkeypatch):
     monkeypatch.setattr(billing, "MP_ACCESS_TOKEN", "tok")
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
+    monkeypatch.setattr(billing, "usd_ars_rate", lambda: 1000.0)  # sin red en tests
     calls = {}
     def fake(method, path, body=None):
         calls["body"] = body

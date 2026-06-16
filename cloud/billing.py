@@ -10,7 +10,9 @@ Config (env): CT_MP_ACCESS_TOKEN (credencial del vendedor), CT_PREMIUM_PRICE
 (monto mensual), CT_PREMIUM_CURRENCY (default ARS), CT_PUBLIC_URL.
 """
 import json
+import math
 import os
+import time as _time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -23,19 +25,64 @@ from sqlalchemy.orm import Session
 from cloud.models import BillingPayment, BillingSubscription, PortalUser
 
 MP_ACCESS_TOKEN = os.environ.get("CT_MP_ACCESS_TOKEN", "")
-PRICE = float(os.environ.get("CT_PREMIUM_PRICE", "1.99"))
+# Precio en dólares (fuente de verdad). El monto en pesos se calcula al dólar
+# del día en cada alta. CT_PREMIUM_PRICE (ARS fijo) queda como override opcional.
+PRICE_USD = float(os.environ.get("CT_PREMIUM_PRICE_USD", "1.99"))
+FIXED_PRICE_ARS = os.environ.get("CT_PREMIUM_PRICE")  # si está, ignora el dólar
 CURRENCY = os.environ.get("CT_PREMIUM_CURRENCY", "ARS")
+# Qué dólar usar para convertir: oficial | blue | tarjeta | cripto (dolarapi.com).
+RATE_SOURCE = os.environ.get("CT_USD_RATE_SOURCE", "oficial")
+MANUAL_RATE = os.environ.get("CT_USD_RATE")           # override manual del tipo de cambio
+RATE_FALLBACK = float(os.environ.get("CT_USD_RATE_FALLBACK", "1100"))
 PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
 MP_API = "https://api.mercadopago.com"
+
+_RATE_TTL = 3600  # cacheamos la cotización 1 hora
+_rate_cache = {"rate": 0.0, "ts": 0.0}
 
 
 def is_configured() -> bool:
     return bool(MP_ACCESS_TOKEN)
 
 
+def _fetch_usd_ars_rate() -> float:
+    """Cotización de venta del dólar elegido, desde dolarapi.com (Argentina)."""
+    src = RATE_SOURCE if RATE_SOURCE in ("oficial", "blue", "tarjeta", "cripto", "mayorista") else "oficial"
+    req = urllib.request.Request(
+        f"https://dolarapi.com/v1/dolares/{src}", headers={"User-Agent": "ChronoTrack"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return float(json.loads(resp.read())["venta"])
+
+
+def usd_ars_rate() -> float:
+    """Tipo de cambio vigente. Override manual > caché (1h) > API > último > fallback."""
+    if MANUAL_RATE:
+        return float(MANUAL_RATE)
+    now = _time.time()
+    if _rate_cache["rate"] and now - _rate_cache["ts"] < _RATE_TTL:
+        return _rate_cache["rate"]
+    try:
+        r = _fetch_usd_ars_rate()
+        _rate_cache["rate"] = r
+        _rate_cache["ts"] = now
+        return r
+    except Exception:
+        return _rate_cache["rate"] or RATE_FALLBACK  # último conocido o piso configurable
+
+
+def base_price_ars() -> float:
+    """Precio mensual base en pesos: monto fijo si se definió, o USD×dólar del día
+    redondeado hacia arriba a la decena (para no quedar corto)."""
+    if FIXED_PRICE_ARS:
+        return float(FIXED_PRICE_ARS)
+    ars = PRICE_USD * usd_ars_rate()
+    return float(math.ceil(ars / 10.0) * 10)
+
+
 def price_for(discount_percent: Optional[int]) -> float:
     """Precio mensual con el descuento del cupón aplicado (redondeado a 2)."""
-    p = PRICE
+    p = base_price_ars()
     if discount_percent:
         p = p * (1 - min(max(discount_percent, 0), 100) / 100)
     return round(p, 2)
