@@ -10,12 +10,13 @@ function applyTheme(t){
   if(b) b.textContent = t === "dark" ? "◑" : "◐";
 }
 function toggleTheme(){
-  const cur = localStorage.getItem("ct_theme") === "dark" ? "dark" : "light";
+  // Dark-first (Dirección A): sin preferencia guardada se asume oscuro.
+  const cur = localStorage.getItem("ct_theme") === "light" ? "light" : "dark";
   const next = cur === "dark" ? "light" : "dark";
   localStorage.setItem("ct_theme", next);
   applyTheme(next);
 }
-applyTheme(localStorage.getItem("ct_theme") === "dark" ? "dark" : "light");
+applyTheme(localStorage.getItem("ct_theme") === "light" ? "light" : "dark");
 
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function fmtNs(ns){ if(!ns) return "—"; let ms=Math.floor(ns/1e6); const h=Math.floor(ms/3600000); ms%=3600000; const m=Math.floor(ms/60000); ms%=60000; const s=Math.floor(ms/1000); const f=ms%1000; const p=(n,l=2)=>String(n).padStart(l,"0"); return `${p(h)}:${p(m)}:${p(s)}.${p(f,3)}`; }

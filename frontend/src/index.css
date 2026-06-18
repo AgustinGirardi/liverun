@@ -1,7 +1,62 @@
-﻿* { box-sizing: border-box; margin: 0; padding: 0; }
-body { overflow: hidden; }
-::-webkit-scrollbar { width: 4px; }
+/* ChronoTrack — Dirección A "Pista nocturna" · tokens centralizados */
+:root {
+  /* Superficies */
+  --bg: #0d0f10;
+  --surface: #141618;
+  --surface-2: #1c1f21;
+  --line: #262b2e;
+  --line-strong: #363b3f;
+
+  /* Texto */
+  --fg: #e8eaeb;
+  --muted: #8a9299;
+  --faint: #525a60;
+
+  /* Marca */
+  --accent: #00e5a0;
+  --accent-2: #00bf85;
+  --on-accent: #06281d;
+  --brand-grad: linear-gradient(135deg, #00bf85, #00e5a0);
+
+  /* Semánticos */
+  --blue: #4d9fff;
+  --gold: #f5a623;
+  --danger: #ff4d4d;
+
+  /* Tipografía */
+  --font-display: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  --font-body: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+
+  /* Radios */
+  --r-card: 16px;
+  --r-hero: 20px;
+  --r-pill: 999px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+}
+body {
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Numerales (tiempo / distancia / ritmo): tabular, peso 800 */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #363b3f; border-radius: 2px; }
-input:focus { border-color: #00e5a0 !important; }
-select:focus { border-color: #00e5a0 !important; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 2px; }
+
+input:focus { border-color: var(--accent) !important; }
+select:focus { border-color: var(--accent) !important; }

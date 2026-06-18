@@ -429,28 +429,43 @@ function autoCategory(birthDate, gender) {
   return `${p}60+`
 }
 
+// ── Tokens de marca — Dirección A "Pista nocturna" ──────────────────────────────
+// Fuente de verdad de color/tipografía/radios. Los CSS vars equivalentes viven en
+// index.css (:root); estas constantes JS son para los estilos inline de React.
+const C = {
+  bg: "#0d0f10", surface: "#141618", surface2: "#1c1f21",
+  line: "#262b2e", lineStrong: "#363b3f",
+  fg: "#e8eaeb", muted: "#8a9299", faint: "#525a60",
+  accent: "#00e5a0", accent2: "#00bf85", onAccent: "#06281d",
+  blue: "#4d9fff", gold: "#f5a623", danger: "#ff4d4d",
+}
+const FONT_DISPLAY = 'ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif'
+const FONT_NUM = { fontVariantNumeric: "tabular-nums", fontFeatureSettings: '"tnum" 1' }
+const RADIUS = { card: 16, hero: 20, pill: 999, sm: 8 }
+
 // ── Estilos compartidos ───────────────────────────────────────────────────────
 
-// Degradado sobrio mint→teal — acento de marca del operador (títulos + acciones principales).
-const OP_GRAD = "linear-gradient(110deg, #00bf85, #00e5a0)"
+// Degradado de marca mint→teal — acento del operador (títulos + acciones principales).
+const OP_GRAD = `linear-gradient(135deg, ${C.accent2}, ${C.accent})`
 const INPUT = {
-  background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6,
-  padding: "7px 10px", color: "#e8eaeb", fontSize: 13, outline: "none", width: "100%",
+  background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: RADIUS.sm,
+  padding: "8px 12px", color: C.fg, fontSize: 13, outline: "none", width: "100%",
 }
 const BTN_PRIMARY = {
-  padding: "6px 16px", background: OP_GRAD, border: "none",
-  borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12, color: "#000",
+  padding: "8px 18px", background: OP_GRAD, border: "none",
+  borderRadius: RADIUS.pill, cursor: "pointer", fontWeight: 800, fontSize: 12,
+  color: C.onAccent, fontFamily: FONT_DISPLAY, letterSpacing: 0.2,
 }
 const BTN_GHOST = {
-  padding: "6px 12px", background: "transparent", border: "1px solid #363b3f",
-  borderRadius: 6, cursor: "pointer", color: "#8a9299", fontSize: 12,
+  padding: "8px 14px", background: "transparent", border: `1px solid ${C.lineStrong}`,
+  borderRadius: RADIUS.pill, cursor: "pointer", color: C.muted, fontSize: 12, fontWeight: 600,
 }
 const BTN_DANGER = {
-  padding: "4px 8px", background: "transparent", border: "1px solid #2a2e31",
-  borderRadius: 4, cursor: "pointer", color: "#ff4d4d", fontSize: 11,
+  padding: "4px 8px", background: "transparent", border: `1px solid ${C.line}`,
+  borderRadius: RADIUS.sm, cursor: "pointer", color: C.danger, fontSize: 11,
 }
 const CARD = {
-  background: "#141618", border: "1px solid #2a2e31", borderRadius: 8, padding: 16,
+  background: C.surface, border: `1px solid ${C.line}`, borderRadius: RADIUS.card, padding: 16,
 }
 
 // Acento de marca: degradado mint→teal clippeado a texto, para una palabra/frase de un título.
@@ -1176,10 +1191,10 @@ function TimingPage({ race }) {
   if (race.status === "FINISHED") {
     return (
       <div>
-        <div style={{ background: "#0f0f0f", border: "1px solid #f5a62340", borderRadius: 10, padding: "20px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ background: "#0f0f0f", border: `1px solid ${C.gold}40`, borderRadius: RADIUS.hero, padding: "20px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 36 }}>🏆</span>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 17, color: "#f5a623", marginBottom: 4 }}>Carrera finalizada</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, color: C.gold, marginBottom: 4 }}>Carrera finalizada</div>
             <div style={{ fontSize: 13, color: "#525a60" }}>El cronómetro está cerrado. Consultá los resultados en la pestaña <strong style={{ color: "#8a9299" }}>Resultados</strong>.</div>
           </div>
         </div>
@@ -1212,26 +1227,26 @@ function TimingPage({ race }) {
 
       {/* ── Banner de estado de largada ── */}
       {!raceStartNs ? (
-        <div style={{ background: "#1a1200", border: "2px solid #f5a623", borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ background: "#1a1200", border: `2px solid ${C.gold}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 28 }}>⏸</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#f5a623", marginBottom: 2 }}>Carrera sin largada oficial</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.gold, marginBottom: 2 }}>Carrera sin largada oficial</div>
             <div style={{ fontSize: 12, color: "#8a7a50" }}>Los tiempos se cuentan desde que se capture la primera llegada. Registrá la largada para medir tiempos netos reales.</div>
           </div>
           <button onClick={startRace}
-            style={{ padding: "10px 24px", background: "#f5a623", border: "none", borderRadius: 8, cursor: "pointer", color: "#000", fontWeight: 800, fontSize: 14, letterSpacing: 0.5, flexShrink: 0 }}>
+            style={{ padding: "10px 24px", background: C.gold, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: "#000", fontWeight: 800, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.5, flexShrink: 0 }}>
             🏁 REGISTRAR LARGADA
           </button>
         </div>
       ) : (
-        <div style={{ background: "#001a0f", border: "2px solid #00e5a0", borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ background: "#001a0f", border: `2px solid ${C.accent}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 28 }}>🟢</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#00e5a0", marginBottom: 2 }}>CARRERA EN CURSO</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.accent, marginBottom: 2 }}>CARRERA EN CURSO</div>
             <div style={{ fontSize: 12, color: "#00a070" }}>Largada registrada — los tiempos se miden desde ese momento</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: "monospace", fontSize: 32, fontWeight: 900, color: "#00e5a0", letterSpacing: 2, lineHeight: 1 }}>{elapsed}</div>
+            <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 34, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{elapsed}</div>
             <div style={{ fontSize: 10, color: "#00a070", marginTop: 2, letterSpacing: 1, textTransform: "uppercase" }}>Tiempo transcurrido</div>
           </div>
         </div>
@@ -1242,7 +1257,7 @@ function TimingPage({ race }) {
       {/* Columna izquierda */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <button onClick={capture}
-          style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 700, background: OP_GRAD, border: "none", borderRadius: 8, cursor: "pointer", color: "#000", letterSpacing: 2 }}>
+          style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 800, fontFamily: FONT_DISPLAY, background: OP_GRAD, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: C.onAccent, letterSpacing: 1 }}>
           ⏱ CAPTURAR LLEGADA
         </button>
 
@@ -1319,7 +1334,7 @@ function TimingPage({ race }) {
                 <div style={{ fontSize: 11, color: "#525a60" }}>{f.runner?.category || ""}</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: "monospace", fontSize: 12, color: "#00e5a0" }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
+                <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.accent }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
                 {f.capture_id && (
                   <button onClick={() => undoAssign(f.capture_id)} title="Deshacer"
                     style={{ padding: "1px 5px", background: "transparent", color: "#f5a62360", border: "none", cursor: "pointer", fontSize: 10 }}>✎</button>
@@ -1474,12 +1489,12 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           <div style={{ fontSize: 11, color: "#525a60", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Distancia</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button onClick={() => { setDistFilter(null); setCatFilter("") }}
-              style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === null ? 800 : 500, borderRadius: 8, cursor: "pointer", border: "2px solid", background: distFilter === null ? "#00e5a020" : "transparent", color: distFilter === null ? "#00e5a0" : "#8a9299", borderColor: distFilter === null ? "#00e5a0" : "#363b3f" }}>
+              style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === null ? 800 : 500, borderRadius: RADIUS.pill, cursor: "pointer", border: "2px solid", background: distFilter === null ? "#00e5a020" : "transparent", color: distFilter === null ? "#00e5a0" : "#8a9299", borderColor: distFilter === null ? "#00e5a0" : "#363b3f" }}>
               Todas
             </button>
             {availDistances.map(d => (
               <button key={d} onClick={() => { setDistFilter(d); setCatFilter("") }}
-                style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === d ? 800 : 500, borderRadius: 8, cursor: "pointer", border: "2px solid", background: distFilter === d ? "#4d9fff20" : "transparent", color: distFilter === d ? "#4d9fff" : "#8a9299", borderColor: distFilter === d ? "#4d9fff" : "#363b3f" }}>
+                style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === d ? 800 : 500, borderRadius: RADIUS.pill, cursor: "pointer", border: "2px solid", background: distFilter === d ? "#4d9fff20" : "transparent", color: distFilter === d ? "#4d9fff" : "#8a9299", borderColor: distFilter === d ? "#4d9fff" : "#363b3f" }}>
                 {d} km
               </button>
             ))}
@@ -1878,38 +1893,38 @@ function DashboardPage({ onNavigate }) {
   return (
     <div>
       {/* ── Bienvenida ── */}
-      <div style={{ ...CARD, background: "linear-gradient(135deg, #0d1a14 0%, #141618 60%, #0d1a14 100%)", border: "1px solid #00e5a030", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
+      <div style={{ ...CARD, borderRadius: RADIUS.hero, background: `linear-gradient(135deg, #0d1a14 0%, ${C.surface} 60%, #0d1a14 100%)`, border: `1px solid ${C.accent}30`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
         <div>
-          <div style={{ fontSize: 11, color: "#00e5a060", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>
+          <div style={{ fontSize: 11, color: `${C.accent}60`, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>
             {dayName}, {dateStr}
           </div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#e8eaeb" }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 800, letterSpacing: -0.3, color: C.fg }}>
             Panel de <OpGrad>Control</OpGrad>
           </div>
-          <div style={{ fontSize: 13, color: "#525a60", marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: C.faint, marginTop: 4 }}>
             Sistema de cronometraje de carreras · ChronoTrack v{APP_VERSION}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: "monospace", fontSize: 36, fontWeight: 900, color: "#00e5a0", letterSpacing: 2, lineHeight: 1 }}>
+          <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 36, fontWeight: 800, color: C.accent, lineHeight: 1 }}>
             {timeStr}
           </div>
-          <div style={{ fontSize: 10, color: "#525a60", marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Hora actual</div>
+          <div style={{ fontSize: 10, color: C.faint, marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Hora actual</div>
         </div>
       </div>
 
       {/* ── Stats ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
         {[
-          { label: "Carreras totales", value: races.length,   color: "#e8eaeb", icon: "🏁" },
-          { label: "Activas ahora",    value: active.length,  color: active.length > 0 ? "#00e5a0" : "#e8eaeb", icon: "▶" },
-          { label: "Finalizadas",      value: finished.length, color: "#f5a623", icon: "✓" },
-          { label: "Atletas en DB",    value: runners.length,  color: "#4d9fff", icon: "👤" },
+          { label: "Carreras totales", value: races.length,   color: C.fg, icon: "🏁" },
+          { label: "Activas ahora",    value: active.length,  color: active.length > 0 ? C.accent : C.fg, icon: "▶" },
+          { label: "Finalizadas",      value: finished.length, color: C.gold, icon: "✓" },
+          { label: "Atletas en DB",    value: runners.length,  color: C.blue, icon: "👤" },
         ].map(s => (
           <div key={s.label} style={{ ...CARD, textAlign: "center" }}>
             <div style={{ fontSize: 26, marginBottom: 6 }}>{s.icon}</div>
-            <div style={{ fontSize: 32, fontWeight: 900, color: s.color, lineHeight: 1 }}>{loading ? "—" : s.value}</div>
-            <div style={{ fontSize: 11, color: "#525a60", marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+            <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 32, fontWeight: 800, color: s.color, lineHeight: 1 }}>{loading ? "—" : s.value}</div>
+            <div style={{ fontSize: 11, color: C.faint, marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -2000,7 +2015,7 @@ function DashboardPage({ onNavigate }) {
       </div>
 
       {/* ── Nota del sistema ── */}
-      <div style={{ marginTop: 20, padding: "12px 16px", background: "#1c1f21", borderRadius: 6, border: "1px solid #2a2e31", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ marginTop: 20, padding: "12px 16px", background: C.surface2, borderRadius: RADIUS.card, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 16 }}>💡</span>
         <div style={{ fontSize: 12, color: "#525a60" }}>
           <strong style={{ color: "#8a9299" }}>Tip:</strong> En cada carrera encontrás los tabs de <strong style={{ color: "#8a9299" }}>Inscriptos</strong>, <strong style={{ color: "#8a9299" }}>Cronómetro</strong> y <strong style={{ color: "#8a9299" }}>Resultados</strong>. La categoría se calcula automáticamente al ingresar fecha de nacimiento. Desde Resultados podés imprimir el certificado de cada corredor 🖨️.
@@ -2063,7 +2078,7 @@ function RacesPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}><OpGrad>Carreras</OpGrad></span>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Carreras</OpGrad></span>
           <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{races.length}</span>
         </div>
         <button onClick={() => { setShowForm(!showForm); setError("") }} style={BTN_PRIMARY}>+ Nueva Carrera</button>
@@ -2231,7 +2246,7 @@ function AthletesPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}><OpGrad>Atletas</OpGrad></span>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Atletas</OpGrad></span>
           <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{runners.length}</span>
           <span style={{ marginLeft: 8, fontSize: 12, color: "#525a60" }}>— base global de corredores</span>
         </div>
@@ -2420,7 +2435,7 @@ function HistorialPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: 16 }}><OpGrad>Historial</OpGrad> de Carreras</span>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Historial</OpGrad> de Carreras</span>
           <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
             {races.length} carrera{races.length !== 1 ? "s" : ""}
           </span>
@@ -2484,8 +2499,8 @@ function RaceResultCard({ race, onOpen }) {
               ["Inscritos", stats.registered, null],
               ["DNS/DNF",   stats.dnf,        stats.dnf > 0 ? "#f5a623" : null],
             ].map(([label, val, color]) => (
-              <div key={label} style={{ background: "#1c1f21", borderRadius: 6, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: color || "#e8eaeb" }}>{val}</div>
+              <div key={label} style={{ background: "#1c1f21", borderRadius: RADIUS.sm, padding: "8px 10px", textAlign: "center" }}>
+                <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 20, fontWeight: 800, color: color || "#e8eaeb" }}>{val}</div>
                 <div style={{ fontSize: 10, color: "#525a60", textTransform: "uppercase" }}>{label}</div>
               </div>
             ))}
@@ -2566,7 +2581,7 @@ function EmailControls() {
       </button>
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: "#141618", border: "1px solid #2a2e31", borderRadius: 10, padding: 24, color: "#e8eaeb" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Envío de emails (Brevo)</div>
             <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 16, lineHeight: 1.5 }}>
               Creá una cuenta gratis en <span style={{ color: "#4d9fff" }}>brevo.com</span>, verificá tu email remitente y pegá tu API key (Settings → SMTP &amp; API → API Keys). 300 emails/día gratis.
@@ -2691,7 +2706,7 @@ function AccountControls() {
         <div onClick={() => !waiting && setOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ width: 400, background: "#141618", border: "1px solid #2a2e31", borderRadius: 10, padding: 24, color: "#e8eaeb" }}>
+            style={{ width: 400, background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
               {mode === "register" ? "Crear cuenta" : "Iniciar sesión"}
             </div>
@@ -2799,7 +2814,7 @@ function CloudControls() {
         <div onClick={() => setOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ width: 440, background: "#141618", border: "1px solid #2a2e31", borderRadius: 10, padding: 24, color: "#e8eaeb" }}>
+            style={{ width: 440, background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Portal en la nube</div>
             <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 18 }}>
               Configurá dónde se publican los resultados. La API key se guarda sólo en este equipo.
@@ -2880,12 +2895,17 @@ export default function App() {
   const [clock, setClock] = useState("")
   const [showConfig, setShowConfig] = useState(false)
 
+  // Reloj maestro con centésimas — requestAnimationFrame para un tick fluido.
   useEffect(() => {
-    const t = setInterval(() => {
+    let raf
+    const tick = () => {
       const n = new Date()
-      setClock(`${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}.${pad(n.getMilliseconds(), 3)}`)
-    }, 33)
-    return () => clearInterval(t)
+      const cs = Math.floor(n.getMilliseconds() / 10)
+      setClock(`${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}.${pad(cs)}`)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   // onNavigate: permite al Dashboard navegar a otras secciones
@@ -2900,19 +2920,19 @@ export default function App() {
   const pageLabel = page === "home" ? "Inicio" : (PAGES.find(p => p.id === page)?.label || "")
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#0d0f10", color: "#e8eaeb", fontFamily: "system-ui, sans-serif", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100vh", background: C.bg, color: C.fg, fontFamily: "var(--font-body)", overflow: "hidden" }}>
 
       {/* Sidebar */}
-      <div style={{ width: 190, background: "#141618", borderRight: "1px solid #2a2e31", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ width: 190, background: C.surface, borderRight: `1px solid ${C.line}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
 
         {/* Logo — clickeable → Inicio */}
         <div
           onClick={() => setPage("home")}
-          style={{ padding: "18px 16px 14px", borderBottom: "1px solid #2a2e31", cursor: "pointer", userSelect: "none" }}
-          onMouseEnter={e => e.currentTarget.style.background = "#1c1f21"}
+          style={{ padding: "18px 16px 14px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", userSelect: "none" }}
+          onMouseEnter={e => e.currentTarget.style.background = C.surface2}
           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-          <div style={{ fontWeight: 700, fontSize: 20, color: "#00e5a0" }}>CHRONO<span style={{ color: "#8a9299", fontWeight: 400 }}>TRACK</span></div>
-          <div style={{ fontSize: 10, color: "#525a60", letterSpacing: 1.5, textTransform: "uppercase", marginTop: 2 }}>Race Timing System</div>
+          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, letterSpacing: -0.5, color: C.accent }}>CHRONO<span style={{ color: C.muted, fontWeight: 500 }}>TRACK</span></div>
+          <div style={{ fontSize: 10, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 2 }}>Race Timing System</div>
         </div>
 
         <nav style={{ flex: 1, padding: "12px 8px" }}>
@@ -2962,10 +2982,10 @@ export default function App() {
 
       {/* Contenido principal */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Top bar */}
-        <div style={{ height: 52, borderBottom: "1px solid #2a2e31", display: "flex", alignItems: "center", padding: "0 24px", background: "#141618", flexShrink: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: 17 }}>{pageLabel}</span>
-          <div style={{ marginLeft: "auto", fontFamily: "monospace", fontSize: 16, color: "#00e5a0", letterSpacing: 1 }}>{clock}</div>
+        {/* Top bar — reloj maestro (dato clave de la pantalla) */}
+        <div style={{ height: 52, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", padding: "0 24px", background: C.surface, flexShrink: 0 }}>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>{pageLabel}</span>
+          <div style={{ marginLeft: "auto", ...FONT_NUM, fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 800, color: C.accent }}>{clock}</div>
         </div>
         {/* Página activa */}
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
