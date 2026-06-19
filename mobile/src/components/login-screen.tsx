@@ -1,7 +1,7 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -69,6 +69,11 @@ export function LoginScreen() {
         <KeyboardAvoidingView
           style={styles.form}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Image
+            source={require('../../assets/images/logo-mark.png')}
+            style={styles.logoMark}
+            resizeMode="contain"
+          />
           <ThemedText style={styles.brand}>
             CHRONO<ThemedText style={[styles.brand, { color: BrandAccent }]}>TRACK</ThemedText> RUN
           </ThemedText>
@@ -166,6 +171,12 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: Spacing.two,
+  },
+  logoMark: {
+    width: 64,
+    height: 64,
+    alignSelf: 'center',
+    marginBottom: Spacing.three,
   },
   brand: {
     fontSize: 12,

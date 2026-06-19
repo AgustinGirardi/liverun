@@ -2931,8 +2931,11 @@ export default function App() {
           style={{ padding: "18px 16px 14px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", userSelect: "none" }}
           onMouseEnter={e => e.currentTarget.style.background = C.surface2}
           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-          <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, letterSpacing: -0.5, color: C.accent }}>CHRONO<span style={{ color: C.muted, fontWeight: 500 }}>TRACK</span></div>
-          <div style={{ fontSize: 10, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 2 }}>Race Timing System</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <img src="/logo.svg" alt="" width={24} height={24} style={{ display: "block", flexShrink: 0 }} />
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, letterSpacing: -0.5, color: C.accent }}>CHRONO<span style={{ color: C.muted, fontWeight: 500 }}>TRACK</span></div>
+          </div>
+          <div style={{ fontSize: 10, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4 }}>Race Timing System</div>
         </div>
 
         <nav style={{ flex: 1, padding: "12px 8px" }}>

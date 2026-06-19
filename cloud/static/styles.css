@@ -47,11 +47,14 @@
     padding:0 22px; height:60px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:20; }
   .logo { font-family:var(--font-display); font-weight:800; font-size:20px; color:var(--acc); letter-spacing:-.4px; display:flex; align-items:center; gap:7px; }
   .logo .dot { width:9px; height:9px; border-radius:50%; background:var(--acc); box-shadow:0 0 12px var(--acc); }
+  .logo .logo-mark { flex-shrink:0; display:block; }
+  footer .logo .logo-mark { width:20px; height:20px; }
   .logo span { color:var(--mut); font-weight:500; }
   .nav { margin-left:auto; display:flex; gap:8px; align-items:center; }
   .nav button { background:transparent; border:1px solid var(--border); color:var(--mut); padding:8px 15px;
     border-radius:var(--r-pill); font-size:13px; font-weight:600; transition:all .15s; }
   .nav button:hover { border-color:var(--acc); color:var(--acc); }
+  .nav button.active { border-color:var(--acc); color:var(--acc); background:rgba(var(--acc-rgb),.10); }
   .nav .primary { background:var(--grad); color:#fff; border-color:transparent; font-weight:700;
     box-shadow:0 4px 14px rgba(var(--acc-rgb),.28); }
   .nav .primary:hover { filter:brightness(1.06); border-color:transparent; color:#fff; }

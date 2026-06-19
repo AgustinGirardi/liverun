@@ -59,14 +59,17 @@ function logout(){ TOKEN=null; USER=null; localStorage.removeItem("ct_token"); l
 
 function renderNav(){
   const n = $("nav");
+  const racesActive = state.view === "races" ? ' class="active"' : "";
   if(USER){
     const adminBtn = USER.is_admin ? `<button onclick="go('admin')">⚙ Admin</button>` : "";
     n.innerHTML = `<button onclick="go('home')">🏠 Inicio</button>
+      <button${racesActive} onclick="go('races')">Carreras</button>
       ${adminBtn}
       <span class="who hide-sm">${esc((USER.full_name||USER.email).split(" ")[0])}</span>
       <button onclick="logout()">Salir</button>`;
   } else {
-    n.innerHTML = `<button onclick="go('login')">Ingresar</button>
+    n.innerHTML = `<button${racesActive} onclick="go('races')">Carreras</button>
+      <button onclick="go('login')">Ingresar</button>
       <button class="primary" onclick="go('register')">Crear cuenta</button>`;
   }
 }
@@ -140,8 +143,8 @@ async function loadHomeRaces(){
       box.innerHTML = `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
       return;
     }
-    const top = races.slice(0, 5).map(raceCard).join("");
-    const more = races.length > 5
+    const top = races.slice(0, 3).map(raceCard).join("");
+    const more = races.length > 3
       ? `<button class="btn ghost sm home-more" onclick="go('races')">Ver todas las carreras (${races.length}) →</button>`
       : "";
     box.innerHTML = top + more;
@@ -191,8 +194,11 @@ async function viewDashboard(){
       <button class="btn sm" onclick="homeSearch()">Buscar</button>
     </div>
     <div id="dashMe"><div class="empty">Cargando tu historial…</div></div>
-    <h2 style="margin-top:32px">Todas las carreras</h2>
-    <div class="sub" style="margin-bottom:14px">Explorá los resultados publicados y entrá a cualquier carrera.</div>
+    <div class="row" style="justify-content:space-between;margin-top:32px;align-items:center">
+      <h2 style="margin:0">Carreras recientes</h2>
+      <button class="btn ghost sm" style="width:auto" onclick="go('races')">Ver todas →</button>
+    </div>
+    <div class="sub" style="margin:6px 0 14px">Explorá los resultados publicados y entrá a cualquier carrera.</div>
     <div id="dashRaces"><div class="empty">Cargando…</div></div>`;
 
   // Mi historial + mejores marcas
@@ -231,7 +237,7 @@ async function viewDashboard(){
   try {
     const races = await api("GET","/api/races");
     $("dashRaces").innerHTML = races.length
-      ? races.map(raceCard).join("")
+      ? races.slice(0, 3).map(raceCard).join("")
       : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
   } catch(e){ $("dashRaces").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
