@@ -81,6 +81,7 @@ function go(view, arg){
   const hq = document.getElementById("hq");
   if(hq && view === "search") hq.value = arg || "";
   if(view==="home")     return viewHome();
+  if(view==="races")    return viewAllRaces();
   if(view==="search")   return viewSearch(arg);
   if(view==="race")     return viewRace(arg);
   if(view==="login")    return viewAuth("login");
@@ -135,10 +136,31 @@ async function loadHomeRaces(){
   const box = $("homeRaces"); if(!box) return;
   try {
     const races = await api("GET","/api/races");
-    box.innerHTML = races.length
-      ? races.slice(0, 9).map(raceCard).join("")
-      : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
+    if(!races.length){
+      box.innerHTML = `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
+      return;
+    }
+    const top = races.slice(0, 5).map(raceCard).join("");
+    const more = races.length > 5
+      ? `<button class="btn ghost sm home-more" onclick="go('races')">Ver todas las carreras (${races.length}) →</button>`
+      : "";
+    box.innerHTML = top + more;
   } catch(e){ box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+// Página pública con todas las carreras publicadas
+async function viewAllRaces(){
+  $("app").innerHTML = `
+    <a class="back" onclick="go('home')">← Volver al inicio</a>
+    <h1>Todas las <span class="grad-text">carreras</span></h1>
+    <div class="sub">Resultados oficiales de todas las carreras publicadas.</div>
+    <div id="allRaces"><div class="empty">Cargando…</div></div>`;
+  try {
+    const races = await api("GET","/api/races");
+    $("allRaces").innerHTML = races.length
+      ? `<div class="races-grid">${races.map(raceCard).join("")}</div>`
+      : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
+  } catch(e){ $("allRaces").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 function homeSearch(){ const q=$("q").value.trim(); if(q.length>=2) go("search", q); }
 function headerSearch(){ const el=document.getElementById("hq"); const q=(el?el.value:"").trim(); if(q.length>=2) go("search", q); }

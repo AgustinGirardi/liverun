@@ -109,6 +109,9 @@
   .home-note { color:var(--dim); font-size:13px; margin-top:16px; }
   .home-recent-label { font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--dim);
     font-weight:700; margin-bottom:14px; }
+  .home-more { width:100%; margin-top:4px; }
+  .races-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:680px){ .races-grid { grid-template-columns:1fr; } }
   @media (max-width:760px){ .home-split { grid-template-columns:1fr; gap:32px; } .home-title { font-size:34px; } }
 
   /* Cards */
