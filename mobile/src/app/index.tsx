@@ -34,7 +34,6 @@ export default function InicioScreen() {
 
   const card = [styles.card, { backgroundColor: theme.backgroundElement }];
   const week = summary?.week;
-  const goalMet = week ? week.days_run >= week.goal : false;
   const records = computeRecords(acts);
   const badges = computeBadges(summary, records);
   const weeks = kmByWeek(acts, 8);
@@ -89,7 +88,7 @@ export default function InicioScreen() {
                   <Ring
                     progress={week ? week.days_run / Math.max(1, week.goal) : 0}
                     track={theme.backgroundSelected}
-                    color={goalMet ? BrandAccent : BrandAccent}
+                    color={BrandAccent}
                     center={`${week?.days_run ?? 0}/${week?.goal ?? 0}`}
                     sub="días"
                   />
