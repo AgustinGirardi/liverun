@@ -59,18 +59,19 @@ function logout(){ TOKEN=null; USER=null; localStorage.removeItem("ct_token"); l
 
 function renderNav(){
   const n = $("nav");
-  const racesActive = state.view === "races" ? ' class="active"' : "";
-  if(USER){
-    const adminBtn = USER.is_admin ? `<button onclick="go('admin')">⚙ Admin</button>` : "";
-    n.innerHTML = `<button onclick="go('home')">🏠 Inicio</button>
-      <button${racesActive} onclick="go('races')">Carreras</button>
-      ${adminBtn}
-      <span class="who hide-sm">${esc((USER.full_name||USER.email).split(" ")[0])}</span>
-      <button onclick="logout()">Salir</button>`;
-  } else {
-    n.innerHTML = `<button${racesActive} onclick="go('races')">Carreras</button>
-      <button onclick="go('login')">Ingresar</button>
-      <button class="primary" onclick="go('register')">Crear cuenta</button>`;
+  const acc = document.getElementById("account");
+  const v = state.view;
+  const link = (view, label, icon) =>
+    `<button class="${v === view ? 'active' : ''}" onclick="go('${view}')"><span class="nav-ic">${icon}</span>${label}</button>`;
+  let links = link('home', 'Inicio', '🏠') + link('races', 'Carreras', '🏁');
+  if (USER && USER.is_admin) links += link('admin', 'Admin', '⚙');
+  if (n) n.innerHTML = links;
+  if (acc) {
+    acc.innerHTML = USER
+      ? `<div class="who">${esc((USER.full_name || USER.email).split(" ")[0])}</div>
+         <button class="btn ghost sm" onclick="logout()">Salir</button>`
+      : `<button class="btn ghost sm" onclick="go('login')">Ingresar</button>
+         <button class="btn sm grad" onclick="go('register')">Crear cuenta</button>`;
   }
 }
 
@@ -79,8 +80,6 @@ function go(view, arg){
   state.view = view; state.arg = arg; state.distFilter = null;
   window.scrollTo(0,0);
   renderNav();
-  const hs = document.getElementById("headerSearch");
-  if(hs) hs.style.display = (view === "home") ? "none" : "block";
   const hq = document.getElementById("hq");
   if(hq && view === "search") hq.value = arg || "";
   if(view==="home")     return viewHome();

@@ -9,19 +9,26 @@
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header>
-  <div class="logo" onclick="go('home')"><img class="logo-mark" src="/logo.svg" alt="" width="26" height="26">CHRONO<span>TRACK</span></div>
-  <div class="header-search" id="headerSearch">
-    <input id="hq" placeholder="🔎 Buscar corredor o carrera…" onkeydown="if(event.key==='Enter')headerSearch()">
+<div class="layout">
+  <aside class="sidebar">
+    <div class="logo" onclick="go('home')"><img class="logo-mark" src="/logo.svg" alt="" width="26" height="26">CHRONO<span>TRACK</span></div>
+    <div class="side-search">
+      <input id="hq" placeholder="🔎 Buscar corredor o carrera…" onkeydown="if(event.key==='Enter')headerSearch()">
+    </div>
+    <nav class="side-nav" id="nav"></nav>
+    <div class="side-foot">
+      <div id="account"></div>
+      <button id="themeBtn" class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema claro u oscuro">◐ Tema</button>
+    </div>
+  </aside>
+  <div class="content">
+    <main id="app"></main>
+    <footer>
+      <div class="logo"><img class="logo-mark" src="/logo.svg" alt="" width="20" height="20">CHRONO<span>TRACK</span></div>
+      <div>Resultados oficiales de cronometraje · Hecho con ChronoTrack</div>
+    </footer>
   </div>
-  <div class="nav" id="nav"></div>
-  <button id="themeBtn" class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema claro u oscuro">◐</button>
-</header>
-<main id="app"></main>
-<footer>
-  <div class="logo"><img class="logo-mark" src="/logo.svg" alt="" width="26" height="26">CHRONO<span>TRACK</span></div>
-  <div>Resultados oficiales de cronometraje · Hecho con ChronoTrack</div>
-</footer>
+</div>
 <script src="/app.js"></script>
 </body>
 </html>
