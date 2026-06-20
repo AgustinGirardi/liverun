@@ -181,7 +181,11 @@ function renderRacePage(){
       <button class="btn ghost sm pager-btn" ${page >= pages - 1 ? "disabled" : ""} onclick="raceNav(1)">Siguientes →</button>
     </div>`;
 }
-function raceNav(dir){ state.racePage = (state.racePage || 0) + dir; renderRacePage(); window.scrollTo(0, 0); }
+// Paginar sin mover el scroll: la página queda donde estaba, sólo cambian las tarjetas.
+function raceNav(dir){ state.racePage = (state.racePage || 0) + dir; renderRacePage(); }
+// Corredores dentro de una carrera, paginados de a 10 (también sin saltar el scroll).
+const RESULTS_PER_PAGE = 10;
+function resNav(dir){ state.resPage = (state.resPage || 0) + dir; const t = document.getElementById("tbl"); if(t && state._renderTable) t.innerHTML = state._renderTable(); }
 function homeSearch(){ const q=$("q").value.trim(); if(q.length>=2) go("search", q); }
 function headerSearch(){ const el=document.getElementById("hq"); const q=(el?el.value:"").trim(); if(q.length>=2) go("search", q); }
 
@@ -368,11 +372,14 @@ async function viewRace(code){
   const renderTable = () => {
     let list = finishers;
     if(dists.length) list = finishers.filter(r=>r.distance_km===state.distFilter);
-    list = [...list].sort((a,b)=>(a.net_time_ns||a.finish_time_ns||9e18)-(b.net_time_ns||b.finish_time_ns||9e18));
+    const ranked = [...list].sort((a,b)=>(a.net_time_ns||a.finish_time_ns||9e18)-(b.net_time_ns||b.finish_time_ns||9e18));
     const tf = (state.textFilter||"").toLowerCase();
-    const ranked = list;  // posición = orden por tiempo, antes de filtrar texto
-    if(tf) list = list.filter(r=> r.full_name.toLowerCase().includes(tf) || String(r.bib_number).toLowerCase().includes(tf));
-    const rows = list.map((r)=>{
+    const filtered = tf ? ranked.filter(r=> r.full_name.toLowerCase().includes(tf) || String(r.bib_number).toLowerCase().includes(tf)) : ranked;
+    const pages = Math.max(1, Math.ceil(filtered.length / RESULTS_PER_PAGE));
+    const page = Math.max(0, Math.min(state.resPage||0, pages-1));
+    state.resPage = page;
+    const pageRows = filtered.slice(page*RESULTS_PER_PAGE, page*RESULTS_PER_PAGE + RESULTS_PER_PAGE);
+    const rows = pageRows.map((r)=>{
       const i = ranked.indexOf(r);
       const idx = race.results.indexOf(r);
       return `<tr>
@@ -385,8 +392,14 @@ async function viewRace(code){
         <td style="text-align:right"><a class="lnk" onclick="certRace(${idx})">🏅 PDF</a></td>
       </tr>`;
     }).join("");
+    const pager = filtered.length > RESULTS_PER_PAGE ? `
+      <div class="pager" style="padding:12px 8px 4px">
+        <button class="btn ghost sm pager-btn" ${page===0?'disabled':''} onclick="resNav(-1)">← Anteriores</button>
+        <span class="pager-info">${page+1} / ${pages} · ${filtered.length} corredores</span>
+        <button class="btn ghost sm pager-btn" ${page>=pages-1?'disabled':''} onclick="resNav(1)">Siguientes →</button>
+      </div>` : "";
     return `<table><thead><tr><th>Pos</th><th>Dorsal</th><th>Nombre</th><th class="hide-sm">Cat.</th><th class="hide-sm">Club</th><th style="text-align:right">Tiempo</th><th></th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="7" class="empty">Sin finishers en esta distancia</td></tr>`}</tbody></table>`;
+      <tbody>${rows||`<tr><td colspan="7" class="empty">Sin finishers en esta distancia</td></tr>`}</tbody></table>${pager}`;
   };
 
   $("rc").innerHTML = `
@@ -414,9 +427,10 @@ async function viewRace(code){
         </tr>`).join("")}</tbody></table></div>`:""}`;
   state._renderTable = renderTable;
   state.textFilter = "";
+  state.resPage = 0;
   renderPodium();
 }
-function filterRace(){ const el=document.getElementById("rfilter"); state.textFilter = el?el.value:""; document.getElementById("tbl").innerHTML = state._renderTable(); }
+function filterRace(){ const el=document.getElementById("rfilter"); state.textFilter = el?el.value:""; state.resPage = 0; document.getElementById("tbl").innerHTML = state._renderTable(); }
 function renderPodium(){
   const el = document.getElementById("podium"); if(!el || !state.curRace) return;
   const fin = state.curRace.results.filter(r=>r.status==="FINISHER" && (state.distFilter==null || r.distance_km===state.distFilter));
@@ -425,7 +439,7 @@ function renderPodium(){
   const m=["🥇","🥈","🥉"];
   el.innerHTML = `<div class="podium">${top.map((r,i)=>`<div class="p ${i===0?'p1':''}"><div class="medal">${m[i]}</div><div class="nm">${esc(r.full_name)}</div><div class="tm">${fmtNs(r.net_time_ns||r.finish_time_ns)}</div></div>`).join("")}</div>`;
 }
-function setDist(d){ state.distFilter=d; state.textFilter=""; const rf=document.getElementById("rfilter"); if(rf) rf.value=""; $("tbl").innerHTML = state._renderTable(); renderPodium(); document.querySelectorAll("#dtabs button").forEach(b=>b.classList.toggle("on", b.textContent===d+" km")); }
+function setDist(d){ state.distFilter=d; state.textFilter=""; state.resPage=0; const rf=document.getElementById("rfilter"); if(rf) rf.value=""; $("tbl").innerHTML = state._renderTable(); renderPodium(); document.querySelectorAll("#dtabs button").forEach(b=>b.classList.toggle("on", b.textContent===d+" km")); }
 function certRace(idx){ const r=state.curRace.results[idx]; printCertificate(r, state.curRace.name, state.curRace.race_date, state.curRace.location, state.curRace.code); }
 
 // ── Certificado PDF (se genera e imprime en el navegador) ─────────────────────
