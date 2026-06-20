@@ -7,7 +7,11 @@
     "icon": "./assets/images/icon.png",
     "scheme": "chronotrackrun",
     "userInterfaceStyle": "automatic",
-    "ios": {},
+    "ios": {
+      "infoPlist": {
+        "UIBackgroundModes": ["location"]
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0d0f10",
@@ -40,7 +44,22 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ChronoTrack Run usa tu ubicación para registrar el recorrido, la distancia y el ritmo de tus salidas."
+          "locationWhenInUsePermission": "ChronoTrack Run usa tu ubicación para registrar el recorrido, la distancia y el ritmo de tus salidas.",
+          "locationAlwaysAndWhenInUsePermission": "ChronoTrack Run usa tu ubicación para seguir registrando tu salida (distancia, ritmo, recorrido) incluso con la pantalla bloqueada.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "ChronoTrack Run usa la cámara para que captures el momento al terminar tu salida."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "ChronoTrack Run guarda la imagen de tu salida en tu galería."
         }
       ]
     ],

@@ -1,13 +1,13 @@
 import * as Crypto from 'expo-crypto';
-import { useKeepAwake } from 'expo-keep-awake';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useFocusEffect } from 'expo-router';
-import * as Speech from 'expo-speech';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RunPhotoCard } from '@/components/run-photo-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -15,185 +15,183 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity } from '@/lib/api';
 import { useEntitlement } from '@/lib/entitlement';
 import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
+import { LOCATION_TASK } from '@/lib/location-task';
+import { runSession, type FinishData } from '@/lib/run-session';
 import { saveActivity } from '@/lib/run-store';
-import {
-  addPoint,
-  autoPauseStep,
-  avgPaceSPerKm,
-  currentPaceSPerKm,
-  encodePolyline,
-  newTracker,
-  type AutoPauseState,
-  type TrackerState,
-} from '@/lib/tracking';
+import { encodePolyline } from '@/lib/tracking';
 
-type Phase = 'idle' | 'running' | 'paused' | 'autopaused' | 'saving';
+// Suscripción del watcher de primer plano y bandera de background a nivel de
+// módulo: sobreviven a cambios de pestaña, así la salida sigue corriendo.
+let fgWatcher: Location.LocationSubscription | null = null;
+let usingBackground = false;
 
-/** Correr: cronómetro + GPS en primer plano, splits con voz y auto-pausa. */
+/** Correr: cronómetro + GPS, sigue registrando con la pantalla bloqueada
+ *  (en un build de desarrollo; en Expo Go usa el watcher de primer plano). */
 export default function CorrerScreen() {
   const theme = useTheme();
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [elapsedS, setElapsedS] = useState(0);
-  const [tracker, setTracker] = useState<TrackerState>(newTracker());
-  const [gpsReady, setGpsReady] = useState<boolean | null>(null);
+  const [, force] = useReducer((x) => x + 1, 0);
   const [lastActivity, setLastActivity] = useState<Activity | null>(null);
+  const [gpsDenied, setGpsDenied] = useState(false);
+  const [bgActive, setBgActive] = useState(false);
+  const [photoData, setPhotoData] = useState<FinishData | null>(null);
   const { access } = useEntitlement();
-  const accessRef = useRef(access);
-  accessRef.current = access;
+  const startingRef = useRef(false);
 
-  // Última salida para la pantalla de reposo (best-effort).
+  useEffect(() => { runSession.setVoice(access); }, [access]);
+
+  // Re-render ante cualquier cambio de la sesión (km, pausa, etc.).
+  useEffect(() => runSession.subscribe(force), []);
+
+  const snap = runSession.snapshot();
+  const phase = snap.phase;
+  const active = phase === 'running' || phase === 'autopaused';
+
+  // Tick de 1 s para el cronómetro mientras corre.
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(force, 1000);
+    return () => clearInterval(id);
+  }, [active]);
+
+  // Pantalla encendida sólo mientras hay salida en curso.
+  useEffect(() => {
+    if (phase === 'idle') { deactivateKeepAwake().catch(() => {}); return; }
+    activateKeepAwakeAsync().catch(() => {});
+  }, [phase]);
+
   useFocusEffect(
     useCallback(() => {
-      if (phaseRef.current === 'idle') {
+      if (runSession.snapshot().phase === 'idle') {
         api.activities(1).then((a) => setLastActivity(a[0] ?? null)).catch(() => {});
       }
     }, []),
   );
 
-  // Refs para que el callback del GPS y el timer vean el estado vigente.
-  const phaseRef = useRef(phase);
-  phaseRef.current = phase;
-  const elapsedRef = useRef(elapsedS);
-  elapsedRef.current = elapsedS;
-  const trackerRef = useRef(tracker);
-  trackerRef.current = tracker;
-  const autoPauseRef = useRef<AutoPauseState>({ paused: false, stillSince: null });
-  const startedAtRef = useRef<Date | null>(null);
-  const watcherRef = useRef<Location.LocationSubscription | null>(null);
-
-  useKeepAwake(); // pantalla encendida mientras esta pestaña está activa
-
-  // Cronómetro: avanza solo en running (las pausas no suman tiempo neto).
-  useEffect(() => {
-    if (phase !== 'running') return;
-    const id = setInterval(() => setElapsedS((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [phase]);
-
-  useEffect(() => () => { watcherRef.current?.remove(); }, []);
-
-  function announceKm(km: number, splits: number[]) {
-    if (!accessRef.current) return; // avisos de voz = premium
-    const splitS = splits[splits.length - 1];
-    const total = formatDuration(elapsedRef.current).replace(':', ' minutos ') + ' segundos';
-    const pace = formatPace(splitS).replace(':', ' ').replace(' /km', ' por kilómetro');
-    Speech.speak(`Kilómetro ${km}. Tiempo ${total}. Último kilómetro a ${pace}.`, { language: 'es' });
-  }
-
-  function onLocation(loc: Location.LocationObject) {
-    const ph = phaseRef.current;
-    if (ph !== 'running' && ph !== 'autopaused') return;
-
-    const result = addPoint(
-      trackerRef.current,
-      {
-        lat: loc.coords.latitude,
-        lon: loc.coords.longitude,
-        t: loc.timestamp,
-        accuracy: loc.coords.accuracy,
-      },
-      elapsedRef.current,
-    );
-
-    if (result.accepted) {
-      setTracker(result.state);
-      if (result.completedKm) announceKm(result.completedKm, result.state.splits);
-
-      const ap = autoPauseStep(autoPauseRef.current, result.state.speedMps, loc.timestamp);
-      if (ap.paused !== autoPauseRef.current.paused) {
-        setPhase(ap.paused ? 'autopaused' : 'running');
-      }
-      autoPauseRef.current = ap;
+  async function stopUpdates() {
+    fgWatcher?.remove();
+    fgWatcher = null;
+    if (usingBackground) {
+      try {
+        if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) {
+          await Location.stopLocationUpdatesAsync(LOCATION_TASK);
+        }
+      } catch {}
+      usingBackground = false;
     }
+    setBgActive(false);
   }
 
   async function start() {
-    setGpsReady(null);
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      setGpsReady(false);
-      Alert.alert(
-        'Sin permiso de ubicación',
-        'Para registrar tu recorrido, permití el acceso a la ubicación en los ajustes del teléfono.',
-      );
-      return;
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setGpsDenied(false);
+    try {
+      const fg = await Location.requestForegroundPermissionsAsync();
+      if (fg.status !== 'granted') {
+        setGpsDenied(true);
+        Alert.alert(
+          'Sin permiso de ubicación',
+          'Para registrar tu recorrido, permití el acceso a la ubicación en los ajustes del teléfono.',
+        );
+        return;
+      }
+      runSession.start();
+
+      // Intentar tracking en background (pantalla bloqueada). En Expo Go o sin
+      // permiso de fondo, cae al watcher de primer plano.
+      let backgroundOk = false;
+      try {
+        const bg = await Location.requestBackgroundPermissionsAsync();
+        if (bg.status === 'granted') {
+          await Location.startLocationUpdatesAsync(LOCATION_TASK, {
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 2000,
+            distanceInterval: 5,
+            pausesUpdatesAutomatically: false,
+            showsBackgroundLocationIndicator: true,
+            activityType: Location.ActivityType.Fitness,
+            foregroundService: {
+              notificationTitle: 'ChronoTrack Run',
+              notificationBody: 'Registrando tu salida…',
+              notificationColor: '#00e5a0',
+            },
+          });
+          usingBackground = true;
+          backgroundOk = true;
+        }
+      } catch {
+        backgroundOk = false;
+      }
+      setBgActive(backgroundOk);
+
+      if (!backgroundOk) {
+        fgWatcher = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 5 },
+          (loc) =>
+            runSession.ingest([
+              {
+                coords: {
+                  latitude: loc.coords.latitude,
+                  longitude: loc.coords.longitude,
+                  accuracy: loc.coords.accuracy,
+                },
+                timestamp: loc.timestamp,
+              },
+            ]),
+        );
+      }
+    } finally {
+      startingRef.current = false;
     }
-    setGpsReady(true);
-    setTracker(newTracker());
-    setElapsedS(0);
-    autoPauseRef.current = { paused: false, stillSince: null };
-    startedAtRef.current = new Date();
-    watcherRef.current = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 3000,
-        distanceInterval: 5,
-      },
-      onLocation,
-    );
-    setPhase('running');
-    if (accessRef.current) Speech.speak('Salida iniciada. ¡Vamos!', { language: 'es' });
   }
 
   function togglePause() {
-    if (phase === 'running' || phase === 'autopaused') {
-      autoPauseRef.current = { paused: false, stillSince: null };
-      setPhase('paused');
-    } else if (phase === 'paused') {
-      setPhase('running');
-    }
+    if (active) runSession.pause();
+    else if (phase === 'paused') runSession.resume();
   }
 
   function confirmFinish() {
-    const km = (trackerRef.current.distanceM / 1000).toFixed(2);
+    const km = (snap.distanceM / 1000).toFixed(2);
     Alert.alert('Terminar salida', `¿Guardar esta salida de ${km} km?`, [
       { text: 'Seguir corriendo', style: 'cancel' },
-      { text: 'Descartar', style: 'destructive', onPress: reset },
+      { text: 'Descartar', style: 'destructive', onPress: discard },
       { text: 'Guardar', onPress: finish },
     ]);
   }
 
-  function reset() {
-    watcherRef.current?.remove();
-    watcherRef.current = null;
-    setPhase('idle');
-    setTracker(newTracker());
-    setElapsedS(0);
+  async function discard() {
+    await stopUpdates();
+    runSession.reset();
   }
 
   async function finish() {
-    watcherRef.current?.remove();
-    watcherRef.current = null;
-    setPhase('saving');
-    const t = trackerRef.current;
+    await stopUpdates();
+    const data = runSession.finishData();
+    runSession.markSaving();
     try {
       const { uploaded } = await saveActivity({
         client_uuid: Crypto.randomUUID(),
-        started_at: (startedAtRef.current ?? new Date()).toISOString(),
-        duration_s: Math.max(1, elapsedRef.current),
-        distance_m: Math.round(t.distanceM * 10) / 10,
-        avg_pace_s_per_km: avgPaceSPerKm(t.distanceM, elapsedRef.current) ?? undefined,
-        splits: t.splits.map((s) => Math.round(s * 10) / 10),
-        polyline: t.path.length > 1 ? encodePolyline(t.path) : undefined,
+        started_at: data.startedAt.toISOString(),
+        duration_s: data.durationS,
+        distance_m: Math.round(data.distanceM * 10) / 10,
+        avg_pace_s_per_km: data.avgPaceSPerKm ?? undefined,
+        splits: data.splits.map((s) => Math.round(s * 10) / 10),
+        polyline: data.path.length > 1 ? encodePolyline(data.path) : undefined,
       });
-      Alert.alert(
-        uploaded ? '¡Salida guardada!' : 'Salida guardada en el teléfono',
-        uploaded
-          ? 'Ya está en tu historial.'
-          : 'No hay conexión: se sube sola cuando vuelva la señal.',
-      );
+      runSession.reset();
+      if (!uploaded) {
+        Alert.alert('Salida guardada en el teléfono', 'No hay conexión: se sube sola cuando vuelva la señal.');
+      }
+      setPhotoData(data); // ofrecer capturar el momento con la cámara
     } catch {
+      runSession.reset();
       Alert.alert('Ups', 'No se pudo guardar la salida.');
     }
-    setPhase('idle');
-    setTracker(newTracker());
-    setElapsedS(0);
   }
 
-  const distanceKm = (tracker.distanceM / 1000).toFixed(2).replace('.', ',');
-  const avgPace = avgPaceSPerKm(tracker.distanceM, elapsedS);
-  const curPace = phase === 'running' ? currentPaceSPerKm(tracker.speedMps) : null;
-  const running = phase === 'running' || phase === 'autopaused' || phase === 'paused';
+  const distanceKm = (snap.distanceM / 1000).toFixed(2).replace('.', ',');
+  const avgPace = snap.avgPaceSPerKm;
+  const curPace = snap.curPaceSPerKm;
 
   return (
     <ThemedView style={styles.container}>
@@ -239,7 +237,7 @@ export default function CorrerScreen() {
             )}
 
             <View style={styles.idleBottom}>
-              {gpsReady === false && (
+              {gpsDenied && (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
                   Falta el permiso de ubicación.
                 </ThemedText>
@@ -254,7 +252,7 @@ export default function CorrerScreen() {
                 </LinearGradient>
               </Pressable>
               <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
-                Llevá el teléfono con la app abierta durante la salida.
+                Podés bloquear la pantalla: la salida sigue registrándose.
                 {!access ? ' Los avisos de voz por km son premium ⭐' : ''}
               </ThemedText>
             </View>
@@ -272,7 +270,7 @@ export default function CorrerScreen() {
               </View>
             )}
 
-            <ThemedText style={styles.time}>{formatDuration(elapsedS)}</ThemedText>
+            <ThemedText style={styles.time}>{formatDuration(snap.elapsedS)}</ThemedText>
 
             <View style={styles.metricsRow}>
               <Metric value={distanceKm} label="km" big />
@@ -280,7 +278,7 @@ export default function CorrerScreen() {
             <View style={styles.metricsRow}>
               <Metric value={formatPace(avgPace).replace(' /km', '')} label="ritmo prom." />
               <Metric value={formatPace(curPace).replace(' /km', '')} label="ritmo actual" />
-              <Metric value={String(tracker.splits.length)} label="splits" />
+              <Metric value={String(snap.splits.length)} label="splits" />
             </View>
 
             <View style={styles.actions}>
@@ -303,12 +301,14 @@ export default function CorrerScreen() {
             </View>
           </View>
         )}
-        {running && (
+        {phase !== 'idle' && (
           <ThemedText type="small" themeColor="textSecondary" style={styles.gpsFooter}>
-            GPS activo · la pantalla queda encendida
+            {bgActive ? 'GPS activo · seguí con la pantalla bloqueada' : 'GPS activo · mantené la app abierta'}
           </ThemedText>
         )}
       </SafeAreaView>
+
+      {photoData && <RunPhotoCard data={photoData} onClose={() => setPhotoData(null)} />}
     </ThemedView>
   );
 }

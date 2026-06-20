@@ -7,6 +7,7 @@ import AppTabs from '@/components/app-tabs';
 import { LoginScreen } from '@/components/login-screen';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { EntitlementProvider } from '@/lib/entitlement';
+import '@/lib/location-task'; // registra la tarea de ubicación en background
 import { syncPending } from '@/lib/run-store';
 
 function Gate() {
