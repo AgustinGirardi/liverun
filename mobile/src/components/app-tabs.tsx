@@ -16,7 +16,7 @@ const ICONS = {
 const TABS: { name: keyof typeof ICONS; label: string }[] = [
   { name: 'index', label: 'Inicio' },
   { name: 'correr', label: 'Correr' },
-  { name: 'historial', label: 'Historial' },
+  { name: 'historial', label: 'Progreso' },
   { name: 'ranking', label: 'Ranking' },
   { name: 'perfil', label: 'Perfil' },
 ];

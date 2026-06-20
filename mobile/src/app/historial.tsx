@@ -12,8 +12,11 @@ import { api, type Activity, type ActivityDetail } from '@/lib/api';
 import { goPremium } from '@/lib/billing';
 import { useEntitlement } from '@/lib/entitlement';
 import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
+import { computeRecords } from '@/lib/progress';
 
-/** Historial: lista de salidas; tocar una despliega los splits km a km. */
+const num = (n: number, d = 1) => n.toFixed(d).replace('.', ',');
+
+/** Progreso: récords arriba + lista de salidas; tocar una despliega los splits. */
 export default function HistorialScreen() {
   const theme = useTheme();
   const [activities, setActivities] = useState<Activity[] | null>(null);
@@ -85,7 +88,7 @@ export default function HistorialScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ThemedText type="subtitle" style={styles.title}>Historial</ThemedText>
+        <ThemedText type="subtitle" style={styles.title}>Progreso</ThemedText>
         {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
         <FlatList
           data={activities ?? []}
@@ -93,6 +96,21 @@ export default function HistorialScreen() {
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
+          }
+          ListHeaderComponent={
+            activities && activities.length > 0 ? (
+              (() => {
+                const rec = computeRecords(activities);
+                return (
+                  <View style={[styles.summary, { backgroundColor: theme.backgroundElement }]}>
+                    <Sum value={num(rec.totalKm)} unit="km" label="total" />
+                    <Sum value={String(rec.runs)} label="salidas" />
+                    <Sum value={num(rec.longestKm)} unit="km" label="más larga" />
+                    <Sum value={formatPace(rec.bestPaceSPerKm).replace(' /km', '')} label="mejor ritmo" />
+                  </View>
+                );
+              })()
+            ) : null
           }
           ListEmptyComponent={
             activities ? (
@@ -149,6 +167,17 @@ export default function HistorialScreen() {
   );
 }
 
+function Sum({ value, unit, label }: { value: string; unit?: string; label: string }) {
+  return (
+    <View style={styles.sum}>
+      <ThemedText style={styles.sumValue}>
+        {value}{unit ? <ThemedText type="small" themeColor="textSecondary"> {unit}</ThemedText> : null}
+      </ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
+    </View>
+  );
+}
+
 function Splits({ detail, dividerColor }: { detail?: ActivityDetail | 'loading'; dividerColor: string }) {
   if (!detail || detail === 'loading') {
     return (
@@ -196,6 +225,9 @@ const styles = StyleSheet.create({
   title: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   error: { color: '#ff6b6b', textAlign: 'center', padding: Spacing.two },
   list: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.two },
+  summary: { flexDirection: 'row', justifyContent: 'space-between', borderRadius: 16, padding: Spacing.three, marginBottom: Spacing.two },
+  sum: { alignItems: 'center', gap: 1, flex: 1 },
+  sumValue: { fontSize: 18, fontWeight: '800', fontVariant: ['tabular-nums'] },
   empty: { textAlign: 'center', marginTop: Spacing.five },
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.one },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
