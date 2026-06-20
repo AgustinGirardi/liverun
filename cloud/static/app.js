@@ -151,7 +151,8 @@ async function loadHomeRaces(){
   } catch(e){ box.innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
 
-// Página pública con todas las carreras publicadas
+// Página pública con todas las carreras publicadas (paginada de a 6)
+const RACES_PER_PAGE = 6;
 async function viewAllRaces(){
   $("app").innerHTML = `
     <a class="back" onclick="go('home')">← Volver al inicio</a>
@@ -159,12 +160,28 @@ async function viewAllRaces(){
     <div class="sub">Resultados oficiales de todas las carreras publicadas.</div>
     <div id="allRaces"><div class="empty">Cargando…</div></div>`;
   try {
-    const races = await api("GET","/api/races");
-    $("allRaces").innerHTML = races.length
-      ? `<div class="races-grid">${races.map(raceCard).join("")}</div>`
-      : `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`;
+    state.allRaces = await api("GET","/api/races");
+    state.racePage = 0;
+    renderRacePage();
   } catch(e){ $("allRaces").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 }
+function renderRacePage(){
+  const box = $("allRaces"); if(!box) return;
+  const races = state.allRaces || [];
+  if(!races.length){ box.innerHTML = `<div class="empty"><div class="ic">🏁</div>Todavía no hay carreras publicadas.</div>`; return; }
+  const pages = Math.ceil(races.length / RACES_PER_PAGE);
+  const page = Math.max(0, Math.min(state.racePage || 0, pages - 1));
+  state.racePage = page;
+  const slice = races.slice(page * RACES_PER_PAGE, page * RACES_PER_PAGE + RACES_PER_PAGE);
+  box.innerHTML = `
+    <div class="races-grid">${slice.map(raceCard).join("")}</div>
+    <div class="pager">
+      <button class="btn ghost sm pager-btn" ${page === 0 ? "disabled" : ""} onclick="raceNav(-1)">← Anteriores</button>
+      <span class="pager-info">${page + 1} / ${pages} · ${races.length} carreras</span>
+      <button class="btn ghost sm pager-btn" ${page >= pages - 1 ? "disabled" : ""} onclick="raceNav(1)">Siguientes →</button>
+    </div>`;
+}
+function raceNav(dir){ state.racePage = (state.racePage || 0) + dir; renderRacePage(); window.scrollTo(0, 0); }
 function homeSearch(){ const q=$("q").value.trim(); if(q.length>=2) go("search", q); }
 function headerSearch(){ const el=document.getElementById("hq"); const q=(el?el.value:"").trim(); if(q.length>=2) go("search", q); }
 

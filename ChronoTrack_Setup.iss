@@ -24,6 +24,7 @@ OutputBaseFilename=ChronoTrack_Setup_v{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=icon.ico
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 UninstallDisplayIcon={app}\{#AppExeName}
