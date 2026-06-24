@@ -1,6 +1,6 @@
-import { Link, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Ring } from '@/components/ring';
@@ -74,11 +74,9 @@ export default function InicioScreen() {
               <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
                 Registrá tu primera salida y vas a ver tu meta, el gráfico de km, tus récords y logros.
               </ThemedText>
-              <Link href="/correr" asChild>
-                <Pressable style={styles.cta}>
-                  <ThemedText style={styles.ctaText}>▶  Salir a correr</ThemedText>
-                </Pressable>
-              </Link>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
+                Tocá <ThemedText type="smallBold" style={styles.accent}>Correr ▶</ThemedText> abajo para arrancar.
+              </ThemedText>
             </View>
           ) : (
             <>
@@ -102,11 +100,6 @@ export default function InicioScreen() {
                   <ThemedText type="small" themeColor="textSecondary">
                     {summary!.month.activities} {summary!.month.activities === 1 ? 'salida' : 'salidas'} · {summary!.month.days_run} {summary!.month.days_run === 1 ? 'día' : 'días'}
                   </ThemedText>
-                  <Link href="/correr" asChild>
-                    <Pressable style={styles.smallCta}>
-                      <ThemedText style={styles.smallCtaText}>▶ Salir a correr</ThemedText>
-                    </Pressable>
-                  </Link>
                 </View>
               </View>
 
@@ -199,8 +192,6 @@ const styles = StyleSheet.create({
   ringCard: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   monthCard: { flex: 1, justifyContent: 'center' },
   bigNum: { fontSize: 30, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  smallCta: { marginTop: Spacing.one, backgroundColor: BrandAccent, borderRadius: 999, paddingVertical: 9, alignItems: 'center' },
-  smallCtaText: { color: '#06281d', fontWeight: '800', fontSize: 13 },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 80, marginVertical: Spacing.one },
   barCol: { flex: 1, height: '100%', justifyContent: 'flex-end' },
   barTrack: { height: '100%', justifyContent: 'flex-end' },
@@ -214,6 +205,5 @@ const styles = StyleSheet.create({
   badgeLabel: { textAlign: 'center', fontWeight: '600' },
   welcome: { alignItems: 'center', paddingVertical: Spacing.five, gap: Spacing.two },
   welcomeEmoji: { fontSize: 40, lineHeight: 48 },
-  cta: { marginTop: Spacing.two, backgroundColor: BrandAccent, borderRadius: 999, paddingVertical: 13, paddingHorizontal: Spacing.five, alignItems: 'center' },
-  ctaText: { color: '#06281d', fontWeight: '800' },
+  accent: { color: BrandAccent },
 });

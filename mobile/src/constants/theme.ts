@@ -14,6 +14,7 @@ export const Colors = {
     backgroundElement: '#F0F0F3',
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
+    border: '#E0E1E6',
   },
   dark: {
     // Dirección A "Pista nocturna" — superficies de marca (no negro puro).
@@ -22,6 +23,7 @@ export const Colors = {
     backgroundElement: '#141618',
     backgroundSelected: '#1c1f21',
     textSecondary: '#8a9299',
+    border: '#262b2e', // --line del brand-spec
   },
 } as const;
 

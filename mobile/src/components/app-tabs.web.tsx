@@ -14,9 +14,9 @@ import { ThemedView } from './themed-view';
 import { BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 
 const TABS: { name: string; href: '/' | '/correr' | '/historial' | '/ranking' | '/perfil'; label: string }[] = [
-  { name: 'index', href: '/', label: 'Inicio' },
+  { name: 'index', href: '/', label: 'Hoy' },
   { name: 'correr', href: '/correr', label: 'Correr' },
-  { name: 'historial', href: '/historial', label: 'Historial' },
+  { name: 'historial', href: '/historial', label: 'Salidas' },
   { name: 'ranking', href: '/ranking', label: 'Ranking' },
   { name: 'perfil', href: '/perfil', label: 'Perfil' },
 ];
