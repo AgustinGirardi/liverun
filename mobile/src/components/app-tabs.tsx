@@ -99,20 +99,20 @@ function NavButton({ label, Icon, isFocused, ...props }: NavButtonProps) {
   );
 }
 
-/** Acción principal: botón circular elevado con gradiente de marca. */
+/** Acción principal: botón circular elevado con gradiente de marca. Variante
+ *  "minimal": sin etiqueta y con un anillo del color del fondo que lo despega
+ *  de la barra. */
 function RunButton({ isFocused, ...props }: TabTriggerSlotProps) {
+  const theme = useTheme();
   return (
     <Pressable {...props} style={styles.runBtn}>
       <LinearGradient
         colors={[...BrandGradient]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.fab, isFocused && styles.fabActive]}>
-        <PlayIcon size={28} color={ON_ACCENT} />
+        style={[styles.fab, { borderColor: theme.background }, isFocused && styles.fabActive]}>
+        <PlayIcon size={30} color={ON_ACCENT} />
       </LinearGradient>
-      <ThemedText type="small" style={[styles.label, styles.runLabel]}>
-        Correr
-      </ThemedText>
     </Pressable>
   );
 }
@@ -133,15 +133,15 @@ const styles = StyleSheet.create({
   navBtn: { flex: 1, alignItems: 'center', gap: 3 },
   runBtn: { flex: 1, alignItems: 'center', gap: 3 },
   label: { fontSize: 11, lineHeight: 14 },
-  runLabel: { color: BrandAccent, fontWeight: '800' },
   fab: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -26, // sobresale por encima de la barra
+    marginTop: -34, // sobresale por encima de la barra
     paddingLeft: 3, // centrado óptico del triángulo de play
+    borderWidth: 3, // anillo (borderColor = fondo, inline) que lo despega de la barra
     shadowColor: BrandAccent,
     shadowOpacity: 0.45,
     shadowRadius: 10,
