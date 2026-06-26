@@ -26,6 +26,30 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 
 const fmtKm = (km: number) => `${km.toFixed(1).replace('.', ',')} km`;
 
+/** Un puesto del podio "héroe": el 1º va elevado y con anillo; 2º/3º a los lados. */
+function PodiumSpot({ entry, place, theme }: { entry: RankingEntry; place: number; theme: ReturnType<typeof useTheme> }) {
+  const isFirst = place === 1;
+  const avatar = <Avatar url={entry.avatar_url} name={entry.username ?? entry.full_name} size={isFirst ? 72 : 52} />;
+  return (
+    <View style={styles.spot}>
+      <ThemedText style={styles.spotTop}>{isFirst ? '👑' : MEDALS[place - 1]}</ThemedText>
+      {isFirst ? <View style={styles.firstRing}>{avatar}</View> : avatar}
+      <ThemedText type="smallBold" numberOfLines={1} style={styles.spotName}>
+        {entry.username ?? entry.full_name ?? 'corredor'}{entry.is_me ? ' (vos)' : ''}
+      </ThemedText>
+      <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(entry.km)}</ThemedText>
+      <View
+        style={[
+          styles.pedestal,
+          place === 1 ? styles.pedH1 : place === 2 ? styles.pedH2 : styles.pedH3,
+          isFirst ? styles.pedFirst : { backgroundColor: theme.backgroundSelected },
+        ]}>
+        <ThemedText style={[styles.pedNum, { color: isFirst ? BrandAccent : theme.textSecondary }]}>{place}</ThemedText>
+      </View>
+    </View>
+  );
+}
+
 /** Ranking práctico: buscador para agregar amigos, podio, mi posición y compartir. */
 export default function RankingScreen() {
   const theme = useTheme();
@@ -88,6 +112,12 @@ export default function RankingScreen() {
       : [...(ranking?.entries ?? [])].sort((a, b) => b[orderBy] - a[orderBy]);
 
   const top3 = entries.slice(0, 3);
+  // Podio "héroe": 2º a la izquierda, 1º al centro (elevado), 3º a la derecha.
+  const podiumSpots = [
+    { place: 2, e: top3[1] },
+    { place: 1, e: top3[0] },
+    { place: 3, e: top3[2] },
+  ].filter((s): s is { place: number; e: RankingEntry } => !!s.e);
   const rest = entries.slice(3);
   const me = entries.find((e) => e.is_me);
   const meOutsideList = me && scope === 'global' && !entries.slice(0, 50).some((e) => e.is_me);
@@ -297,23 +327,8 @@ export default function RankingScreen() {
             ListHeaderComponent={
               top3.length > 0 ? (
                 <View style={styles.podium}>
-                  {top3.map((e, i) => (
-                    <View
-                      key={e.username ?? i}
-                      style={[
-                        styles.podiumCard,
-                        { backgroundColor: theme.backgroundElement },
-                        i === 0 && styles.podiumFirst,
-                        e.is_me && { borderColor: BrandAccent, borderWidth: 1 },
-                      ]}>
-                      <ThemedText style={styles.medal}>{MEDALS[i]}</ThemedText>
-                      <Avatar url={e.avatar_url} name={e.username ?? e.full_name} size={i === 0 ? 56 : 46} />
-                      <ThemedText type="smallBold" numberOfLines={1} style={styles.podiumName}>
-                        {e.username ?? e.full_name ?? 'corredor'}{e.is_me ? ' (vos)' : ''}
-                      </ThemedText>
-                      <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(e.km)}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">{e.days_run}d · {e.activities} sal.</ThemedText>
-                    </View>
+                  {podiumSpots.map(({ place, e }) => (
+                    <PodiumSpot key={e.username ?? place} entry={e} place={place} theme={theme} />
                   ))}
                 </View>
               ) : null
@@ -368,12 +383,21 @@ const styles = StyleSheet.create({
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, padding: Spacing.three },
   position: { minWidth: 30, textAlign: 'center' },
   who: { flex: 1, gap: 2 },
-  // Podio
+  // Podio "héroe"
   podium: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-end', marginBottom: Spacing.two },
-  podiumCard: { flex: 1, alignItems: 'center', gap: 4, borderRadius: 16, paddingVertical: Spacing.three, paddingHorizontal: Spacing.one },
-  podiumFirst: { paddingVertical: Spacing.four },
-  podiumName: { textAlign: 'center', maxWidth: '100%' },
-  medal: { fontSize: 22 },
+  spot: { flex: 1, alignItems: 'center', gap: 5 },
+  spotTop: { fontSize: 22, lineHeight: 26, height: 26 },
+  firstRing: {
+    borderRadius: 999, borderWidth: 3, borderColor: BrandAccent,
+    shadowColor: BrandAccent, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8,
+  },
+  spotName: { textAlign: 'center', maxWidth: '100%' },
+  pedestal: { width: '100%', borderTopLeftRadius: 12, borderTopRightRadius: 12, alignItems: 'center', paddingTop: 8, marginTop: 2 },
+  pedFirst: { backgroundColor: 'rgba(0,229,160,0.14)' },
+  pedH1: { height: 64 },
+  pedH2: { height: 46 },
+  pedH3: { height: 36 },
+  pedNum: { fontSize: 20, fontWeight: '900', fontVariant: ['tabular-nums'] },
   meFooter: { borderWidth: 1, marginTop: Spacing.two },
   // Buscador
   searchHeader: {
