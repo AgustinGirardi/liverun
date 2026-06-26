@@ -1,0 +1,37 @@
+name: EAS Update (OTA)
+
+# Publica un update OTA cada vez que cambia algo en mobile/ y se hace push.
+# La app (Expo Go o un build con expo-updates) toma el último update al abrir,
+# sin necesidad de `npx expo start`. Solo aplica a cambios JS/assets; lo nativo
+# necesita rebuild. Requiere el secret EXPO_TOKEN (expo.dev → Access Tokens).
+
+on:
+  push:
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/eas-update.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: eas-update
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Publicar update OTA (branch "main")
+        run: npx eas-cli@latest update --branch main --message "$MSG" --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          MSG: ${{ github.event.head_commit.message || 'manual dispatch' }}
