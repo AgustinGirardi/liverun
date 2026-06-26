@@ -1,18 +1,21 @@
+import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { api, ApiError, type FriendLists, type Profile, type SearchedUser } from '@/lib/api';
+import { api, ApiError, type FriendLists, type Profile, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { goPremium } from '@/lib/billing';
 import { useEntitlement } from '@/lib/entitlement';
+
+const AMBER = '#f5a524'; // estado "atención" (prueba por terminar / terminada)
 
 /** Días enteros desde hoy hasta `iso` (negativo si ya pasó). */
 function daysUntil(iso: string | null): number | null {
@@ -21,8 +24,19 @@ function daysUntil(iso: string | null): number | null {
   return Math.ceil(ms / 86400000);
 }
 
+/** Etiqueta corta del plan para el chip del hero. */
+function planChip(profile: Profile): { label: string; color: string } {
+  const left = daysUntil(profile.plan === 'premium' ? profile.premium_until : profile.trial_ends_at);
+  if (profile.plan === 'admin') return { label: '⭐ Ilimitada', color: BrandAccent };
+  if (profile.plan === 'premium') return { label: left != null ? `⭐ Premium · ${left}d` : '⭐ Premium', color: BrandAccent };
+  if (profile.plan === 'trial') {
+    return { label: left != null ? `🎁 Prueba · ${left} ${left === 1 ? 'día' : 'días'}` : '🎁 Prueba', color: AMBER };
+  }
+  return { label: '⏰ Prueba terminada', color: AMBER };
+}
+
 /** Tarjeta de estado de la suscripción. Muro "suave": informa y anima, no bloquea. */
-function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: any; card: any[] }) {
+function SubscriptionCard({ profile, card }: { profile: Profile; card: any[] }) {
   const left = daysUntil(profile.plan === 'premium' ? profile.premium_until : profile.trial_ends_at);
   const [busy, setBusy] = useState(false);
 
@@ -40,11 +54,11 @@ function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: a
     detail = left != null
       ? `Te ${left === 1 ? 'queda' : 'quedan'} ${left} ${left === 1 ? 'día' : 'días'} de prueba. ¡Disfrutá todo!`
       : 'Estás en tu período de prueba.';
-    if (left != null && left <= 14) accent = '#f5a524';
+    if (left != null && left <= 14) accent = AMBER;
   } else {
     title = '⏰ Prueba terminada';
     detail = 'Tu prueba gratis terminó. Pasate a premium para seguir disfrutando todo.';
-    accent = '#f5a524';
+    accent = AMBER;
   }
 
   // El botón de pago aparece para quien no es admin ni tiene premium vigente.
@@ -59,7 +73,7 @@ function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: a
           style={[styles.premiumButton, busy && { opacity: 0.6 }]}
           disabled={busy}
           onPress={async () => { setBusy(true); await goPremium(); setBusy(false); }}>
-          <ThemedText type="smallBold" style={styles.buttonText}>
+          <ThemedText type="smallBold" style={styles.onAccent}>
             {busy ? 'Abriendo…' : '⭐ Hacerme premium'}
           </ThemedText>
         </Pressable>
@@ -68,16 +82,28 @@ function SubscriptionCard({ profile, theme, card }: { profile: Profile; theme: a
   );
 }
 
-/** Perfil: datos, username, meta semanal, búsqueda de amigos y solicitudes. */
+/** Mini-stat del strip de identidad (racha · salidas · meta). */
+function Stat({ icon, value, label, bg }: { icon: string; value: string; label: string; bg: string }) {
+  return (
+    <View style={[styles.stat, { backgroundColor: bg }]}>
+      <ThemedText style={styles.statIcon}>{icon}</ThemedText>
+      <ThemedText style={styles.statValue}>{value}</ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
+    </View>
+  );
+}
+
+/** Perfil: identidad + cuenta. Lo social (buscar amigos, solicitudes) vive en Ranking. */
 export default function PerfilScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { logout } = useAuth();
   const { refresh: refreshEntitlement } = useEntitlement();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [friends, setFriends] = useState<FriendLists | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [username, setUsername] = useState('');
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchedUser[]>([]);
+  const [editingUser, setEditingUser] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,10 +111,11 @@ export default function PerfilScreen() {
   const [redeeming, setRedeeming] = useState(false);
 
   const load = useCallback(() => {
-    Promise.all([api.profile(), api.friends()])
-      .then(([p, f]) => {
+    Promise.all([api.profile(), api.friends(), api.summary().catch(() => null)])
+      .then(([p, f, s]) => {
         setProfile(p);
         setFriends(f);
+        setSummary(s);
         setUsername(p.username ?? '');
         setError(null);
       })
@@ -111,6 +138,11 @@ export default function PerfilScreen() {
     } catch (e) {
       Alert.alert('Ups', e instanceof ApiError ? e.message : 'Algo salió mal.');
     }
+  }
+
+  function saveUsername() {
+    setEditingUser(false);
+    run(() => api.updateProfile({ username: username.trim() }), 'Username guardado');
   }
 
   async function redeem() {
@@ -147,22 +179,12 @@ export default function PerfilScreen() {
     }
   }
 
-  async function search(q: string) {
-    setQuery(q);
-    if (q.trim().length < 3) {
-      setResults([]);
-      return;
-    }
-    try {
-      setResults(await api.searchFriends(q.trim()));
-    } catch {
-      // la búsqueda es best-effort; no rompemos la pantalla
-    }
-  }
-
   const card = [styles.card, { backgroundColor: theme.backgroundElement }];
   const inputStyle = [styles.input, { backgroundColor: theme.backgroundSelected, color: theme.text }];
   const goal = profile?.weekly_goal ?? 3;
+  const chip = profile ? planChip(profile) : null;
+  const friendCount = friends?.friends.length ?? 0;
+  const incoming = friends?.incoming.length ?? 0;
 
   return (
     <ThemedView style={styles.container}>
@@ -173,45 +195,136 @@ export default function PerfilScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
           }>
-          <ThemedText type="subtitle">Perfil</ThemedText>
           {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
           {notice && <ThemedText type="small" style={styles.notice}>{notice}</ThemedText>}
 
-          {/* Cuenta */}
-          <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>CUENTA</ThemedText>
-            <View style={styles.accountRow}>
-              <Pressable onPress={changeAvatar}>
-                <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.username} size={72} />
-                <View style={styles.avatarBadge}>
-                  <ThemedText style={styles.avatarBadgeText}>✎</ThemedText>
-                </View>
-              </Pressable>
-              <View style={styles.flex}>
-                <ThemedText>{profile?.full_name ?? '—'}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">{profile?.email ?? ''}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">Tocá la foto para cambiarla.</ThemedText>
+          {/* Hero de identidad: foto, nombre, @username (editable) y plan */}
+          <View style={[card, styles.hero]}>
+            <Pressable onPress={changeAvatar}>
+              <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.username} size={80} />
+              <View style={styles.avatarBadge}>
+                <ThemedText style={styles.avatarBadgeText}>✎</ThemedText>
               </View>
-            </View>
-            <View style={styles.inline}>
-              <TextInput
-                style={[inputStyle, styles.flex]}
-                placeholder="username (para que te encuentren)"
-                placeholderTextColor={theme.textSecondary}
-                autoCapitalize="none"
-                value={username}
-                onChangeText={setUsername}
-              />
-              <Pressable
-                style={styles.smallButton}
-                onPress={() => run(() => api.updateProfile({ username: username.trim() }), 'Username guardado')}>
-                <ThemedText type="smallBold" style={styles.buttonText}>Guardar</ThemedText>
-              </Pressable>
+            </Pressable>
+            <View style={styles.heroWho}>
+              <ThemedText style={styles.heroName} numberOfLines={1}>
+                {profile?.full_name ?? profile?.username ?? '—'}
+              </ThemedText>
+              {editingUser ? (
+                <View style={styles.inline}>
+                  <TextInput
+                    style={[inputStyle, styles.flex, styles.userInput]}
+                    placeholder="username"
+                    placeholderTextColor={theme.textSecondary}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoFocus
+                    value={username}
+                    onChangeText={setUsername}
+                    onSubmitEditing={saveUsername}
+                  />
+                  <Pressable style={styles.smallButton} onPress={saveUsername}>
+                    <ThemedText type="smallBold" style={styles.onAccent}>OK</ThemedText>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={() => setEditingUser(true)}>
+                  {profile?.username ? (
+                    <ThemedText type="small" themeColor="textSecondary">@{profile.username}</ThemedText>
+                  ) : (
+                    <ThemedText type="small" style={styles.accent}>Agregá tu @username ✎</ThemedText>
+                  )}
+                </Pressable>
+              )}
+              {chip && (
+                <View style={[styles.chip, { backgroundColor: `${chip.color}26` }]}>
+                  <ThemedText type="small" style={{ color: chip.color, fontWeight: '700' }}>{chip.label}</ThemedText>
+                </View>
+              )}
             </View>
           </View>
 
+          {/* Solicitudes de amistad entrantes — se aceptan acá mismo */}
+          {incoming > 0 && (
+            <View style={card}>
+              <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+                SOLICITUDES ({incoming})
+              </ThemedText>
+              {friends!.incoming.map((f) => (
+                <View key={f.friendship_id} style={styles.reqRow}>
+                  <Avatar url={f.avatar_url} name={f.username ?? f.full_name} size={40} />
+                  <View style={styles.flex}>
+                    <ThemedText type="smallBold" numberOfLines={1}>{f.username ?? f.full_name ?? 'corredor'}</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">quiere ser tu amigo</ThemedText>
+                  </View>
+                  <Pressable
+                    style={styles.smallButton}
+                    onPress={() => run(() => api.acceptFriend(f.friendship_id), '¡Ahora son amigos!')}>
+                    <ThemedText type="smallBold" style={styles.onAccent}>Aceptar</ThemedText>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Strip de identidad */}
+          <View style={styles.strip}>
+            <Stat icon="🔥" value={String(summary?.streak_weeks ?? 0)} label="racha (sem)" bg={theme.backgroundElement} />
+            <Stat icon="🏃" value={String(summary?.month.activities ?? 0)} label="salidas (mes)" bg={theme.backgroundElement} />
+            <Stat icon="🎯" value={String(goal)} label="meta (días)" bg={theme.backgroundElement} />
+          </View>
+
           {/* Suscripción (muro suave: informa, todavía no bloquea) */}
-          {profile && <SubscriptionCard profile={profile} theme={theme} card={card} />}
+          {profile && <SubscriptionCard profile={profile} card={card} />}
+
+          {/* Amigos: el conteo y el acceso; la gestión vive en Ranking */}
+          <Pressable onPress={() => router.navigate('/ranking')} style={card}>
+            <View style={styles.amigosHead}>
+              <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+                AMIGOS {friendCount > 0 ? `(${friendCount})` : ''}
+              </ThemedText>
+              <ThemedText type="smallBold" style={styles.accent}>Ver ranking ›</ThemedText>
+            </View>
+            {friendCount > 0 ? (
+              <View style={styles.friendRow}>
+                {friends!.friends.slice(0, 6).map((f, i) => (
+                  <Avatar key={f.username ?? i} url={f.avatar_url} name={f.username ?? f.full_name} size={36} />
+                ))}
+                {friendCount > 6 && (
+                  <ThemedText type="small" themeColor="textSecondary">+{friendCount - 6}</ThemedText>
+                )}
+              </View>
+            ) : (
+              <ThemedText type="small" themeColor="textSecondary">
+                Todavía no tenés amigos. Buscá corredores en Ranking para agregarlos.
+              </ThemedText>
+            )}
+          </Pressable>
+
+          {/* Meta semanal */}
+          <View style={card}>
+            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
+              META SEMANAL (DÍAS)
+            </ThemedText>
+            <View style={styles.goalRow}>
+              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                <Pressable
+                  key={n}
+                  onPress={() => run(() => api.updateProfile({ weekly_goal: n }))}
+                  style={[
+                    styles.goalChip,
+                    { backgroundColor: n === goal ? BrandAccent : theme.backgroundSelected },
+                  ]}>
+                  <ThemedText type="smallBold" style={n === goal ? styles.onAccent : undefined}>
+                    {n}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+            <ThemedText type="small" themeColor="textSecondary">
+              Tu racha cuenta las semanas en que corrés al menos {goal} {goal === 1 ? 'día' : 'días'}.
+            </ThemedText>
+          </View>
 
           {/* Canjear cupón */}
           <View style={card}>
@@ -230,107 +343,17 @@ export default function PerfilScreen() {
                 onSubmitEditing={redeem}
               />
               <Pressable style={[styles.smallButton, redeeming && { opacity: 0.6 }]} onPress={redeem} disabled={redeeming}>
-                <ThemedText type="smallBold" style={styles.buttonText}>{redeeming ? '…' : 'Canjear'}</ThemedText>
+                <ThemedText type="smallBold" style={styles.onAccent}>{redeeming ? '…' : 'Canjear'}</ThemedText>
               </Pressable>
             </View>
           </View>
 
-          {/* Meta semanal */}
-          <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-              META SEMANAL (DÍAS)
-            </ThemedText>
-            <View style={styles.goalRow}>
-              {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                <Pressable
-                  key={n}
-                  onPress={() => run(() => api.updateProfile({ weekly_goal: n }))}
-                  style={[
-                    styles.goalChip,
-                    { backgroundColor: n === goal ? BrandAccent : theme.backgroundSelected },
-                  ]}>
-                  <ThemedText type="smallBold" style={n === goal ? styles.buttonText : undefined}>
-                    {n}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-            <ThemedText type="small" themeColor="textSecondary">
-              Tu racha cuenta las semanas en que corrés al menos {goal} {goal === 1 ? 'día' : 'días'}.
-            </ThemedText>
-          </View>
-
-          {/* Solicitudes entrantes */}
-          {friends && friends.incoming.length > 0 && (
-            <View style={card}>
-              <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-                SOLICITUDES
-              </ThemedText>
-              {friends.incoming.map((f) => (
-                <View key={f.friendship_id} style={styles.inline}>
-                  <ThemedText style={styles.flex}>{f.username ?? f.full_name}</ThemedText>
-                  <Pressable
-                    style={styles.smallButton}
-                    onPress={() => run(() => api.acceptFriend(f.friendship_id), '¡Ahora son amigos!')}>
-                    <ThemedText type="smallBold" style={styles.buttonText}>Aceptar</ThemedText>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Amigos + búsqueda */}
-          <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-              AMIGOS {friends ? `(${friends.friends.length})` : ''}
-            </ThemedText>
-            {friends?.friends.map((f, i) => (
-              <ThemedText key={f.username ?? i}>{f.username ?? f.full_name}</ThemedText>
-            ))}
-            {friends && friends.friends.length === 0 && (
-              <ThemedText type="small" themeColor="textSecondary">
-                Buscá corredores por username para agregarlos.
-              </ThemedText>
-            )}
-            {friends && friends.outgoing.length > 0 && (
-              <ThemedText type="small" themeColor="textSecondary">
-                Pendientes: {friends.outgoing.map((f) => f.username ?? f.full_name).join(', ')}
-              </ThemedText>
-            )}
-            <TextInput
-              style={inputStyle}
-              placeholder="Buscar por username (mín. 3 letras)"
-              placeholderTextColor={theme.textSecondary}
-              autoCapitalize="none"
-              value={query}
-              onChangeText={search}
-            />
-            {results.map((u, i) => (
-              <View key={u.username ?? i} style={styles.inline}>
-                <View style={styles.flex}>
-                  <ThemedText>{u.username}</ThemedText>
-                  {u.full_name && (
-                    <ThemedText type="small" themeColor="textSecondary">{u.full_name}</ThemedText>
-                  )}
-                </View>
-                {u.relation === 'none' ? (
-                  <Pressable
-                    style={styles.smallButton}
-                    onPress={() => run(() => api.requestFriend(u.username!), 'Solicitud enviada')}>
-                    <ThemedText type="smallBold" style={styles.buttonText}>Agregar</ThemedText>
-                  </Pressable>
-                ) : (
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {u.relation === 'friend' ? 'Amigos' : 'Pendiente'}
-                  </ThemedText>
-                )}
-              </View>
-            ))}
-          </View>
-
-          <Pressable style={[styles.logout, { borderColor: theme.backgroundSelected }]} onPress={logout}>
+          <Pressable style={[styles.logout, { borderColor: theme.border }]} onPress={logout}>
             <ThemedText type="smallBold" themeColor="textSecondary">Cerrar sesión</ThemedText>
           </Pressable>
+          <ThemedText type="small" themeColor="textSecondary" style={styles.version}>
+            ChronoTrack Run · v{Constants.expoConfig?.version ?? '1.0.0'}
+          </ThemedText>
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -343,10 +366,18 @@ const styles = StyleSheet.create({
   scroll: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.three },
   error: { color: '#ff6b6b' },
   notice: { color: BrandAccent },
+  accent: { color: BrandAccent },
+  onAccent: { color: '#06281d' },
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
   cardTitle: { letterSpacing: 2 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  accountRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  flex: { flex: 1 },
+  // Hero
+  hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  heroWho: { flex: 1, gap: 4 },
+  heroName: { fontSize: 22, fontWeight: '700', lineHeight: 26 },
+  userInput: { paddingVertical: 6 },
+  chip: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 2 },
   avatarBadge: {
     position: 'absolute',
     right: -2,
@@ -359,7 +390,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarBadgeText: { color: '#000', fontSize: 14, fontWeight: '800' },
-  flex: { flex: 1 },
+  // Strip
+  strip: { flexDirection: 'row', gap: Spacing.three },
+  stat: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 14, paddingHorizontal: Spacing.two },
+  statIcon: { fontSize: 15, marginBottom: 2 },
+  statValue: { fontSize: 26, fontWeight: '900', lineHeight: 30, fontVariant: ['tabular-nums'] },
+  // Solicitudes
+  reqRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  // Amigos
+  amigosHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  friendRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
+  // Inputs / botones
   input: { borderRadius: 10, paddingHorizontal: Spacing.three, paddingVertical: 10, fontSize: 15 },
   smallButton: {
     backgroundColor: BrandAccent,
@@ -367,7 +408,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: 10,
   },
-  buttonText: { color: '#000' },
   premiumButton: {
     backgroundColor: BrandAccent,
     borderRadius: 10,
@@ -389,4 +429,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
+  version: { textAlign: 'center', opacity: 0.7 },
 });
