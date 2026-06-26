@@ -60,7 +60,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "publish": "eas update --branch main --message \"manual publish\""
   },
   "private": true
 }
