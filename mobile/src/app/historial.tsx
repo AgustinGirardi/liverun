@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
-import { ShareCard } from '@/components/share-card';
+import { StoryCard } from '@/components/story-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -220,7 +220,21 @@ export default function HistorialScreen() {
             )}
           />
         )}
-        {sharing && <ShareCard activity={sharing} onClose={() => setSharing(null)} />}
+        {sharing && (
+          <StoryCard
+            stats={{
+              km: formatKm(sharing.distance_m),
+              time: formatDuration(sharing.duration_s),
+              pace: formatPace(sharing.avg_pace_s_per_km).replace(' /km', ''),
+              speed:
+                sharing.duration_s > 0
+                  ? ((sharing.distance_m / sharing.duration_s) * 3.6).toFixed(1).replace('.', ',')
+                  : undefined,
+              when: formatWhen(sharing.started_at),
+            }}
+            onClose={() => setSharing(null)}
+          />
+        )}
       </SafeAreaView>
     </ThemedView>
   );

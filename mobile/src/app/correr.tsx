@@ -7,7 +7,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { RunPhotoCard } from '@/components/run-photo-card';
+import { StoryCard } from '@/components/story-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -308,7 +308,20 @@ export default function CorrerScreen() {
         )}
       </SafeAreaView>
 
-      {photoData && <RunPhotoCard data={photoData} onClose={() => setPhotoData(null)} />}
+      {photoData && (
+        <StoryCard
+          stats={{
+            km: formatKm(photoData.distanceM),
+            time: formatDuration(photoData.durationS),
+            pace: formatPace(photoData.avgPaceSPerKm).replace(' /km', ''),
+            speed:
+              photoData.durationS > 0
+                ? ((photoData.distanceM / photoData.durationS) * 3.6).toFixed(1).replace('.', ',')
+                : undefined,
+          }}
+          onClose={() => setPhotoData(null)}
+        />
+      )}
     </ThemedView>
   );
 }
