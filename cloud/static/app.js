@@ -64,6 +64,7 @@ function renderNav(){
   const link = (view, label, icon) =>
     `<button class="${v === view ? 'active' : ''}" onclick="go('${view}')"><span class="nav-ic">${icon}</span>${label}</button>`;
   let links = link('home', 'Inicio', '🏠') + link('races', 'Carreras', '🏁');
+  if (USER) links += link('run', 'Mi progreso', '🏃');
   if (USER && USER.is_admin) links += link('admin', 'Admin', '⚙');
   if (n) n.innerHTML = links;
   if (acc) {
@@ -89,6 +90,7 @@ function go(view, arg){
   if(view==="login")    return viewAuth("login");
   if(view==="register") return viewAuth("register");
   if(view==="admin")    return viewAdmin();
+  if(view==="run")      return viewRun();
   if(view==="me")       return viewHome();   // el perfil ahora vive en el inicio (dashboard)
 }
 
@@ -293,6 +295,85 @@ async function goPremium(btn){
     const d = await api("POST","/api/run/billing/subscribe", null, true);
     location.href = d.init_point;
   } catch(e){ toast(e.message, "warn"); btn.disabled=false; btn.textContent=orig; }
+}
+
+// ── Mi entrenamiento (datos de ChronoTrack Run) ──────────────────────────────
+function weekKeyRun(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setHours(0,0,0,0); x.setDate(x.getDate()-day); return x.getTime(); }
+function kmByWeekRun(acts, n){
+  const WEEK=7*86400000, cur=weekKeyRun(new Date());
+  const weeks=[]; for(let i=n-1;i>=0;i--) weeks.push({key:cur-i*WEEK, km:0});
+  const idx=new Map(weeks.map((w,i)=>[w.key,i]));
+  for(const a of acts){ const k=weekKeyRun(a.started_at); if(idx.has(k)) weeks[idx.get(k)].km += a.distance_m/1000; }
+  return weeks.map((w,i)=>({km:w.km, isCurrent:i===n-1}));
+}
+function recordsRun(acts){
+  let totalKm=0,longest=0,best=Infinity;
+  for(const a of acts){ const km=a.distance_m/1000; totalKm+=km; if(km>longest)longest=km;
+    if(a.avg_pace_s_per_km>0 && a.avg_pace_s_per_km<best) best=a.avg_pace_s_per_km; }
+  return { totalKm, runs:acts.length, longest, bestPace: best===Infinity?null:best };
+}
+const fmtKmRun = (km)=> km.toFixed(1).replace('.',',')+" km";
+const fmtPaceRun = (s)=> (!s||s<=0) ? "—" : `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,'0')}`;
+
+async function viewRun(){
+  if(!USER) return go("login");
+  $("app").innerHTML = `<h1>Mi <span class="grad-text">entrenamiento</span></h1>
+    <div class="sub">Tu actividad de ChronoTrack Run, en sincronía con la app de tu teléfono.</div>
+    <div id="runBody"><div class="empty">Cargando tu progreso…</div></div>`;
+  try {
+    const [summary, acts, ranking] = await Promise.all([
+      api("GET","/api/run/summary", null, true),
+      api("GET","/api/run/activities?limit=100", null, true),
+      api("GET","/api/run/ranking?period=week&scope=friends", null, true).catch(()=>null),
+    ]);
+    renderRun(summary, acts, ranking);
+  } catch(e){ $("runBody").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+function renderRun(summary, acts, ranking){
+  const box=$("runBody"); if(!box) return;
+  if(!acts.length){
+    box.innerHTML = `<div class="empty" style="padding:40px"><div class="ic">🏃</div>
+      Todavía no registraste salidas.<br><span class="dim">Abrí ChronoTrack Run en tu teléfono y salí a correr — acá vas a ver tu progreso.</span></div>`;
+    return;
+  }
+  const week=summary.week, month=summary.month;
+  const pct = week.goal>0 ? Math.min(1, week.days_run/week.goal) : 0;
+  const deg = Math.round(pct*360);
+  const weeks=kmByWeekRun(acts,8), maxKm=Math.max(1,...weeks.map(w=>w.km));
+  const rec=recordsRun(acts);
+  const bars = weeks.map((w,i)=>`<div class="bar-col"><div class="bar ${w.isCurrent?'cur':''}" style="height:${Math.max(4,(w.km/maxKm)*100)}%;animation-delay:${i*60}ms"></div></div>`).join("");
+  const ring = `<div class="ring" style="background:conic-gradient(var(--acc) ${deg}deg, var(--panel2) ${deg}deg)">
+      <div class="ring-in"><div class="ring-v">${week.days_run}/${week.goal}</div><div class="ring-l">días</div></div></div>`;
+  let rankHtml="";
+  if(ranking && ranking.entries && ranking.entries.length){
+    rankHtml = `<div class="card"><h2>Ranking · amigos · semana</h2>
+      ${ranking.entries.slice(0,5).map((e,i)=>`<div class="rank-row ${e.is_me?'me':''}">
+        <span class="rank-pos">${["🥇","🥈","🥉"][i]||(i+1)}</span>
+        <span class="rank-name">${esc(e.username||e.full_name||'corredor')}${e.is_me?' (vos)':''}</span>
+        <span class="rank-km">${fmtKmRun(e.km)}</span></div>`).join("")}</div>`;
+  }
+  box.innerHTML = `
+    <div class="run-top">
+      <div class="card run-hero">${ring}
+        <div class="run-hero-info">
+          <div class="dim" style="text-transform:uppercase;letter-spacing:1px;font-weight:700">Este mes</div>
+          <div class="run-big">${month.km.toFixed(1).replace('.',',')}<span class="run-unit"> km</span></div>
+          <div class="dim">${month.activities} ${month.activities===1?'salida':'salidas'} · ${month.days_run} ${month.days_run===1?'día':'días'}</div>
+        </div>
+      </div>
+      <div class="stats run-stats">
+        <div class="stat"><div class="v">${summary.streak_weeks}</div><div class="l">🔥 Racha (sem)</div></div>
+        <div class="stat"><div class="v">${rec.totalKm.toFixed(0)}</div><div class="l">km totales</div></div>
+        <div class="stat"><div class="v">${rec.runs}</div><div class="l">salidas</div></div>
+        <div class="stat"><div class="v">${fmtPaceRun(rec.bestPace)}</div><div class="l">mejor ritmo</div></div>
+      </div>
+    </div>
+    <div class="card"><h2>Km por semana</h2>
+      <div class="chart">${bars}</div>
+      <div class="dim" style="margin-top:8px">Últimas 8 semanas · pico ${fmtKmRun(maxKm)}</div>
+    </div>
+    ${rankHtml}`;
 }
 
 // ── Búsqueda ───────────────────────────────────────────────────────────────
