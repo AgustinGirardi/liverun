@@ -80,10 +80,12 @@ export default function InicioScreen() {
             </View>
           ) : (
             <>
-              {/* Meta semanal + mes */}
-              <View style={styles.row}>
-                <View style={[card, styles.ringCard]}>
+              {/* Hero: meta semanal + resumen del mes */}
+              <View style={[card, styles.hero]}>
+                <View style={styles.heroRing}>
                   <Ring
+                    size={132}
+                    stroke={12}
                     progress={week ? week.days_run / Math.max(1, week.goal) : 0}
                     track={theme.backgroundSelected}
                     color={BrandAccent}
@@ -94,7 +96,7 @@ export default function InicioScreen() {
                     META SEMANAL
                   </ThemedText>
                 </View>
-                <View style={[card, styles.monthCard]}>
+                <View style={styles.heroInfo}>
                   <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>ESTE MES</ThemedText>
                   <ThemedText style={styles.bigNum}>{num(summary!.month.km)}<ThemedText type="small" themeColor="textSecondary"> km</ThemedText></ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
@@ -179,7 +181,7 @@ function Rec({ value, unit, label }: { value: string; unit?: string; label: stri
 const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'row', justifyContent: 'center' },
   safeArea: { flex: 1, maxWidth: MaxContentWidth, width: '100%' },
-  scroll: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.three },
+  scroll: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.four },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingTop: Spacing.one },
   hello: { fontSize: 24 },
   streak: { alignItems: 'center', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 14 },
@@ -188,9 +190,9 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
   cardTitle: { letterSpacing: 2 },
   center: { textAlign: 'center' },
-  row: { flexDirection: 'row', gap: Spacing.three },
-  ringCard: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  monthCard: { flex: 1, justifyContent: 'center' },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, padding: Spacing.four },
+  heroRing: { alignItems: 'center', gap: Spacing.two },
+  heroInfo: { flex: 1, gap: Spacing.one },
   bigNum: { fontSize: 30, fontWeight: '900', fontVariant: ['tabular-nums'] },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 80, marginVertical: Spacing.one },
   barCol: { flex: 1, height: '100%', justifyContent: 'flex-end' },
