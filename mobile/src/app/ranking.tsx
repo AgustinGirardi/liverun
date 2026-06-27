@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { FriendRequests } from '@/components/friend-requests';
 import { PremiumUpsell } from '@/components/premium-upsell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -68,8 +69,6 @@ export default function RankingScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchedUser[]>([]);
   const [searching, setSearching] = useState(false);
-  // Solicitudes entrantes desplegadas
-  const [showRequests, setShowRequests] = useState(false);
 
   const globalLocked = scope === 'global' && !access;
 
@@ -270,44 +269,36 @@ export default function RankingScreen() {
           </View>
         </View>
 
-        {/* Solicitudes de amistad entrantes */}
-        {friends && friends.incoming.length > 0 && (
-          <View style={styles.requests}>
-            <Pressable onPress={() => setShowRequests((v) => !v)} style={[styles.requestPill, { backgroundColor: theme.backgroundElement }]}>
-              <ThemedText type="smallBold" style={{ color: BrandAccent }}>
-                {friends.incoming.length} {friends.incoming.length === 1 ? 'solicitud de amistad' : 'solicitudes de amistad'}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">{showRequests ? '▲' : '▼'}</ThemedText>
-            </Pressable>
-            {showRequests && friends.incoming.map((f) => (
-              <View key={f.friendship_id} style={[styles.rowCard, { backgroundColor: theme.backgroundElement }]}>
-                <Avatar url={f.avatar_url} name={f.username ?? f.full_name} size={34} />
-                <View style={styles.who}>
-                  <ThemedText type="smallBold" numberOfLines={1}>{f.username ?? f.full_name ?? 'corredor'}</ThemedText>
-                </View>
-                <Pressable onPress={() => accept(f.friendship_id)} style={[styles.addBtn, { borderColor: BrandAccent }]}>
-                  <ThemedText type="small" style={{ color: BrandAccent }}>Aceptar</ThemedText>
-                </Pressable>
-              </View>
-            ))}
-          </View>
-        )}
+        {/* Solicitudes de amistad entrantes (agrupadas) */}
+        <FriendRequests requests={friends?.incoming ?? []} onAccept={accept} style={styles.section} />
 
-        <View style={styles.controls}>
-          {segmented(
-            [{ key: 'friends', label: 'Amigos' }, { key: 'global', label: '🌎 Mundial' }],
-            scope, (v) => setScope(v as RankingScope),
-          )}
+        {/* Scope como tabs subrayadas + filtros chicos debajo */}
+        <View style={styles.scopeTabs}>
+          {([{ key: 'friends', label: 'Amigos' }, { key: 'global', label: '🌎 Mundial' }] as const).map((o) => {
+            const on = scope === o.key;
+            return (
+              <Pressable key={o.key} onPress={() => setScope(o.key)} style={styles.scopeTab} hitSlop={8}>
+                <ThemedText type="smallBold" style={{ color: on ? theme.text : theme.textSecondary }}>
+                  {o.label}
+                </ThemedText>
+                <View style={[styles.scopeUnderline, on && { backgroundColor: BrandAccent }]} />
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.filterRow}>
           {segmented(
             [{ key: 'week', label: 'Semana' }, { key: 'month', label: 'Mes' }],
             period, (v) => setPeriod(v as Period),
           )}
-        </View>
-        <View style={styles.controls}>
-          {segmented(
-            [{ key: 'km', label: 'por km' }, { key: 'days_run', label: 'por días' }],
-            orderBy, (v) => setOrderBy(v as OrderBy),
-          )}
+          <Pressable
+            onPress={() => setOrderBy((o) => (o === 'km' ? 'days_run' : 'km'))}
+            style={[styles.orderChip, { backgroundColor: theme.backgroundElement }]}
+            hitSlop={8}>
+            <ThemedText type="small" themeColor="textSecondary">
+              {orderBy === 'km' ? 'por km' : 'por días'} ⇅
+            </ThemedText>
+          </Pressable>
         </View>
 
         {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
@@ -374,7 +365,12 @@ const styles = StyleSheet.create({
   iconBtn: { width: 38, height: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   iconTxt: { fontSize: 16 },
   shareBtn: { paddingHorizontal: Spacing.three, paddingVertical: 9, borderRadius: 999 },
-  controls: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.one },
+  section: { paddingHorizontal: Spacing.three, paddingTop: Spacing.one },
+  scopeTabs: { flexDirection: 'row', gap: Spacing.four, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
+  scopeTab: { alignItems: 'center', gap: 5 },
+  scopeUnderline: { height: 2, borderRadius: 1, alignSelf: 'stretch', backgroundColor: 'transparent' },
+  filterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
+  orderChip: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
   segmented: { flexDirection: 'row', borderRadius: 999, padding: 3 },
   segment: { paddingHorizontal: Spacing.three, paddingVertical: 6, borderRadius: 999 },
   error: { color: '#ff6b6b', textAlign: 'center', padding: Spacing.two },
@@ -407,7 +403,5 @@ const styles = StyleSheet.create({
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 10 },
   searchIcon: { fontSize: 15 },
   searchInput: { flex: 1, fontSize: 15 },
-  requests: { paddingHorizontal: Spacing.three, gap: Spacing.two, paddingTop: Spacing.one },
-  requestPill: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 10 },
   addBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
 });

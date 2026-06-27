@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { FriendRequests } from '@/components/friend-requests';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -184,7 +185,6 @@ export default function PerfilScreen() {
   const goal = profile?.weekly_goal ?? 3;
   const chip = profile ? planChip(profile) : null;
   const friendCount = friends?.friends.length ?? 0;
-  const incoming = friends?.incoming.length ?? 0;
 
   return (
     <ThemedView style={styles.container}>
@@ -244,28 +244,11 @@ export default function PerfilScreen() {
             </View>
           </View>
 
-          {/* Solicitudes de amistad entrantes — se aceptan acá mismo */}
-          {incoming > 0 && (
-            <View style={card}>
-              <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-                SOLICITUDES ({incoming})
-              </ThemedText>
-              {friends!.incoming.map((f) => (
-                <View key={f.friendship_id} style={styles.reqRow}>
-                  <Avatar url={f.avatar_url} name={f.username ?? f.full_name} size={40} />
-                  <View style={styles.flex}>
-                    <ThemedText type="smallBold" numberOfLines={1}>{f.username ?? f.full_name ?? 'corredor'}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">quiere ser tu amigo</ThemedText>
-                  </View>
-                  <Pressable
-                    style={styles.smallButton}
-                    onPress={() => run(() => api.acceptFriend(f.friendship_id), '¡Ahora son amigos!')}>
-                    <ThemedText type="smallBold" style={styles.onAccent}>Aceptar</ThemedText>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
+          {/* Solicitudes de amistad entrantes (agrupadas; se aceptan acá) */}
+          <FriendRequests
+            requests={friends?.incoming ?? []}
+            onAccept={(id) => run(() => api.acceptFriend(id), '¡Ahora son amigos!')}
+          />
 
           {/* Strip de identidad */}
           <View style={styles.strip}>
@@ -363,7 +346,7 @@ export default function PerfilScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'row', justifyContent: 'center' },
   safeArea: { flex: 1, maxWidth: MaxContentWidth, width: '100%' },
-  scroll: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.three },
+  scroll: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.four },
   error: { color: '#ff6b6b' },
   notice: { color: BrandAccent },
   accent: { color: BrandAccent },
@@ -395,8 +378,6 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 14, paddingHorizontal: Spacing.two },
   statIcon: { fontSize: 15, marginBottom: 2 },
   statValue: { fontSize: 26, fontWeight: '900', lineHeight: 30, fontVariant: ['tabular-nums'] },
-  // Solicitudes
-  reqRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   // Amigos
   amigosHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },
