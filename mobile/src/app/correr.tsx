@@ -242,7 +242,7 @@ export default function CorrerScreen() {
                   Falta el permiso de ubicación.
                 </ThemedText>
               )}
-              <Pressable onPress={start}>
+              <Pressable onPress={start} style={({ pressed }) => pressed && styles.pressed}>
                 <LinearGradient
                   colors={['#00bf85', '#00e5a0']}
                   start={{ x: 0, y: 0 }}
@@ -283,7 +283,7 @@ export default function CorrerScreen() {
 
             <View style={styles.actions}>
               <Pressable
-                style={[styles.actionButton, { backgroundColor: theme.backgroundElement }]}
+                style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.backgroundElement }, pressed && styles.pressed]}
                 onPress={togglePause}
                 disabled={phase === 'saving'}>
                 <ThemedText type="smallBold">
@@ -291,7 +291,7 @@ export default function CorrerScreen() {
                 </ThemedText>
               </Pressable>
               <Pressable
-                style={[styles.actionButton, styles.finishButton]}
+                style={({ pressed }) => [styles.actionButton, styles.finishButton, pressed && styles.pressed]}
                 onPress={confirmFinish}
                 disabled={phase === 'saving'}>
                 <ThemedText type="smallBold" style={styles.finishText}>
@@ -379,4 +379,5 @@ const styles = StyleSheet.create({
   finishButton: { backgroundColor: BrandAccent },
   finishText: { color: '#000' },
   gpsFooter: { textAlign: 'center' },
+  pressed: { opacity: 0.9, transform: [{ scale: 0.97 }] },
 });

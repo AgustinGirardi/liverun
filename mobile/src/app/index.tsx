@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FadeIn } from '@/components/fade-in';
 import { Ring } from '@/components/ring';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -81,7 +82,7 @@ export default function InicioScreen() {
           ) : (
             <>
               {/* Hero: meta semanal + resumen del mes */}
-              <View style={[card, styles.hero]}>
+              <FadeIn delay={40} style={[card, styles.hero]}>
                 <View style={styles.heroRing}>
                   <Ring
                     size={132}
@@ -103,10 +104,10 @@ export default function InicioScreen() {
                     {summary!.month.activities} {summary!.month.activities === 1 ? 'salida' : 'salidas'} · {summary!.month.days_run} {summary!.month.days_run === 1 ? 'día' : 'días'}
                   </ThemedText>
                 </View>
-              </View>
+              </FadeIn>
 
               {/* Gráfico km por semana */}
-              <View style={card}>
+              <FadeIn delay={90} style={card}>
                 <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>KM POR SEMANA</ThemedText>
                 <View style={styles.chart}>
                   {weeks.map((w, i) => (
@@ -128,10 +129,10 @@ export default function InicioScreen() {
                 <ThemedText type="small" themeColor="textSecondary">
                   Últimas 8 semanas · pico {num(maxKm)} km
                 </ThemedText>
-              </View>
+              </FadeIn>
 
               {/* Récords */}
-              <View style={card}>
+              <FadeIn delay={140} style={card}>
                 <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>RÉCORDS</ThemedText>
                 <View style={styles.recRow}>
                   <Rec value={num(records.totalKm)} unit="km" label="total" />
@@ -139,10 +140,10 @@ export default function InicioScreen() {
                   <Rec value={num(records.longestKm)} unit="km" label="más larga" />
                   <Rec value={formatPace(records.bestPaceSPerKm).replace(' /km', '')} label="mejor ritmo" />
                 </View>
-              </View>
+              </FadeIn>
 
               {/* Logros */}
-              <View style={card}>
+              <FadeIn delay={190} style={card}>
                 <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>LOGROS</ThemedText>
                 <View style={styles.badges}>
                   {badges.map((b) => (
@@ -158,7 +159,7 @@ export default function InicioScreen() {
                     </View>
                   ))}
                 </View>
-              </View>
+              </FadeIn>
             </>
           )}
         </ScrollView>

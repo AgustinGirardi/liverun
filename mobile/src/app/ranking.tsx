@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { FadeIn } from '@/components/fade-in';
 import { FriendRequests } from '@/components/friend-requests';
 import { PremiumUpsell } from '@/components/premium-upsell';
 import { ThemedText } from '@/components/themed-text';
@@ -317,11 +318,11 @@ export default function RankingScreen() {
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
             ListHeaderComponent={
               top3.length > 0 ? (
-                <View style={styles.podium}>
+                <FadeIn style={styles.podium}>
                   {podiumSpots.map(({ place, e }) => (
                     <PodiumSpot key={e.username ?? place} entry={e} place={place} theme={theme} />
                   ))}
-                </View>
+                </FadeIn>
               ) : null
             }
             ListEmptyComponent={
