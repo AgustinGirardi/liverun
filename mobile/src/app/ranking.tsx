@@ -12,6 +12,7 @@ import { FriendRequests } from '@/components/friend-requests';
 import { PremiumUpsell } from '@/components/premium-upsell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Segmented } from '@/components/ui';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -136,25 +137,6 @@ export default function RankingScreen() {
         `${lines.join('\n')}${mine}\n\n¿Me ganás? Sumate y competimos: ${PORTAL_URL}`,
     }).catch(() => {});
   }
-
-  const segmented = (
-    options: { key: string; label: string }[],
-    value: string,
-    onChange: (v: string) => void,
-  ) => (
-    <View style={[styles.segmented, { backgroundColor: theme.backgroundElement }]}>
-      {options.map((o) => (
-        <Pressable
-          key={o.key}
-          onPress={() => onChange(o.key)}
-          style={[styles.segment, value === o.key && { backgroundColor: theme.backgroundSelected }]}>
-          <ThemedText type="small" style={value === o.key ? { color: BrandAccent } : undefined}>
-            {o.label}
-          </ThemedText>
-        </Pressable>
-      ))}
-    </View>
-  );
 
   const relationLabel = (rel: SearchedUser['relation']) =>
     rel === 'friend' ? '✓ Amigo' : rel === 'pending' ? 'Pendiente' : '+ Agregar';
@@ -288,10 +270,11 @@ export default function RankingScreen() {
           })}
         </View>
         <View style={styles.filterRow}>
-          {segmented(
-            [{ key: 'week', label: 'Semana' }, { key: 'month', label: 'Mes' }],
-            period, (v) => setPeriod(v as Period),
-          )}
+          <Segmented
+            options={[{ key: 'week', label: 'Semana' }, { key: 'month', label: 'Mes' }]}
+            value={period}
+            onChange={setPeriod}
+          />
           <Pressable
             onPress={() => setOrderBy((o) => (o === 'km' ? 'days_run' : 'km'))}
             style={[styles.orderChip, { backgroundColor: theme.backgroundElement }]}
@@ -372,8 +355,6 @@ const styles = StyleSheet.create({
   scopeUnderline: { height: 2, borderRadius: 1, alignSelf: 'stretch', backgroundColor: 'transparent' },
   filterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   orderChip: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
-  segmented: { flexDirection: 'row', borderRadius: 999, padding: 3 },
-  segment: { paddingHorizontal: Spacing.three, paddingVertical: 6, borderRadius: 999 },
   error: { color: '#ff6b6b', textAlign: 'center', padding: Spacing.two },
   list: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.two },
   empty: { textAlign: 'center', marginTop: Spacing.five, paddingHorizontal: Spacing.three },

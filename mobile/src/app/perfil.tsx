@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 
@@ -9,6 +9,7 @@ import { Avatar } from '@/components/avatar';
 import { FriendRequests } from '@/components/friend-requests';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SectionTitle, StatTile, useCardStyle } from '@/components/ui';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError, type FriendLists, type Profile, type Summary } from '@/lib/api';
@@ -37,7 +38,7 @@ function planChip(profile: Profile): { label: string; color: string } {
 }
 
 /** Tarjeta de estado de la suscripción. Muro "suave": informa y anima, no bloquea. */
-function SubscriptionCard({ profile, card }: { profile: Profile; card: any[] }) {
+function SubscriptionCard({ profile, card }: { profile: Profile; card: StyleProp<ViewStyle> }) {
   const left = daysUntil(profile.plan === 'premium' ? profile.premium_until : profile.trial_ends_at);
   const [busy, setBusy] = useState(false);
 
@@ -79,17 +80,6 @@ function SubscriptionCard({ profile, card }: { profile: Profile; card: any[] }) 
           </ThemedText>
         </Pressable>
       )}
-    </View>
-  );
-}
-
-/** Mini-stat del strip de identidad (racha · salidas · meta). */
-function Stat({ icon, value, label, bg }: { icon: string; value: string; label: string; bg: string }) {
-  return (
-    <View style={[styles.stat, { backgroundColor: bg }]}>
-      <ThemedText style={styles.statIcon}>{icon}</ThemedText>
-      <ThemedText style={styles.statValue}>{value}</ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
     </View>
   );
 }
@@ -180,7 +170,7 @@ export default function PerfilScreen() {
     }
   }
 
-  const card = [styles.card, { backgroundColor: theme.backgroundElement }];
+  const card = useCardStyle();
   const inputStyle = [styles.input, { backgroundColor: theme.backgroundSelected, color: theme.text }];
   const goal = profile?.weekly_goal ?? 3;
   const chip = profile ? planChip(profile) : null;
@@ -252,9 +242,9 @@ export default function PerfilScreen() {
 
           {/* Strip de identidad */}
           <View style={styles.strip}>
-            <Stat icon="🔥" value={String(summary?.streak_weeks ?? 0)} label="racha (sem)" bg={theme.backgroundElement} />
-            <Stat icon="🏃" value={String(summary?.month.activities ?? 0)} label="salidas (mes)" bg={theme.backgroundElement} />
-            <Stat icon="🎯" value={String(goal)} label="meta (días)" bg={theme.backgroundElement} />
+            <StatTile icon="🔥" value={String(summary?.streak_weeks ?? 0)} label="racha (sem)" />
+            <StatTile icon="🏃" value={String(summary?.month.activities ?? 0)} label="salidas (mes)" />
+            <StatTile icon="🎯" value={String(goal)} label="meta (días)" />
           </View>
 
           {/* Suscripción (muro suave: informa, todavía no bloquea) */}
@@ -263,9 +253,7 @@ export default function PerfilScreen() {
           {/* Amigos: el conteo y el acceso; la gestión vive en Ranking */}
           <Pressable onPress={() => router.navigate('/ranking')} style={card}>
             <View style={styles.amigosHead}>
-              <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-                AMIGOS {friendCount > 0 ? `(${friendCount})` : ''}
-              </ThemedText>
+              <SectionTitle>AMIGOS {friendCount > 0 ? `(${friendCount})` : ''}</SectionTitle>
               <ThemedText type="smallBold" style={styles.accent}>Ver ranking ›</ThemedText>
             </View>
             {friendCount > 0 ? (
@@ -286,9 +274,7 @@ export default function PerfilScreen() {
 
           {/* Meta semanal */}
           <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-              META SEMANAL (DÍAS)
-            </ThemedText>
+            <SectionTitle>META SEMANAL (DÍAS)</SectionTitle>
             <View style={styles.goalRow}>
               {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                 <Pressable
@@ -311,9 +297,7 @@ export default function PerfilScreen() {
 
           {/* Canjear cupón */}
           <View style={card}>
-            <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-              CANJEAR CUPÓN
-            </ThemedText>
+            <SectionTitle>CANJEAR CUPÓN</SectionTitle>
             <View style={styles.inline}>
               <TextInput
                 style={[inputStyle, styles.flex, { textTransform: 'uppercase' }]}
@@ -351,8 +335,6 @@ const styles = StyleSheet.create({
   notice: { color: BrandAccent },
   accent: { color: BrandAccent },
   onAccent: { color: '#06281d' },
-  card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
-  cardTitle: { letterSpacing: 2 },
   inline: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   flex: { flex: 1 },
   // Hero
@@ -375,9 +357,6 @@ const styles = StyleSheet.create({
   avatarBadgeText: { color: '#000', fontSize: 14, fontWeight: '800' },
   // Strip
   strip: { flexDirection: 'row', gap: Spacing.three },
-  stat: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 14, paddingHorizontal: Spacing.two },
-  statIcon: { fontSize: 15, marginBottom: 2 },
-  statValue: { fontSize: 26, fontWeight: '900', lineHeight: 30, fontVariant: ['tabular-nums'] },
   // Amigos
   amigosHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   friendRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flexWrap: 'wrap' },

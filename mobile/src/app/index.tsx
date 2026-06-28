@@ -7,6 +7,7 @@ import { FadeIn } from '@/components/fade-in';
 import { Ring } from '@/components/ring';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SectionTitle, useCardStyle } from '@/components/ui';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity, type Profile, type Summary } from '@/lib/api';
@@ -33,7 +34,7 @@ export default function InicioScreen() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const card = [styles.card, { backgroundColor: theme.backgroundElement }];
+  const card = useCardStyle();
   const week = summary?.week;
   const records = computeRecords(acts);
   const badges = computeBadges(summary, records);
@@ -93,12 +94,10 @@ export default function InicioScreen() {
                     center={`${week?.days_run ?? 0}/${week?.goal ?? 0}`}
                     sub="días"
                   />
-                  <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>
-                    META SEMANAL
-                  </ThemedText>
+                  <SectionTitle>META SEMANAL</SectionTitle>
                 </View>
                 <View style={styles.heroInfo}>
-                  <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>ESTE MES</ThemedText>
+                  <SectionTitle>ESTE MES</SectionTitle>
                   <ThemedText style={styles.bigNum}>{num(summary!.month.km)}<ThemedText type="small" themeColor="textSecondary"> km</ThemedText></ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
                     {summary!.month.activities} {summary!.month.activities === 1 ? 'salida' : 'salidas'} · {summary!.month.days_run} {summary!.month.days_run === 1 ? 'día' : 'días'}
@@ -108,7 +107,7 @@ export default function InicioScreen() {
 
               {/* Gráfico km por semana */}
               <FadeIn delay={90} style={card}>
-                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>KM POR SEMANA</ThemedText>
+                <SectionTitle>KM POR SEMANA</SectionTitle>
                 <View style={styles.chart}>
                   {weeks.map((w, i) => (
                     <View key={i} style={styles.barCol}>
@@ -133,7 +132,7 @@ export default function InicioScreen() {
 
               {/* Récords */}
               <FadeIn delay={140} style={card}>
-                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>RÉCORDS</ThemedText>
+                <SectionTitle>RÉCORDS</SectionTitle>
                 <View style={styles.recRow}>
                   <Rec value={num(records.totalKm)} unit="km" label="total" />
                   <Rec value={String(records.runs)} label="salidas" />
@@ -144,7 +143,7 @@ export default function InicioScreen() {
 
               {/* Logros */}
               <FadeIn delay={190} style={card}>
-                <ThemedText type="smallBold" themeColor="textSecondary" style={styles.cardTitle}>LOGROS</ThemedText>
+                <SectionTitle>LOGROS</SectionTitle>
                 <View style={styles.badges}>
                   {badges.map((b) => (
                     <View
@@ -188,8 +187,6 @@ const styles = StyleSheet.create({
   streak: { alignItems: 'center', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 14 },
   streakNum: { fontSize: 22, fontWeight: '900', color: BrandAccent, fontVariant: ['tabular-nums'] },
   error: { color: '#ff6b6b', textAlign: 'center' },
-  card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two },
-  cardTitle: { letterSpacing: 2 },
   center: { textAlign: 'center' },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, padding: Spacing.four },
   heroRing: { alignItems: 'center', gap: Spacing.two },
