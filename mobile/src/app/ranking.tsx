@@ -4,6 +4,7 @@ import {
   TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
@@ -124,9 +125,12 @@ export default function RankingScreen() {
   const rest = entries.slice(3);
   const me = entries.find((e) => e.is_me);
   const meOutsideList = me && scope === 'global' && !entries.slice(0, 50).some((e) => e.is_me);
-  const podiumHeight = podiumH
-    ? scrollY.interpolate({ inputRange: [0, 130], outputRange: [podiumH, Math.max(110, podiumH * 0.58)], extrapolate: 'clamp' })
-    : undefined;
+  // Podio: al bajar, se achica como bloque a la mitad (anclado arriba, sin recortar)
+  // y se le superpone un degradado oscuro que va apareciendo.
+  const podiumScale = podiumH ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [1, 0.5], extrapolate: 'clamp' }) : 1;
+  const podiumTransY = podiumH ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [0, -(podiumH * 0.25)], extrapolate: 'clamp' }) : 0;
+  const podiumHeight = podiumH ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [podiumH, podiumH * 0.5], extrapolate: 'clamp' }) : undefined;
+  const podiumDim = scrollY.interpolate({ inputRange: [0, 140], outputRange: [0, 0.6], extrapolate: 'clamp' });
 
   async function shareRanking() {
     const scopeLabel = scope === 'friends' ? 'mis amigos' : 'el mundial';
@@ -302,13 +306,18 @@ export default function RankingScreen() {
           <View style={styles.flex}>
             {top3.length > 0 && (
               <Animated.View style={[styles.podiumWrap, podiumHeight != null && { height: podiumHeight }]}>
-                <View
+                <Animated.View
                   onLayout={(e) => { if (!podiumH) setPodiumH(Math.round(e.nativeEvent.layout.height)); }}
-                  style={styles.podium}>
-                  {podiumSpots.map(({ place, e }) => (
-                    <PodiumSpot key={e.username ?? place} entry={e} place={place} theme={theme} />
-                  ))}
-                </View>
+                  style={{ transform: [{ translateY: podiumTransY }, { scale: podiumScale }] }}>
+                  <View style={styles.podium}>
+                    {podiumSpots.map(({ place, e }) => (
+                      <PodiumSpot key={e.username ?? place} entry={e} place={place} theme={theme} />
+                    ))}
+                  </View>
+                </Animated.View>
+                <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: podiumDim }]}>
+                  <LinearGradient colors={['transparent', 'rgba(8,10,11,0.92)']} style={StyleSheet.absoluteFill} />
+                </Animated.View>
               </Animated.View>
             )}
             <Animated.FlatList
