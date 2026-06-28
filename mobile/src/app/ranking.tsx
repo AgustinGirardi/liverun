@@ -1,13 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
-  ActivityIndicator, FlatList, Pressable, RefreshControl, Share, StyleSheet,
+  ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, Share, StyleSheet,
   TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
-import { FadeIn } from '@/components/fade-in';
 import { FriendRequests } from '@/components/friend-requests';
 import { PremiumUpsell } from '@/components/premium-upsell';
 import { ThemedText } from '@/components/themed-text';
@@ -71,6 +70,9 @@ export default function RankingScreen() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchedUser[]>([]);
   const [searching, setSearching] = useState(false);
+  // Podio colapsable: se achica al hacer scroll de la lista.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [podiumH, setPodiumH] = useState(0);
 
   const globalLocked = scope === 'global' && !access;
 
@@ -122,6 +124,9 @@ export default function RankingScreen() {
   const rest = entries.slice(3);
   const me = entries.find((e) => e.is_me);
   const meOutsideList = me && scope === 'global' && !entries.slice(0, 50).some((e) => e.is_me);
+  const podiumHeight = podiumH
+    ? scrollY.interpolate({ inputRange: [0, 130], outputRange: [podiumH, Math.max(110, podiumH * 0.58)], extrapolate: 'clamp' })
+    : undefined;
 
   async function shareRanking() {
     const scopeLabel = scope === 'friends' ? 'mis amigos' : 'el mundial';
@@ -257,11 +262,11 @@ export default function RankingScreen() {
 
         {/* Scope como tabs subrayadas + filtros chicos debajo */}
         <View style={styles.scopeTabs}>
-          {([{ key: 'friends', label: 'Amigos' }, { key: 'global', label: '🌎 Mundial' }] as const).map((o) => {
+          {([{ key: 'friends', label: '👥 Amigos' }, { key: 'global', label: '🌎 Mundial' }] as const).map((o) => {
             const on = scope === o.key;
             return (
               <Pressable key={o.key} onPress={() => setScope(o.key)} style={styles.scopeTab} hitSlop={8}>
-                <ThemedText type="smallBold" style={{ color: on ? theme.text : theme.textSecondary }}>
+                <ThemedText style={[styles.scopeLabel, { color: on ? theme.text : theme.textSecondary }]}>
                   {o.label}
                 </ThemedText>
                 <View style={[styles.scopeUnderline, on && { backgroundColor: BrandAccent }]} />
@@ -294,44 +299,50 @@ export default function RankingScreen() {
             detail="Competí con corredores de todo el mundo y participá por premios. El ranking mundial es premium; el de amigos es gratis."
           />
         ) : (
-          <FlatList
-            data={rest}
-            keyExtractor={(e, i) => e.username ?? String(i)}
-            contentContainerStyle={styles.list}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-            ListHeaderComponent={
-              top3.length > 0 ? (
-                <FadeIn style={styles.podium}>
+          <View style={styles.flex}>
+            {top3.length > 0 && (
+              <Animated.View style={[styles.podiumWrap, podiumHeight != null && { height: podiumHeight }]}>
+                <View
+                  onLayout={(e) => { if (!podiumH) setPodiumH(Math.round(e.nativeEvent.layout.height)); }}
+                  style={styles.podium}>
                   {podiumSpots.map(({ place, e }) => (
                     <PodiumSpot key={e.username ?? place} entry={e} place={place} theme={theme} />
                   ))}
-                </FadeIn>
-              ) : null
-            }
-            ListEmptyComponent={
-              ranking && top3.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-                  {scope === 'friends'
-                    ? 'Todavía no tenés amigos en el ranking. Tocá 🔍 para buscar y agregar corredores.'
-                    : 'Sin datos todavía.'}
-                </ThemedText>
-              ) : null
-            }
-            ListFooterComponent={
-              meOutsideList && me ? (
-                <View style={[styles.rowCard, styles.meFooter, { backgroundColor: theme.backgroundElement, borderColor: BrandAccent }]}>
-                  <ThemedText type="smallBold" style={styles.position}>{me.position ?? '–'}</ThemedText>
-                  <Avatar url={me.avatar_url} name={me.username} size={38} />
-                  <View style={styles.who}>
-                    <ThemedText type="smallBold">{me.username ?? 'vos'} (vos)</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">tu posición</ThemedText>
-                  </View>
-                  <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(me.km)}</ThemedText>
                 </View>
-              ) : null
-            }
-            renderItem={renderRow}
-          />
+              </Animated.View>
+            )}
+            <Animated.FlatList
+              data={rest}
+              keyExtractor={(e, i) => (e as RankingEntry).username ?? String(i)}
+              contentContainerStyle={styles.list}
+              scrollEventThrottle={16}
+              onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
+              ListEmptyComponent={
+                ranking && top3.length === 0 ? (
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+                    {scope === 'friends'
+                      ? 'Todavía no tenés amigos en el ranking. Tocá 🔍 para buscar y agregar corredores.'
+                      : 'Sin datos todavía.'}
+                  </ThemedText>
+                ) : null
+              }
+              ListFooterComponent={
+                meOutsideList && me ? (
+                  <View style={[styles.rowCard, styles.meFooter, { backgroundColor: theme.backgroundElement, borderColor: BrandAccent }]}>
+                    <ThemedText type="smallBold" style={styles.position}>{me.position ?? '–'}</ThemedText>
+                    <Avatar url={me.avatar_url} name={me.username} size={38} />
+                    <View style={styles.who}>
+                      <ThemedText type="smallBold">{me.username ?? 'vos'} (vos)</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">tu posición</ThemedText>
+                    </View>
+                    <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(me.km)}</ThemedText>
+                  </View>
+                ) : null
+              }
+              renderItem={renderRow as any}
+            />
+          </View>
         )}
       </SafeAreaView>
     </ThemedView>
@@ -341,6 +352,7 @@ export default function RankingScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'row', justifyContent: 'center' },
   safeArea: { flex: 1, maxWidth: MaxContentWidth, width: '100%' },
+  flex: { flex: 1 },
   headerRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: Spacing.three, paddingTop: Spacing.two,
@@ -350,8 +362,9 @@ const styles = StyleSheet.create({
   iconTxt: { fontSize: 16 },
   shareBtn: { paddingHorizontal: Spacing.three, paddingVertical: 9, borderRadius: 999 },
   section: { paddingHorizontal: Spacing.three, paddingTop: Spacing.one },
-  scopeTabs: { flexDirection: 'row', gap: Spacing.four, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
+  scopeTabs: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.five, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   scopeTab: { alignItems: 'center', gap: 5 },
+  scopeLabel: { fontSize: 16, fontWeight: '700' },
   scopeUnderline: { height: 2, borderRadius: 1, alignSelf: 'stretch', backgroundColor: 'transparent' },
   filterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   orderChip: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
@@ -362,7 +375,8 @@ const styles = StyleSheet.create({
   position: { minWidth: 30, textAlign: 'center' },
   who: { flex: 1, gap: 2 },
   // Podio "héroe"
-  podium: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-end', marginBottom: Spacing.two },
+  podium: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-end' },
+  podiumWrap: { overflow: 'hidden', paddingHorizontal: Spacing.three, marginBottom: Spacing.two },
   spot: { flex: 1, alignItems: 'center', gap: 5 },
   spotTop: { fontSize: 22, lineHeight: 26, height: 26 },
   firstRing: {

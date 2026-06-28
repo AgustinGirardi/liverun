@@ -27,6 +27,7 @@ export default function HistorialScreen() {
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [details, setDetails] = useState<Record<number, ActivityDetail | 'loading'>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [selDay, setSelDay] = useState<number | null>(null);
   const [sharing, setSharing] = useState<Activity | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -76,12 +77,18 @@ export default function HistorialScreen() {
     };
   }, [activities, sel, curY, curM]);
 
+  const visibleRuns = selDay != null
+    ? monthRuns.filter((a) => new Date(a.started_at).getDate() === selDay)
+    : monthRuns;
+  const dayKm = visibleRuns.reduce((s, a) => s + a.distance_m, 0) / 1000;
+
   function shift(delta: number) {
     setSel((s) => {
       const k = s.y * 12 + s.m + delta;
       return { y: Math.floor(k / 12), m: ((k % 12) + 12) % 12 };
     });
     setExpanded(null);
+    setSelDay(null);
   }
 
   function tryShare(item: Activity) {
@@ -151,26 +158,40 @@ export default function HistorialScreen() {
           </View>
         ) : (
           <FlatList
-            data={monthRuns}
+            data={visibleRuns}
             keyExtractor={(a) => String(a.id)}
             contentContainerStyle={styles.list}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />
             }
             ListHeaderComponent={
-              <MonthCalendar
-                y={sel.y}
-                m={sel.m}
-                runDays={runDays}
-                count={monthRuns.length}
-                km={monthKm}
-                isCurrentMonth={sel.y === curY && sel.m === curM}
-                today={curD}
-                canPrev={canPrev}
-                canNext={canNext}
-                onPrev={() => shift(-1)}
-                onNext={() => shift(1)}
-              />
+              <>
+                <MonthCalendar
+                  y={sel.y}
+                  m={sel.m}
+                  runDays={runDays}
+                  count={monthRuns.length}
+                  km={monthKm}
+                  isCurrentMonth={sel.y === curY && sel.m === curM}
+                  today={curD}
+                  canPrev={canPrev}
+                  canNext={canNext}
+                  onPrev={() => shift(-1)}
+                  onNext={() => shift(1)}
+                  selDay={selDay}
+                  onSelectDay={(d) => { setSelDay((p) => (p === d ? null : d)); setExpanded(null); }}
+                />
+                {selDay != null && (
+                  <View style={[styles.dayBanner, { backgroundColor: theme.backgroundElement }]}>
+                    <ThemedText type="smallBold">
+                      {selDay} de {MESES[sel.m].toLowerCase()} · {visibleRuns.length} {visibleRuns.length === 1 ? 'salida' : 'salidas'} · {num(dayKm)} km
+                    </ThemedText>
+                    <Pressable onPress={() => setSelDay(null)} hitSlop={8}>
+                      <ThemedText type="small" style={styles.accent}>Ver todo el mes</ThemedText>
+                    </Pressable>
+                  </View>
+                )}
+              </>
             }
             ListEmptyComponent={
               <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
@@ -242,11 +263,12 @@ export default function HistorialScreen() {
 
 /** Calendario mensual con los días corridos marcados; navegable mes a mes. */
 function MonthCalendar({
-  y, m, runDays, count, km, isCurrentMonth, today, canPrev, canNext, onPrev, onNext,
+  y, m, runDays, count, km, isCurrentMonth, today, canPrev, canNext, onPrev, onNext, selDay, onSelectDay,
 }: {
   y: number; m: number; runDays: Set<number>; count: number; km: number;
   isCurrentMonth: boolean; today: number;
   canPrev: boolean; canNext: boolean; onPrev: () => void; onNext: () => void;
+  selDay: number | null; onSelectDay: (day: number) => void;
 }) {
   const theme = useTheme();
   const firstDow = (new Date(y, m, 1).getDay() + 6) % 7; // 0 = lunes
@@ -282,13 +304,17 @@ function MonthCalendar({
             if (day == null) return <View key={di} style={styles.cell} />;
             const run = runDays.has(day);
             const isToday = isCurrentMonth && day === today;
+            const selected = selDay === day;
             return (
               <View key={di} style={styles.cell}>
-                <View
+                <Pressable
+                  disabled={!run}
+                  onPress={() => onSelectDay(day)}
                   style={[
                     styles.dayDot,
                     run && { backgroundColor: BrandAccent },
                     !run && isToday && { borderColor: BrandAccent, borderWidth: 1.5 },
+                    selected && { borderColor: theme.text, borderWidth: 2 },
                   ]}>
                   <ThemedText
                     type="small"
@@ -298,7 +324,7 @@ function MonthCalendar({
                     ]}>
                     {day}
                   </ThemedText>
-                </View>
+                </Pressable>
               </View>
             );
           })}
@@ -376,6 +402,7 @@ const styles = StyleSheet.create({
   dayNum: { fontVariant: ['tabular-nums'] },
   dayRun: { color: ON_ACCENT, fontWeight: '800' },
   calSummary: { textAlign: 'center', marginTop: 2 },
+  dayBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, paddingHorizontal: Spacing.three, paddingVertical: 10, marginBottom: Spacing.two },
   // tarjetas de salida
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.one },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
