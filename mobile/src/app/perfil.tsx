@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { FadeIn } from '@/components/fade-in';
 import { FriendRequests } from '@/components/friend-requests';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -189,7 +190,7 @@ export default function PerfilScreen() {
           {notice && <ThemedText type="small" style={styles.notice}>{notice}</ThemedText>}
 
           {/* Hero de identidad: foto, nombre, @username (editable) y plan */}
-          <View style={[card, styles.hero]}>
+          <FadeIn delay={40} style={[card, styles.hero]}>
             <Pressable onPress={changeAvatar}>
               <Avatar url={profile?.avatar_url} name={profile?.full_name ?? profile?.username} size={80} />
               <View style={styles.avatarBadge}>
@@ -232,7 +233,7 @@ export default function PerfilScreen() {
                 </View>
               )}
             </View>
-          </View>
+          </FadeIn>
 
           {/* Solicitudes de amistad entrantes (agrupadas; se aceptan acá) */}
           <FriendRequests
@@ -241,14 +242,14 @@ export default function PerfilScreen() {
           />
 
           {/* Strip de identidad */}
-          <View style={styles.strip}>
+          <FadeIn delay={90} style={styles.strip}>
             <StatTile icon="🔥" value={String(summary?.streak_weeks ?? 0)} label="racha (sem)" />
             <StatTile icon="🏃" value={String(summary?.month.activities ?? 0)} label="salidas (mes)" />
             <StatTile icon="🎯" value={String(goal)} label="meta (días)" />
-          </View>
+          </FadeIn>
 
           {/* Suscripción (muro suave: informa, todavía no bloquea) */}
-          {profile && <SubscriptionCard profile={profile} card={card} />}
+          {profile && <FadeIn delay={140}><SubscriptionCard profile={profile} card={card} /></FadeIn>}
 
           {/* Amigos: el conteo y el acceso; la gestión vive en Ranking */}
           <Pressable onPress={() => router.navigate('/ranking')} style={card}>

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, Share, StyleSheet,
   TextInput, View,
@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 
 import { Avatar } from '@/components/avatar';
+import { FadeIn } from '@/components/fade-in';
 import { FriendRequests } from '@/components/friend-requests';
 import { PremiumUpsell } from '@/components/premium-upsell';
 import { ThemedText } from '@/components/themed-text';
@@ -74,6 +75,8 @@ export default function RankingScreen() {
   // Podio colapsable: se achica al hacer scroll de la lista.
   const scrollY = useRef(new Animated.Value(0)).current;
   const [podiumH, setPodiumH] = useState(0);
+  const [listH, setListH] = useState(0);
+  const [contentH, setContentH] = useState(0);
 
   const globalLocked = scope === 'global' && !access;
 
@@ -90,6 +93,9 @@ export default function RankingScreen() {
   }, [period, scope, access]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Al cambiar de scope/período: reseteo el colapso del podio (se re-mide solo).
+  useEffect(() => { scrollY.setValue(0); setPodiumH(0); }, [scope, period, scrollY]);
 
   async function runSearch(q: string) {
     setQuery(q);
@@ -125,12 +131,14 @@ export default function RankingScreen() {
   const rest = entries.slice(3);
   const me = entries.find((e) => e.is_me);
   const meOutsideList = me && scope === 'global' && !entries.slice(0, 50).some((e) => e.is_me);
-  // Podio: al bajar, se achica como bloque a la mitad (anclado arriba, sin recortar)
-  // y se le superpone un degradado oscuro que va apareciendo.
-  const podiumScale = podiumH ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [1, 0.5], extrapolate: 'clamp' }) : 1;
-  const podiumTransY = podiumH ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [0, -(podiumH * 0.25)], extrapolate: 'clamp' }) : 0;
-  const podiumHeight = podiumH ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [podiumH, podiumH * 0.5], extrapolate: 'clamp' }) : undefined;
-  const podiumDim = scrollY.interpolate({ inputRange: [0, 140], outputRange: [0, 0.6], extrapolate: 'clamp' });
+  // Podio: al bajar se achica como bloque a la mitad (anclado arriba, sin recortar)
+  // + degradado oscuro. Solo colapsa si la lista da para scrollear; si no, queda
+  // fijo y completo (evita el "salto"/sensación de trabado con pocas filas).
+  const canCollapse = podiumH > 0 && contentH > listH + 24;
+  const podiumScale = canCollapse ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [1, 0.5], extrapolate: 'clamp' }) : 1;
+  const podiumTransY = canCollapse ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [0, -(podiumH * 0.25)], extrapolate: 'clamp' }) : 0;
+  const podiumHeight = podiumH ? (canCollapse ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [podiumH, podiumH * 0.5], extrapolate: 'clamp' }) : podiumH) : undefined;
+  const podiumDim = canCollapse ? scrollY.interpolate({ inputRange: [0, 140], outputRange: [0, 0.6], extrapolate: 'clamp' }) : 0;
 
   async function shareRanking() {
     const scopeLabel = scope === 'friends' ? 'mis amigos' : 'el mundial';
@@ -303,7 +311,7 @@ export default function RankingScreen() {
             detail="Competí con corredores de todo el mundo y participá por premios. El ranking mundial es premium; el de amigos es gratis."
           />
         ) : (
-          <View style={styles.flex}>
+          <FadeIn key={`${scope}-${period}`} style={styles.flex}>
             {top3.length > 0 && (
               <Animated.View style={[styles.podiumWrap, podiumHeight != null && { height: podiumHeight }]}>
                 <Animated.View
@@ -321,10 +329,13 @@ export default function RankingScreen() {
               </Animated.View>
             )}
             <Animated.FlatList
+              style={styles.flex}
               data={rest}
               keyExtractor={(e, i) => (e as RankingEntry).username ?? String(i)}
               contentContainerStyle={styles.list}
               scrollEventThrottle={16}
+              onLayout={(e) => setListH(e.nativeEvent.layout.height)}
+              onContentSizeChange={(_w, h) => setContentH(h)}
               onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
               ListEmptyComponent={
@@ -351,7 +362,7 @@ export default function RankingScreen() {
               }
               renderItem={renderRow as any}
             />
-          </View>
+          </FadeIn>
         )}
       </SafeAreaView>
     </ThemedView>

@@ -3,6 +3,7 @@ import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
+import { FadeIn } from '@/components/fade-in';
 import { StoryCard } from '@/components/story-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -182,14 +183,14 @@ export default function HistorialScreen() {
                   onSelectDay={(d) => { setSelDay((p) => (p === d ? null : d)); setExpanded(null); }}
                 />
                 {selDay != null && (
-                  <View style={[styles.dayBanner, { backgroundColor: theme.backgroundElement }]}>
+                  <FadeIn key={selDay} style={[styles.dayBanner, { backgroundColor: theme.backgroundElement }]}>
                     <ThemedText type="smallBold">
                       {selDay} de {MESES[sel.m].toLowerCase()} · {visibleRuns.length} {visibleRuns.length === 1 ? 'salida' : 'salidas'} · {num(dayKm)} km
                     </ThemedText>
                     <Pressable onPress={() => setSelDay(null)} hitSlop={8}>
                       <ThemedText type="small" style={styles.accent}>Ver todo el mes</ThemedText>
                     </Pressable>
-                  </View>
+                  </FadeIn>
                 )}
               </>
             }
@@ -216,7 +217,7 @@ export default function HistorialScreen() {
                     </View>
                   </View>
                   {expanded === item.id && (
-                    <>
+                    <FadeIn>
                       <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
                       <View style={styles.actionsRow}>
                         <Pressable
@@ -234,7 +235,7 @@ export default function HistorialScreen() {
                           </ThemedText>
                         </Pressable>
                       </View>
-                    </>
+                    </FadeIn>
                   )}
                 </View>
               </Pressable>
