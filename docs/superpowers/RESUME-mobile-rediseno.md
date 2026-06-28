@@ -1,82 +1,83 @@
 # RESUME — Rediseño móvil + sección web del corredor (ChronoTrack)
 
 > Para retomar en la próxima sesión exactamente en este punto.
-> Última actualización: 2026-06-27.
+> Última actualización: 2026-06-27 (sesión de pulido + fixes + tema escritorio).
 
 ## Estado en una línea
 
-Rediseño integral de la **app móvil** (Ranking, Perfil, Inicio, tarjeta de historia, fluidez) +
-**nueva sección web "Mi entrenamiento"** en el portal, todo sobre la **cuenta compartida** móvil↔web.
-**Todo lo móvil (hasta fluidez) y la web están DESPLEGADOS** (OTA EAS + Render). Único código sin
-desplegar: el commit del **kit de UI** (refactor puro, sin cambio visual).
+App móvil con rediseño integral + fluidez + sección web "Mi entrenamiento", **todo DESPLEGADO y
+sincronizado** (`main` = `1955aa1`, OTA EAS + Render). No queda nada de código local sin pushear.
+**Único tema abierto importante:** el **.exe de escritorio no está firmado** → Windows lo bloquea
+(SmartScreen / Control inteligente); el usuario por ahora **no va a comprar** el certificado.
 
-## Rama, commits y deploy
+## Rama y deploy
 
-- **Rama de trabajo:** `feat/mobile-correr-central` · HEAD local **`1f365c8`** (kit de UI).
-- **`origin/main` = `7c6dea7`** → **esto es lo desplegado** (Render web + última OTA).
-- **Sólo `1f365c8` (kit) está local**, NO en main, NO en OTA. Es un refactor sin cambio visual →
-  shipear cuando quieras (no urge).
-- **Commits de la sesión** (más nuevo arriba):
-  - `1f365c8` refactor(mobile): kit de UI compartido (Card, SectionTitle, StatTile, Segmented) — *local*
-  - `7c6dea7` feat(web): sección "Mi entrenamiento" en el portal — *desplegado*
-  - `f6b61b1` feat(mobile): fluidez (anillo animado, aparición escalonada, feedback al tocar)
-  - `83ddb28` feat(mobile): Inicio minimalista (hero meta+mes, más aire)
-  - `d240ec4` feat(mobile): StoryCard unificada 9:16 (foto al terminar + compartir historial)
-  - `7c1cd1a` feat(mobile): solicitudes agrupadas + Ranking con scope en tabs
-  - (antes, tarea previa: `5fd9dbe`…`3b81720` — script publish, perfil/ranking iniciales, workflow OTA, eslint)
+- **Rama:** `feat/mobile-correr-central` == `origin/main` == **`1955aa1`** (sin diferencias).
+- **OTA móvil:** última = `bff5203e` (branch EAS `main`, runtime `exposdk:54.0.0`, iOS+Android).
+  Para verla: **cerrar del todo y reabrir la app**.
+- **Web:** desplegada en Render (auto-deploy de `cloud/**` al pushear a `main`).
+  https://chronotrack-portal.onrender.com → login → nav **🏃 Mi progreso**.
+- **Pipeline OTA:** `EXPO_TOKEN` seteado, workflow probado en verde. Footgun: push de `mobile/**`
+  en cualquier rama publica OTA a prod.
 
-## Qué está desplegado y cómo verlo
+## Lo que se hizo esta sesión (sobre el rediseño previo)
 
-- **App móvil = OTA EAS** (branch EAS `main`, runtime `exposdk:54.0.0`, iOS+Android). Últimos updates
-  publicados a mano esta sesión (grupos `bb92f2de` rediseño y `2109e72e` fluidez). **Para verlo:
-  cerrar del todo y reabrir la app** (Expo Go SDK 54). No incluye el kit (1f365c8).
-- **Portal web = Render**, auto-deploy al pushear `cloud/**` a `main` (ya pusheado). Ir a
-  https://chronotrack-portal.onrender.com → login con la cuenta del móvil → nav **🏃 Mi progreso**
-  (racha, km del mes, anillo de meta, gráfico km/semana, récords, ranking de amigos).
-- **Pipeline OTA:** secret `EXPO_TOKEN` seteado; workflow `.github/workflows/eas-update.yml` probado
-  **en verde**. Ojo footgun: dispara en push de `mobile/**` en CUALQUIER rama y publica a prod.
+1. **Inicio:** arreglados cortes por `lineHeight` faltante (km del mes, íconos de logros). (`b54e67d`)
+2. **Salidas:** tocar un día del calendario **filtra la lista y muestra el resumen de ese día**
+   ("5 de junio · 2 salidas · 8,3 km · Ver todo el mes"). (`b54e67d`)
+3. **Ranking — tabs scope:** 👥 Amigos / 🌎 Mundial **centradas, más grandes, con ícono en ambas**. (`b54e67d`)
+4. **Ranking — podio colapsable:** queda fijo arriba y **se achica como bloque a la mitad** (escala
+   anclada arriba, **sin recortar**) con un **degradado oscuro** que aparece al bajar. (`90e170c`)
+5. **Ranking — bug del podio** (reportado: saltaba/se sentía trabado con pocas filas): ahora **solo
+   colapsa si la lista da para scrollear** (mide contenido vs viewport); FlatList con `flex` correcto;
+   resetea + hace fade al cambiar scope/período. (`1955aa1`)
+6. **Fluidez extra:** aparición escalonada en Perfil (hero/strip/suscripción) y fades en Salidas
+   (banner del día + splits). (`1955aa1`)
 
-## Decisiones tomadas (para no re-litigar)
+## Decisiones tomadas (no re-litigar)
 
-- **Ranking — barra superior = opción B:** scope (Amigos / 🌎 Mundial) como **tabs subrayadas** +
-  fila chica con período (Semana/Mes, `Segmented`) y orden (chip `por km ⇅` que togglea km/días).
-- **Solicitudes de amistad:** Ranking es el hub social (buscador + lista + solicitudes); Perfil queda
-  "vos" + un **botón agrupado desplegable** de solicitudes. Ambos usan `FriendRequests` (compartido).
-- **StoryCard:** una sola tarjeta 9:16, **esquinas rectas**, stats ancladas abajo sobre velo
-  (km nunca tapado); con o sin foto (cámara/galería). Unifica `run-photo-card` + `share-card` (borrados).
-- **Fluidez:** se usó el **Animated nativo de RN** (no Reanimated worklets) por robustez — no hay
-  `babel.config.js` y no pude verificar el plugin de worklets. `FadeIn` (aparición), `Ring` animado,
-  feedback de presión en botones de Correr; en web: fade de vistas + hover + barras animadas (CSS).
-- **Web (#9):** sin backend nuevo — la app móvil ya pega al backend del portal
-  (`mobile/src/lib/api.ts` BASE = portal, `/api/auth/*` + `/api/run/*`), así que la sección web lee
-  los mismos endpoints con el mismo token.
+- Ranking barra = **opción B** (scope en tabs centradas + período/orden como filtros chicos).
+- Social: Ranking = hub (buscador + amigos + solicitudes); Perfil = "vos" + botón agrupado de
+  solicitudes. Componente compartido `FriendRequests`.
+- StoryCard 9:16 esquinas rectas (unifica las 2 tarjetas viejas).
+- **Fluidez con el Animated nativo de RN** (no Reanimated worklets) por robustez — no hay
+  `babel.config.js` y no se pudo verificar el plugin de worklets. Componente `FadeIn` + `Ring` animado.
+- Podio: colapso por **altura + escala anclada arriba** (sin transform-origin mágico), gated por
+  "¿hay scroll?" para no saltar con pocas filas.
+- Web: sin backend nuevo — el móvil ya pega al backend del portal (`mobile/src/lib/api.ts` BASE =
+  portal, `/api/auth/*` + `/api/run/*`).
 
 ## Pendiente / próximos pasos
 
-1. **Shipear el kit `1f365c8`** si se quiere (OTA + merge a main). Refactor sin cambio visual → sin apuro.
-2. **Barrido de cortes (#3):** sólo se arregló el confirmado (foto). Falta que el usuario pruebe la OTA
-   y reporte qué pantalla se ve cortada/mal dimensionada; atacar puntual (no hay preview móvil sin login).
-3. **Footgun del workflow:** si molesta que push de feature branch mande OTA a prod, acotar el trigger a
-   `branches: [main]` en `.github/workflows/eas-update.yml`.
-4. **Nit CI:** el workflow usa Node 20 (deprecado en runners de GitHub) → bump a 22.
+1. **Escritorio — SmartScreen / Control inteligente de aplicaciones** (lo que el usuario quiere sacar
+   por imagen de marca): el `.exe` y el instalador **no están firmados**. Único fix real = **certificado
+   de firma de código** (EV da reputación inmediata; OV la construye con el tiempo). **El usuario por
+   ahora NO lo va a comprar.** El build (`build.bat` + `ChronoTrack_Setup.iss`) **no tiene paso de
+   firma**; cuando consiga cert, agregar `signtool` (PyInstaller exe) + `SignTool` en Inno Setup
+   (condicional). Workaround del usuario para abrirlo gratis en SU PC: desbloquear el archivo
+   (Propiedades→Desbloquear) / "Ejecutar de todas formas" / o desactivar SAC (⚠️ one-way, no se
+   re-activa sin reinstalar Windows) / o correr el `dist\ChronoTrack\ChronoTrack.exe` local.
+2. Barrido visual final del móvil con el ojo del usuario sobre la OTA (no hay preview sin login).
+3. Opcionales: acotar el workflow a `branches: [main]` (footgun); bump Node 20→22 en el CI;
+   extender el kit de UI a más primitivas si se quiere.
 
-## Archivos clave (de esta sesión)
+## Archivos clave
 
-- **Kit:** `mobile/src/components/ui.tsx` (`Card`, `useCardStyle`, `SectionTitle`, `StatTile`, `Segmented`).
-- **Componentes nuevos:** `friend-requests.tsx`, `story-card.tsx`, `fade-in.tsx`; `ring.tsx` (animado).
-- **Pantallas tocadas:** `app/{index,perfil,ranking,correr,historial}.tsx`.
-- **Web:** `cloud/static/app.js` (`viewRun`/`renderRun` + `kmByWeekRun`/`recordsRun` + nav/route) y
-  `cloud/static/styles.css` (sección "Mi entrenamiento" + fluidez `#app > *` rise, `.bar` growbar).
+- **Kit UI:** `mobile/src/components/ui.tsx` (Card, useCardStyle, SectionTitle, StatTile, Segmented).
+- **Componentes:** `friend-requests.tsx`, `story-card.tsx`, `fade-in.tsx`, `ring.tsx` (animado).
+- **Pantallas:** `mobile/src/app/{index,perfil,ranking,correr,historial}.tsx`.
+- **Web:** `cloud/static/app.js` (`viewRun`/`renderRun` + nav/route) y `cloud/static/styles.css`
+  (sección "Mi entrenamiento" + fluidez).
+- **Escritorio (build):** `build.bat`, `ChronoTrack_Setup.iss`, `ChronoTrack.spec`, `version.txt`.
 
-## Cómo verificar (lo que se usó esta sesión)
+## Cómo verificar
 
-- **Portal local:** `.venv/Scripts/python -m uvicorn cloud.main:app --port 8002` desde la raíz; abrir
-  http://127.0.0.1:8002. Para ver `viewRun` sin una cuenta con datos: inyectar datos mock en la consola
-  y llamar `renderRun(summary, acts, ranking)` (se hizo así y renderizó bien — ring, gráfico, ranking).
-- **Móvil:** no hay preview en vivo sin login/datos → publicar OTA y mirar en el teléfono. Publish:
-  `npx eas-cli update --branch main --message "..."` desde `mobile/` (el script `npm run publish` falla:
-  llama a `eas` global no instalado).
+- **Móvil:** OTA → cerrar/reabrir la app (no hay preview en vivo sin login). Publish manual:
+  `npx eas-cli update --branch main --message "..."` desde `mobile/` (el script `npm run publish`
+  falla: usa `eas` global no instalado).
+- **Web:** `.venv/Scripts/python -m uvicorn cloud.main:app --port 8002` desde la raíz; para `viewRun`
+  sin cuenta con datos, inyectar mock en consola y llamar `renderRun(summary, acts, ranking)`.
 
 ## Memoria relacionada
 
-`deploy-pipeline.md` (OTA/Render + footgun), `mobile-design-preview.md` (gotchas de preview/Expo Go).
+`deploy-pipeline.md` (OTA/Render + footgun + firma escritorio), `mobile-design-preview.md`.
