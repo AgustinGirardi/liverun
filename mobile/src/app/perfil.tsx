@@ -48,7 +48,7 @@ function SubscriptionCard({ profile, card }: { profile: Profile; card: StyleProp
   let accent = BrandAccent;
   if (profile.plan === 'admin') {
     title = '⭐ Cuenta ilimitada';
-    detail = 'Tenés acceso total a ChronoTrack Run.';
+    detail = 'Tenés acceso total a ChronoTrack.';
   } else if (profile.plan === 'premium') {
     title = '⭐ Premium activo';
     detail = left != null ? `Te quedan ${left} ${left === 1 ? 'día' : 'días'} de premium.` : 'Suscripción activa.';
@@ -320,7 +320,7 @@ export default function PerfilScreen() {
             <ThemedText type="smallBold" themeColor="textSecondary">Cerrar sesión</ThemedText>
           </Pressable>
           <ThemedText type="small" themeColor="textSecondary" style={styles.version}>
-            ChronoTrack Run · v{Constants.expoConfig?.version ?? '1.0.0'}
+            ChronoTrack · v{Constants.expoConfig?.version ?? '1.0.0'}
           </ThemedText>
         </ScrollView>
       </SafeAreaView>

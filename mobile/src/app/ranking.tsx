@@ -150,7 +150,7 @@ export default function RankingScreen() {
     const mine = me ? `\nYo voy ${fmtKm(me.km)} 💪` : '';
     await Share.share({
       message:
-        `🏃 Ranking ChronoTrack Run · ${scopeLabel} · ${periodLabel}\n\n` +
+        `🏃 Ranking ChronoTrack · ${scopeLabel} · ${periodLabel}\n\n` +
         `${lines.join('\n')}${mine}\n\n¿Me ganás? Sumate y competimos: ${PORTAL_URL}`,
     }).catch(() => {});
   }

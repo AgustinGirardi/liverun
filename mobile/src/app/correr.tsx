@@ -111,7 +111,7 @@ export default function CorrerScreen() {
             showsBackgroundLocationIndicator: true,
             activityType: Location.ActivityType.Fitness,
             foregroundService: {
-              notificationTitle: 'ChronoTrack Run',
+              notificationTitle: 'ChronoTrack',
               notificationBody: 'Registrando tu salida…',
               notificationColor: '#00e5a0',
             },
