@@ -13,6 +13,7 @@
       }
     },
     "android": {
+      "package": "com.agusgirarfi.chronotrackrun",
       "adaptiveIcon": {
         "backgroundColor": "#0d0f10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
