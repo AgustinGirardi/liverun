@@ -1,5 +1,5 @@
 """
-ChronoTrack Launcher
+LiveRun Launcher
 Abre la aplicación como ventana de escritorio (pywebview + Edge WebView2).
 Muestra pantalla de carga inmediatamente mientras el servidor arranca en segundo plano.
 """
@@ -10,7 +10,7 @@ import threading
 from pathlib import Path
 
 PORT  = 8001
-TITLE = "ChronoTrack"
+TITLE = "LiveRun"
 
 LOADING_HTML = """<!DOCTYPE html>
 <html>
@@ -44,7 +44,7 @@ LOADING_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <div class="wrap">
-    <div class="logo">Chrono<span>Track</span></div>
+    <div class="logo">Live<span>Run</span></div>
     <div class="sub">Race Timing System</div>
     <div class="bar-wrap"><div class="bar"></div></div>
     <div class="msg">Iniciando...</div>
@@ -70,17 +70,17 @@ ERROR_HTML = """<!DOCTYPE html>
   <div class="wrap">
     <h2>No se pudo iniciar el servidor</h2>
     <p>El servidor interno tardó demasiado en responder.</p>
-    <div class="tip">Revisá el archivo <strong>chronotrack.log</strong> para más detalles.</div>
+    <div class="tip">Revisá el archivo <strong>liverun.log</strong> para más detalles.</div>
   </div>
 </body>
 </html>"""
 
 
 def _setup_logging(base: Path):
-    log_path = base / "chronotrack.log"
+    log_path = base / "liverun.log"
     try:
         if log_path.exists() and log_path.stat().st_size > 1_000_000:
-            log_path.rename(base / "chronotrack.log.old")
+            log_path.rename(base / "liverun.log.old")
         sys.stderr = open(str(log_path), "a", encoding="utf-8", buffering=1)
     except Exception:
         pass

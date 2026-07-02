@@ -1,10 +1,15 @@
-; ChronoTrack Inno Setup Script
-; Compilar manualmente:  ISCC.exe /DAppVersion=2.1 ChronoTrack_Setup.iss
+; LiveRun Inno Setup Script
+; Compilar manualmente:  ISCC.exe /DAppVersion=3.0 LiveRun_Setup.iss
 ; El build.bat pasa la versión automáticamente.
+;
+; OJO: el AppId NO se cambia con el rename ChronoTrack→LiveRun. Es la identidad
+; de la instalación: con el mismo AppId, el instalador actualiza EN EL MISMO
+; directorio y la base (chronotrack.db, nombre interno que se conserva) y la
+; config quedan intactas.
 
-#define AppName      "ChronoTrack"
-#define AppPublisher "ChronoTrack"
-#define AppExeName   "ChronoTrack.exe"
+#define AppName      "LiveRun"
+#define AppPublisher "LiveRun"
+#define AppExeName   "LiveRun.exe"
 
 ; AppVersion se inyecta desde build.bat con /DAppVersion=x.y
 ; Si se compila a mano sin /D, usa "2.0" como fallback.
@@ -20,7 +25,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={localappdata}\{#AppName}
 DisableProgramGroupPage=yes
 OutputDir=installer
-OutputBaseFilename=ChronoTrack_Setup_v{#AppVersion}
+OutputBaseFilename=LiveRun_Setup_v{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -40,7 +45,11 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 Name: "desktopicon"; Description: "Crear acceso directo en el Escritorio"; GroupDescription: "Accesos directos:"
 
 [Files]
-Source: "dist\ChronoTrack\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\LiveRun\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+; Al actualizar desde ChronoTrack, el exe viejo quedaría huérfano al lado del nuevo.
+Type: files; Name: "{app}\ChronoTrack.exe"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
@@ -53,10 +62,14 @@ Filename: "{app}\{#AppExeName}"; Description: "Lanzar {#AppName}"; Flags: nowait
 Type: filesandordirs; Name: "{app}"
 
 [Code]
-// Cerrar ChronoTrack si está corriendo antes de instalar
+// Cerrar la app si está corriendo antes de instalar (el nombre nuevo y el
+// viejo, por las actualizaciones desde ChronoTrack).
 procedure CurStepChanged(CurStep: TSetupStep);
 var ResultCode: Integer;
 begin
   if CurStep = ssInstall then
+  begin
+    Exec('taskkill.exe', '/f /im LiveRun.exe', '', SW_HIDE, ewNoWait, ResultCode);
     Exec('taskkill.exe', '/f /im ChronoTrack.exe', '', SW_HIDE, ewNoWait, ResultCode);
+  end;
 end;

@@ -1,11 +1,11 @@
 @echo off
 setlocal EnableDelayedExpansion
-title ChronoTrack - Build
+title LiveRun - Build
 cd /d "%~dp0"
 
 echo.
 echo ============================================================
-echo  ChronoTrack - Build completo
+echo  LiveRun - Build completo
 echo ============================================================
 echo.
 
@@ -33,12 +33,12 @@ echo.
 
 :: --- 2. PyInstaller ---
 echo [2/3] Empaquetando con PyInstaller...
-python -m PyInstaller ChronoTrack.spec --clean --noconfirm
+python -m PyInstaller LiveRun.spec --clean --noconfirm
 if errorlevel 1 (
     echo ERROR: Fallo PyInstaller
     pause & exit /b 1
 )
-echo     OK - dist\ChronoTrack generado
+echo     OK - dist\LiveRun generado
 echo.
 
 :: --- 3. Inno Setup ---
@@ -54,7 +54,7 @@ if not exist %ISCC% (
 )
 
 if not exist installer mkdir installer
-%ISCC% /DAppVersion=%VERSION% ChronoTrack_Setup.iss
+%ISCC% /DAppVersion=%VERSION% LiveRun_Setup.iss
 if errorlevel 1 (
     echo ERROR: Fallo Inno Setup
     pause & exit /b 1
@@ -62,7 +62,7 @@ if errorlevel 1 (
 
 echo.
 echo ============================================================
-echo  Listo!  installer\ChronoTrack_Setup_v%VERSION%.exe
+echo  Listo!  installer\LiveRun_Setup_v%VERSION%.exe
 echo ============================================================
 echo.
 start "" "installer"

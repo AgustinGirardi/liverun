@@ -20,7 +20,7 @@ _DEFAULTS = {
     "provider": "brevo",
     "api_key": "",
     "from_email": "",
-    "from_name": "ChronoTrack",
+    "from_name": "LiveRun",
 }
 
 

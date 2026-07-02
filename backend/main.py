@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
-app = FastAPI(title="ChronoTrack API", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="LiveRun API", version="2.0.0", lifespan=lifespan)
 
 # CORS restringido al propio origen de la app (el SPA se sirve desde este mismo
 # host:puerto) y al dev-server de Vite. NO usar "*": el backend local no tiene
@@ -35,7 +35,7 @@ app.add_middleware(
 # lo tapa y devuelve el index.html en lugar del JSON de estado.
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "ChronoTrack", "version": "2.0.0"}
+    return {"status": "ok", "service": "LiveRun", "version": "2.0.0"}
 
 app.include_router(router, prefix="/api/v1")
 

@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 #
-# ChronoTrack PyInstaller spec
-# Genera un directorio ChronoTrack/ listo para distribuir (más rápido que --onefile).
-# Para empaquetar: pyinstaller ChronoTrack.spec
+# LiveRun PyInstaller spec
+# Genera un directorio LiveRun/ listo para distribuir (más rápido que --onefile).
+# Para empaquetar: pyinstaller LiveRun.spec
 #
 
 from pathlib import Path
@@ -101,13 +101,13 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,       # onedir mode (más rápido que onefile)
-    name='ChronoTrack',
+    name='LiveRun',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
-    console=False,               # Sin terminal visible; errores van a chronotrack.log
+    console=False,               # Sin terminal visible; errores van a liverun.log
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -124,5 +124,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='ChronoTrack',
+    name='LiveRun',
 )
