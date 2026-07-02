@@ -7,10 +7,16 @@ name: EAS Update (OTA)
 
 on:
   push:
+    branches: [main]   # solo main publica OTA (antes cualquier rama iba a prod)
     paths:
       - 'mobile/**'
       - '.github/workflows/eas-update.yml'
   workflow_dispatch: {}
+
+# OJO para los builds de tienda: usan canal "production" (eas.json). Antes de
+# publicar en App Store/Play, mapear ese canal a este branch
+# (`eas channel:edit production --branch main`) o publicar también a un branch
+# "production"; si no, los usuarios de tienda no reciben estos OTA.
 
 concurrency:
   group: eas-update

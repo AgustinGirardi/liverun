@@ -116,7 +116,7 @@ function printCertificate({ race, runner, bib_number, position, net_time_ns, cat
   <!-- Header -->
   <div class="header">
     <div>
-      <div class="logo-text">CHRONO<span>TRACK</span></div>
+      <div class="logo-text">LIVE<span>RUN</span></div>
       <div class="logo-sub">Race Timing System</div>
     </div>
     <div class="header-right">
@@ -208,7 +208,7 @@ function printCertificate({ race, runner, bib_number, position, net_time_ns, cat
   <!-- Footer -->
   <div class="footer">
     <div>
-      <div class="footer-logo">CHRONO<span>TRACK</span></div>
+      <div class="footer-logo">LIVE<span>RUN</span></div>
       <div style="font-size:9px;color:#9ca3af;margin-top:2px;letter-spacing:1px">RACE TIMING SYSTEM · v${APP_VERSION}</div>
     </div>
     <div class="footer-info">
@@ -371,7 +371,7 @@ function printResultsReport({ race, results }) {
 </head>
 <body>
   <div class="header">
-    <div class="logo-text">CHRONO<span>TRACK</span></div>
+    <div class="logo-text">LIVE<span>RUN</span></div>
     <div class="head-right">Reporte de resultados<br>Generado el ${generated}</div>
   </div>
   <div class="stripe"></div>
@@ -389,7 +389,7 @@ function printResultsReport({ race, results }) {
   ${dnfSection}
 
   <div class="footer">
-    <span>ChronoTrack · Race Timing System</span>
+    <span>LiveRun · Race Timing System</span>
     <span>Resultados oficiales</span>
   </div>
 </body>
@@ -1902,7 +1902,7 @@ function DashboardPage({ onNavigate }) {
             Panel de <OpGrad>Control</OpGrad>
           </div>
           <div style={{ fontSize: 13, color: C.faint, marginTop: 4 }}>
-            Sistema de cronometraje de carreras · ChronoTrack v{APP_VERSION}
+            Sistema de cronometraje de carreras · LiveRun v{APP_VERSION}
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -2533,14 +2533,14 @@ function EmailControls() {
   const [open, setOpen]   = useState(false)
   const [cfg, setCfg]     = useState(null)
   const [fromEmail, setFromEmail] = useState("")
-  const [fromName, setFromName]   = useState("ChronoTrack")
+  const [fromName, setFromName]   = useState("LiveRun")
   const [key, setKey]     = useState("")
   const [busy, setBusy]   = useState(false)
   const [testTo, setTestTo] = useState("")
 
   const loadCfg = useCallback(() => {
     fetch(API + "/email/config").then(r => r.json()).then(d => {
-      setCfg(d); setFromEmail(d.from_email || ""); setFromName(d.from_name || "ChronoTrack")
+      setCfg(d); setFromEmail(d.from_email || ""); setFromName(d.from_name || "LiveRun")
     }).catch(() => {})
   }, [])
   useEffect(() => { loadCfg() }, [loadCfg])
@@ -2711,7 +2711,7 @@ function AccountControls() {
               {mode === "register" ? "Crear cuenta" : "Iniciar sesión"}
             </div>
             <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 18 }}>
-              Tu cuenta ChronoTrack: la misma del portal y la app móvil.
+              Tu cuenta LiveRun: la misma del portal y la app móvil.
             </div>
 
             {waiting ? (
@@ -2933,7 +2933,7 @@ export default function App() {
           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img src="/logo.svg" alt="" width={24} height={24} style={{ display: "block", flexShrink: 0 }} />
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, letterSpacing: -0.5, color: C.accent }}>CHRONO<span style={{ color: C.muted, fontWeight: 500 }}>TRACK</span></div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, letterSpacing: -0.5, color: C.accent }}>LIVE<span style={{ color: C.muted, fontWeight: 500 }}>RUN</span></div>
           </div>
           <div style={{ fontSize: 10, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4 }}>Race Timing System</div>
         </div>
