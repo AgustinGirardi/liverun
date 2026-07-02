@@ -115,11 +115,11 @@ function viewHome(){
       </div>
     </div>
     <div class="eco">
-      <div class="eco-label">El ecosistema <span class="grad-text">ChronoTrack</span></div>
+      <div class="eco-label">El ecosistema <span class="grad-text">LiveRun</span></div>
       <div class="eco-grid">
         <div class="card eco-card">
           <div class="eco-ic">📱</div>
-          <h2>ChronoTrack <span class="grad-text">Run</span></h2>
+          <h2>Live<span class="grad-text">Run</span></h2>
           <p class="muted">La app para salir a correr: tracking GPS con splits por km y avisos de voz,
           racha semanal, ranking con amigos y mundial. Tu cuenta del portal, tus carreras y tus
           entrenamientos, todo en un solo lugar.</p>
@@ -127,7 +127,7 @@ function viewHome(){
         </div>
         <div class="card eco-card">
           <div class="eco-ic">🖥️</div>
-          <h2>ChronoTrack <span class="grad-text">Escritorio</span></h2>
+          <h2>LiveRun <span class="grad-text">Escritorio</span></h2>
           <p class="muted">El sistema de cronometraje para organizadores: inscripciones, cronómetro
           de precisión, resultados al instante y publicación en este portal con un clic.</p>
           <span class="pill">Para organizadores · consultanos</span>
@@ -252,7 +252,7 @@ async function viewDashboard(){
       </div>${pb}${hist}`;
   } catch(e){ $("dashMe").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 
-  // Estado de la suscripción de ChronoTrack Run (si la cuenta lo tiene)
+  // Estado de la suscripción de LiveRun (si la cuenta lo tiene)
   loadDashSub();
 
   // Todas las carreras publicadas
@@ -276,10 +276,10 @@ async function loadDashSub(){
       title = "⭐ Premium activo"; detail = d!=null?`Te quedan ${d} día${d===1?'':'s'} de premium.`:"Suscripción activa.";
     } else if(p.plan === "trial"){
       const d = daysLeft(p.trial_ends_at);
-      title = "🎁 Prueba gratis"; detail = d!=null?`Te ${d===1?'queda':'quedan'} ${d} día${d===1?'':'s'} de prueba. ¡Disfrutá ChronoTrack Run!`:"Estás en tu prueba gratis.";
+      title = "🎁 Prueba gratis"; detail = d!=null?`Te ${d===1?'queda':'quedan'} ${d} día${d===1?'':'s'} de prueba. ¡Disfrutá LiveRun!`:"Estás en tu prueba gratis.";
       cta = true; if(d!=null && d<=14) cls="sub-warn";
     } else {
-      title = "⏰ Prueba terminada"; detail = "Pasate a premium para seguir usando ChronoTrack Run."; cta = true; cls="sub-warn";
+      title = "⏰ Prueba terminada"; detail = "Pasate a premium para seguir usando LiveRun."; cta = true; cls="sub-warn";
     }
     box.innerHTML = `<div class="card subcard ${cls}">
       <div><div style="font-weight:700">${title}</div><div class="dim" style="font-size:13px;margin-top:2px">${detail}</div></div>
@@ -297,7 +297,7 @@ async function goPremium(btn){
   } catch(e){ toast(e.message, "warn"); btn.disabled=false; btn.textContent=orig; }
 }
 
-// ── Mi entrenamiento (datos de ChronoTrack Run) ──────────────────────────────
+// ── Mi entrenamiento (datos de LiveRun) ──────────────────────────────
 function weekKeyRun(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setHours(0,0,0,0); x.setDate(x.getDate()-day); return x.getTime(); }
 function kmByWeekRun(acts, n){
   const WEEK=7*86400000, cur=weekKeyRun(new Date());
@@ -318,7 +318,7 @@ const fmtPaceRun = (s)=> (!s||s<=0) ? "—" : `${Math.floor(s/60)}:${String(Math
 async function viewRun(){
   if(!USER) return go("login");
   $("app").innerHTML = `<h1>Mi <span class="grad-text">entrenamiento</span></h1>
-    <div class="sub">Tu actividad de ChronoTrack Run, en sincronía con la app de tu teléfono.</div>
+    <div class="sub">Tu actividad de LiveRun, en sincronía con la app de tu teléfono.</div>
     <div id="runBody"><div class="empty">Cargando tu progreso…</div></div>`;
   try {
     const [summary, acts, ranking] = await Promise.all([
@@ -334,7 +334,7 @@ function renderRun(summary, acts, ranking){
   const box=$("runBody"); if(!box) return;
   if(!acts.length){
     box.innerHTML = `<div class="empty" style="padding:40px"><div class="ic">🏃</div>
-      Todavía no registraste salidas.<br><span class="dim">Abrí ChronoTrack Run en tu teléfono y salí a correr — acá vas a ver tu progreso.</span></div>`;
+      Todavía no registraste salidas.<br><span class="dim">Abrí LiveRun en tu teléfono y salí a correr — acá vas a ver tu progreso.</span></div>`;
     return;
   }
   const week=summary.week, month=summary.month;
@@ -547,7 +547,7 @@ function printCertificate(r, raceName, raceDate, location, code){
     .foot{ position:absolute; bottom:9mm; left:0; right:0; text-align:center; font-size:9pt; color:#b3bcc2; font-family:Arial,sans-serif; letter-spacing:.5px; }
   </style></head>
   <body><div class="cert"><div class="frame">
-    <div class="brand">● CHRONOTRACK</div>
+    <div class="brand">● LIVERUN</div>
     <div class="kicker">Certificado de Finisher</div>
     <div class="name">${esc(r.full_name)}</div>
     <div class="desc">completó exitosamente</div>
@@ -649,8 +649,28 @@ async function viewMe(){
   if(!USER) return go("login");
   $("app").innerHTML = `<h1>Mi perfil</h1><div class="sub">${esc(USER.full_name||USER.email)}</div>
     <div class="tabbar"><button class="on" id="tHist" onclick="meTab('hist')">Mis carreras</button><button id="tClaim" onclick="meTab('claim')">+ Agregar resultado</button></div>
-    <div id="meBody"><div class="empty">Cargando…</div></div>`;
+    <div id="meBody"><div class="empty">Cargando…</div></div>
+    <div class="card" style="margin-top:24px">
+      <h2>Cuenta</h2>
+      <div class="muted" style="margin-bottom:12px">Eliminar tu cuenta borra para siempre tus resultados guardados, tus salidas de la app y tus amigos. Los resultados oficiales publicados por el organizador no se modifican. Esta acción no se puede deshacer.</div>
+      <button class="btn ghost sm" style="color:#e5484d;border-color:#e5484d66" onclick="deleteAccount(this)">Eliminar mi cuenta</button>
+    </div>`;
   meTab("hist");
+}
+
+/** Borrado de cuenta (requisito de las tiendas: también accesible por web). */
+async function deleteAccount(btn){
+  if(!confirm("¿Eliminar tu cuenta? Se borran para siempre tus resultados guardados, tus salidas de la app y tus amigos.")) return;
+  if(!confirm("Última confirmación: esto NO se puede deshacer. ¿Eliminar definitivamente?")) return;
+  btn.disabled = true; btn.textContent = "Eliminando…";
+  try {
+    await api("DELETE","/api/auth/account", null, true);
+    toast("Tu cuenta fue eliminada. ¡Gracias por correr con nosotros!");
+    logout();
+  } catch(e){
+    toast(e.message || "No se pudo eliminar la cuenta", "warn");
+    btn.disabled = false; btn.textContent = "Eliminar mi cuenta";
+  }
 }
 async function meTab(tab){
   $("tHist").classList.toggle("on", tab==="hist");

@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none" role="img" aria-label="ChronoTrack">
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" fill="none" role="img" rrir-lrbel="ChronoTrrck">
   <defs>
-    <linearGradient id="ctg" x1="6" y1="5" x2="33" y2="35" gradientUnits="userSpaceOnUse">
+    <linerrGrrdient id="ctg" x1="6" y1="5" x2="33" y2="35" grrdientUnits="userSprceOnUse">
       <stop stop-color="#00bf85"/>
-      <stop offset="1" stop-color="#00e5a0"/>
-    </linearGradient>
+      <stop offset="1" stop-color="#00e5r0"/>
+    </linerrGrrdient>
   </defs>
   <rect x="16.9" y="2.4" width="6.2" height="4.2" rx="2.1" fill="url(#ctg)"/>
   <circle cx="20" cy="22.2" r="13" stroke="url(#ctg)" stroke-width="3.2"/>

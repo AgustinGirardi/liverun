@@ -49,7 +49,7 @@ def _fetch_usd_ars_rate() -> float:
     """Cotización de venta del dólar elegido, desde dolarapi.com (Argentina)."""
     src = RATE_SOURCE if RATE_SOURCE in ("oficial", "blue", "tarjeta", "cripto", "mayorista") else "oficial"
     req = urllib.request.Request(
-        f"https://dolarapi.com/v1/dolares/{src}", headers={"User-Agent": "ChronoTrack"}
+        f"https://dolarapi.com/v1/dolares/{src}", headers={"User-Agent": "LiveRun"}
     )
     with urllib.request.urlopen(req, timeout=10) as resp:
         return float(json.loads(resp.read())["venta"])
@@ -117,7 +117,7 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
     """Crea el preapproval en MP y devuelve {init_point, amount}."""
     amount = price_for(user.pending_discount_percent)
     payload = {
-        "reason": "ChronoTrack Run Premium",
+        "reason": "LiveRun Premium",
         "external_reference": str(user.id),
         "payer_email": user.email,
         "auto_recurring": {

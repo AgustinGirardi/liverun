@@ -30,6 +30,15 @@ PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrende
 # Avatares: archivos chicos en el mismo disco persistente que la DB.
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
 AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
+# Firmas de archivo por formato: el Content-Type lo declara el cliente y no
+# alcanza — sin esto se podría subir HTML/SVG disfrazado de imagen.
+_AVATAR_MAGIC = {"jpg": b"\xff\xd8\xff", "png": b"\x89PNG\r\n\x1a\n", "webp": b"RIFF"}
+
+
+def _is_real_image(ext: str, data: bytes) -> bool:
+    if not data.startswith(_AVATAR_MAGIC[ext]):
+        return False
+    return ext != "webp" or data[8:12] == b"WEBP"
 
 
 def avatar_dir() -> Path:
@@ -109,12 +118,15 @@ class ProfileUpdate(BaseModel):
 
 
 class ActivityIn(BaseModel):
+    # Cotas de sanidad: una salida trucha de 10.000 km rompería el ranking
+    # (integridad del juego, no solo validación). 48 h / 400 km cubren hasta
+    # ultras extremas; splits: uno por km → 400 como techo holgado.
     client_uuid: str = Field(..., min_length=1, max_length=64)
     started_at: datetime
-    duration_s: int = Field(..., ge=1)
-    distance_m: float = Field(..., ge=0)
+    duration_s: int = Field(..., ge=1, le=48 * 3600)
+    distance_m: float = Field(..., ge=0, le=400_000)
     avg_pace_s_per_km: Optional[float] = Field(None, gt=0)
-    splits: list[float] = []
+    splits: list[float] = Field(default_factory=list, max_length=400)
     polyline: Optional[str] = Field(None, max_length=100_000)
 
 
@@ -401,6 +413,8 @@ def upload_avatar(request: Request, file: UploadFile = File(...),
         raise HTTPException(413, "La imagen es muy pesada (máximo 2 MB)")
     if not data:
         raise HTTPException(400, "Archivo vacío")
+    if not _is_real_image(ext, data):
+        raise HTTPException(400, "El archivo no es una imagen válida")
     d = avatar_dir()
     # Un solo archivo por usuario: borrar variantes con otra extensión.
     for old in d.glob(f"{user.id}.*"):

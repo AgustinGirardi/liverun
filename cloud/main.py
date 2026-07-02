@@ -7,6 +7,7 @@ Roles:
 import os
 import hashlib
 import unicodedata
+from hmac import compare_digest as hmac_compare
 from datetime import date
 from pathlib import Path
 from typing import Optional
@@ -43,13 +44,29 @@ def _name_matches(a: str, b: str) -> bool:
     return bool(_name_tokens(a) & _name_tokens(b))
 
 
-app = FastAPI(title="ChronoTrack Cloud", version="1.0")
+app = FastAPI(title="LiveRun Cloud", version="1.0")
+
+# CORS cerrado al propio portal (el SPA es same-origin; esto cubre subdominios
+# o un dominio propio futuro vía CT_PUBLIC_URL) + localhost para desarrollo.
+# La app móvil no manda header Origin (fetch nativo), así que no la afecta.
+PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # MVP; restringir al dominio del portal en producción
+    allow_origins=[PUBLIC_URL, "http://localhost:8002", "http://127.0.0.1:8002"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    """Cabeceras defensivas: sin sniffing de content-type (avatares subidos),
+    sin embeber el portal en iframes de terceros, referrer mínimo."""
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return resp
 
 
 def _ensure_run_columns():
@@ -226,7 +243,8 @@ def _autolink(user: PortalUser, db: Session) -> int:
 
 @app.post("/api/publish", tags=["Organizador"])
 def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session = Depends(get_db)):
-    if x_api_key != PUBLISH_API_KEY:
+    # compare_digest: comparación en tiempo constante (no filtra la key por timing).
+    if not x_api_key or not hmac_compare(x_api_key, PUBLISH_API_KEY):
         raise HTTPException(403, "API key inválida")
 
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == payload.source_id))
@@ -349,6 +367,51 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
         db.rollback()
         linked = 0
     return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": linked}
+
+
+@app.delete("/api/auth/account", tags=["Corredor"])
+def delete_account(request: Request, user: PortalUser = Depends(current_user),
+                   db: Session = Depends(get_db)):
+    """Borra la cuenta y todos sus datos personales (requisito de App Store
+    5.1.1(v) y Google Play). Los resultados publicados de las carreras no se
+    tocan (son datos del organizador, ya públicos): solo se rompe el vínculo
+    (claims). Irreversible."""
+    rate_limit(request, "delete_account", limit=5, window=60.0)
+
+    # Mejor esfuerzo: cancelar la suscripción de Mercado Pago para no seguir
+    # cobrando una cuenta que ya no existe. Si MP falla, el borrado procede.
+    from cloud import billing
+    from cloud.models import (
+        BillingPayment, BillingSubscription, CouponRedemption, Friendship,
+    )
+    subs = db.scalars(select(BillingSubscription)
+                      .where(BillingSubscription.user_id == user.id)).all()
+    for sub in subs:
+        if sub.status != "cancelled" and billing.is_configured():
+            try:
+                billing.mp_request("PUT", f"/preapproval/{sub.mp_preapproval_id}",
+                                   {"status": "cancelled"})
+            except Exception:
+                pass
+
+    # El avatar es un archivo en disco: el CASCADE de la DB no lo cubre.
+    from cloud.run import avatar_dir
+    try:
+        for f in avatar_dir().glob(f"{user.id}.*"):
+            f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    # Dependencias sin relationship en el ORM: borrado explícito (no dependemos
+    # del ondelete=CASCADE, que en SQLite requiere PRAGMA foreign_keys).
+    db.execute(sa_delete(Friendship).where(
+        (Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id)))
+    db.execute(sa_delete(CouponRedemption).where(CouponRedemption.user_id == user.id))
+    db.execute(sa_delete(BillingPayment).where(BillingPayment.user_id == user.id))
+    db.execute(sa_delete(BillingSubscription).where(BillingSubscription.user_id == user.id))
+    db.delete(user)  # el cascade del ORM borra claims y actividades
+    db.commit()
+    return {"deleted": True}
 
 
 @app.post("/api/claim", tags=["Corredor"])
@@ -488,7 +551,7 @@ def autolink_me(request: Request, user: PortalUser = Depends(current_user), db: 
 def unpublish(source_id: str, x_api_key: str = Header(None), db: Session = Depends(get_db)):
     """Elimina una carrera publicada (y sus resultados/claims). Idempotente:
     si no existe, no es error. Lo usa la app de escritorio al borrar una carrera."""
-    if x_api_key != PUBLISH_API_KEY:
+    if not x_api_key or not hmac_compare(x_api_key, PUBLISH_API_KEY):
         raise HTTPException(403, "API key inválida")
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == source_id))
     if not race:
