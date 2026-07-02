@@ -4,9 +4,11 @@ import {
   autoPauseStep,
   avgPaceSPerKm,
   currentPaceSPerKm,
+  decodePolyline,
   encodePolyline,
   haversineM,
   newTracker,
+  rebaseTracker,
   type GeoPoint,
 } from '../tracking';
 
@@ -55,6 +57,53 @@ describe('addPoint', () => {
     const r = addPoint(st, pt(1, 1_000), 1);
     expect(r.accepted).toBe(false);
     expect(r.state.distanceM).toBe(0);
+  });
+
+  it('parado, el baile del GPS no suma distancia y deja la velocidad en ~0', () => {
+    let st = newTracker();
+    ({ state: st } = addPoint(st, pt(0, 0), 0));
+    ({ state: st } = addPoint(st, pt(1, 30_000), 30)); // corre 111 m
+    const base = st.distanceM;
+    // Se detiene: lecturas cada 2 s "bailando" ±9 m alrededor del mismo lugar.
+    const still = { lat: -31.4 + STEP_LAT, lon: -64.18 };
+    for (let i = 1; i <= 5; i++) {
+      const jitter = (i % 2 === 0 ? 1 : -1) * 0.00008; // ~±8,9 m
+      const r = addPoint(st, { lat: still.lat + jitter, lon: still.lon, t: 30_000 + i * 2_000, accuracy: 5 }, 30 + i * 2);
+      expect(r.accepted).toBe(true); // cuenta para la auto-pausa…
+      st = r.state;
+    }
+    expect(st.distanceM).toBe(base); // …pero no genera distancia fantasma
+    expect(st.speedMps).toBeLessThan(0.55); // y habilita la auto-pausa
+  });
+
+  it('trotando con pasos cortos la distancia se acumula igual (en tramos)', () => {
+    let st = newTracker();
+    const stepLat = 0.00006; // ~6,7 m cada 2 s = 3,3 m/s (bajo el piso por lectura)
+    for (let i = 0; i <= 20; i++) {
+      ({ state: st } = addPoint(st, { lat: -31.4 + i * stepLat, lon: -64.18, t: i * 2_000, accuracy: 5 }, i * 2));
+    }
+    const realM = haversineM({ lat: -31.4, lon: -64.18 }, { lat: -31.4 + 20 * stepLat, lon: -64.18 });
+    expect(st.distanceM).toBeGreaterThan(realM * 0.85);
+    expect(st.distanceM).toBeLessThanOrEqual(realM + 1);
+  });
+
+  it('prefiere la velocidad Doppler del GPS cuando está disponible', () => {
+    let st = newTracker();
+    ({ state: st } = addPoint(st, pt(0, 0), 0));
+    const r = addPoint(st, { ...pt(1, 30_000), speedMps: 2.5 }, 30);
+    expect(r.state.speedMps).toBeCloseTo(2.5); // Doppler, no los 3,7 m/s derivados
+  });
+
+  it('rebaseTracker: el próximo punto re-ancla sin sumar el tramo no medido', () => {
+    let st = newTracker();
+    ({ state: st } = addPoint(st, pt(0, 0), 0));
+    ({ state: st } = addPoint(st, pt(1, 30_000), 30));
+    const base = st.distanceM;
+    st = rebaseTracker(st); // pausa manual: caminó 111 m mientras tanto
+    ({ state: st } = addPoint(st, pt(2, 90_000), 40));
+    expect(st.distanceM).toBe(base); // el tramo caminado en pausa no cuenta
+    ({ state: st } = addPoint(st, pt(3, 120_000), 70));
+    expect(st.distanceM).toBeCloseTo(base + STEP_M, 0); // y después mide normal
   });
 
   it('corta el split al completar cada km, interpolando el tiempo', () => {
@@ -133,5 +182,25 @@ describe('encodePolyline', () => {
 
   it('camino vacío = string vacío', () => {
     expect(encodePolyline([])).toBe('');
+  });
+});
+
+describe('decodePolyline', () => {
+  it('es el inverso de encodePolyline (ida y vuelta)', () => {
+    const path = [
+      { lat: 38.5, lon: -120.2 },
+      { lat: 40.7, lon: -120.95 },
+      { lat: 43.252, lon: -126.453 },
+    ];
+    const decoded = decodePolyline(encodePolyline(path));
+    expect(decoded).toHaveLength(3);
+    decoded.forEach((p, i) => {
+      expect(p.lat).toBeCloseTo(path[i].lat, 5);
+      expect(p.lon).toBeCloseTo(path[i].lon, 5);
+    });
+  });
+
+  it('string vacío = camino vacío', () => {
+    expect(decodePolyline('')).toEqual([]);
   });
 });

@@ -13,6 +13,9 @@ export type GeoPoint = {
   t: number;
   /** precisión reportada por el GPS, en metros (menor = mejor) */
   accuracy?: number | null;
+  /** velocidad Doppler del GPS en m/s (mucho más fiable que derivarla de
+   *  posiciones); null/negativa = no disponible */
+  speedMps?: number | null;
 };
 
 /** Lecturas con peor precisión que esto se descartan (típico al arrancar). */
@@ -25,6 +28,21 @@ export const AUTO_PAUSE_BELOW_MPS = 0.55;
 export const AUTO_RESUME_ABOVE_MPS = 1.2;
 /** Segundos quieto antes de auto-pausar (evita pausas por semáforo de 2 s). */
 export const AUTO_PAUSE_AFTER_S = 5;
+/** Piso de ruido del ancla de quietud: moverse menos que esto desde el último
+ *  punto contado NO es movimiento (es el GPS "bailando" parado). */
+export const STATIONARY_FLOOR_MIN_M = 12;
+export const STATIONARY_FLOOR_MAX_M = 25;
+
+/** Piso de ruido en metros según la precisión reportada. */
+export function stationaryFloorM(accuracy?: number | null): number {
+  const acc = accuracy ?? 10;
+  return Math.min(STATIONARY_FLOOR_MAX_M, Math.max(STATIONARY_FLOOR_MIN_M, 1.6 * acc));
+}
+
+/** Doppler saneado: null si el GPS no la informa (iOS manda -1). */
+function dopplerMps(p: GeoPoint): number | null {
+  return p.speedMps != null && p.speedMps >= 0 ? p.speedMps : null;
+}
 
 const EARTH_R = 6371000;
 
@@ -68,6 +86,13 @@ export type AddResult = {
  * Procesa una lectura del GPS. `elapsedS` es el tiempo neto de corrida
  * (sin pausas) en el momento de la lectura — lo lleva la pantalla.
  * Inmutable: devuelve un estado nuevo.
+ *
+ * Modelo de "ancla de quietud": `last` es el último punto CONTADO, no la última
+ * lectura. Si el desplazamiento desde el ancla queda bajo el piso de ruido, la
+ * lectura se acepta como "quieto" (velocidad ~0, alimenta la auto-pausa) pero
+ * no suma distancia ni mueve el ancla — así el baile del GPS parado no genera
+ * distancia fantasma ni impide la auto-pausa. Corriendo, cada lectura (o cada
+ * dos, según el intervalo) supera el piso y la distancia se acumula igual.
  */
 export function addPoint(state: TrackerState, p: GeoPoint, elapsedS: number): AddResult {
   // Filtro de precisión: lecturas malas no suman ni mueven el cursor.
@@ -75,7 +100,7 @@ export function addPoint(state: TrackerState, p: GeoPoint, elapsedS: number): Ad
     return { state, accepted: false, completedKm: null };
   }
   if (!state.last) {
-    const st = { ...state, last: p, elapsedS, path: [{ lat: p.lat, lon: p.lon }] };
+    const st = { ...state, last: p, elapsedS, speedMps: dopplerMps(p) ?? 0, path: [...state.path, { lat: p.lat, lon: p.lon }] };
     return { state: st, accepted: true, completedKm: null };
   }
 
@@ -87,6 +112,12 @@ export function addPoint(state: TrackerState, p: GeoPoint, elapsedS: number): Ad
   // Salto imposible (rebote de GPS): se ignora la lectura.
   if (speed > MAX_SPEED_MPS) {
     return { state, accepted: false, completedKm: null };
+  }
+
+  // Bajo el piso de ruido: quieto. Cuenta para la auto-pausa, no para el km.
+  if (dM < stationaryFloorM(p.accuracy)) {
+    const st: TrackerState = { ...state, speedMps: dopplerMps(p) ?? Math.min(speed, 0.3) };
+    return { state: st, accepted: true, completedKm: null };
   }
 
   const prevKm = Math.floor(state.distanceM / 1000);
@@ -110,10 +141,19 @@ export function addPoint(state: TrackerState, p: GeoPoint, elapsedS: number): Ad
     distanceM,
     elapsedS,
     splits,
-    speedMps: speed,
+    speedMps: dopplerMps(p) ?? speed,
     path: [...state.path, { lat: p.lat, lon: p.lon }],
   };
   return { state: st, accepted: true, completedKm };
+}
+
+/**
+ * Suelta el ancla del tracker (tras una pausa manual o al restaurar una sesión
+ * guardada): el próximo punto re-ancla sin sumar la distancia recorrida
+ * mientras no se estaba midiendo.
+ */
+export function rebaseTracker(state: TrackerState): TrackerState {
+  return { ...state, last: null, speedMps: 0 };
 }
 
 /** Ritmo promedio en s/km (null si todavía no hay distancia razonable). */
@@ -179,4 +219,29 @@ function encodeVarint(v: number): string {
   }
   s += String.fromCharCode(n + 63);
   return s;
+}
+
+/** Decodifica un encoded polyline (inverso de encodePolyline). */
+export function decodePolyline(encoded: string): { lat: number; lon: number }[] {
+  const path: { lat: number; lon: number }[] = [];
+  let i = 0;
+  let lat = 0;
+  let lon = 0;
+  while (i < encoded.length) {
+    for (const which of ['lat', 'lon'] as const) {
+      let result = 0;
+      let shift = 0;
+      let b: number;
+      do {
+        b = encoded.charCodeAt(i++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const delta = result & 1 ? ~(result >> 1) : result >> 1;
+      if (which === 'lat') lat += delta;
+      else lon += delta;
+    }
+    path.push({ lat: lat / 1e5, lon: lon / 1e5 });
+  }
+  return path;
 }
