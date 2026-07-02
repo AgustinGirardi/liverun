@@ -8,10 +8,15 @@
 import * as Speech from 'expo-speech';
 
 import { formatDuration, formatPace } from '@/lib/format';
+import { clearSessionSnapshot, saveSessionSnapshot } from '@/lib/run-store';
+import { buildSnapshot, restoreFields, type SessionSnapshotV1 } from '@/lib/session-snapshot';
 import {
-  addPoint, autoPauseStep, avgPaceSPerKm, currentPaceSPerKm, newTracker,
+  addPoint, autoPauseStep, avgPaceSPerKm, currentPaceSPerKm, newTracker, rebaseTracker,
   type AutoPauseState, type GeoPoint, type TrackerState,
 } from '@/lib/tracking';
+
+/** Cada cuánto persistir el snapshot durante la salida (ms). */
+const PERSIST_EVERY_MS = 10_000;
 
 export type Phase = 'idle' | 'running' | 'paused' | 'autopaused' | 'saving';
 
@@ -23,6 +28,8 @@ export type Snapshot = {
   speedMps: number;
   avgPaceSPerKm: number | null;
   curPaceSPerKm: number | null;
+  /** recorrido aceptado hasta ahora (para el mapa en vivo) */
+  path: { lat: number; lon: number }[];
 };
 
 export type FinishData = {
@@ -35,7 +42,13 @@ export type FinishData = {
 };
 
 type RawLoc = {
-  coords: { latitude: number; longitude: number; accuracy: number | null };
+  coords: {
+    latitude: number;
+    longitude: number;
+    accuracy: number | null;
+    /** velocidad Doppler (m/s); -1/null si el GPS no la informa */
+    speed?: number | null;
+  };
   timestamp: number;
 };
 
@@ -66,6 +79,7 @@ class RunSession {
     this.pausedAccumMs = 0;
     this.pauseStartedMs = 0;
     this.phase = 'running';
+    this.persist(true);
     if (this.voiceEnabled) Speech.speak('Salida iniciada. ¡Vamos!', { language: 'es' });
     this.emit();
   }
@@ -91,6 +105,7 @@ class RunSession {
       this.pauseStartedMs = 0;
     }
     this.phase = next;
+    this.persist(true);
     this.emit();
   }
 
@@ -100,7 +115,12 @@ class RunSession {
       this.setPhase('paused');
     }
   }
-  resume() { if (this.phase === 'paused') this.setPhase('running'); }
+  resume() {
+    if (this.phase !== 'paused') return;
+    // Lo caminado durante la pausa manual no cuenta: se re-ancla el GPS.
+    this.tracker = rebaseTracker(this.tracker);
+    this.setPhase('running');
+  }
 
   private announce(km: number, splits: number[]) {
     if (!this.voiceEnabled) return;
@@ -119,20 +139,84 @@ class RunSession {
         lon: loc.coords.longitude,
         t: loc.timestamp,
         accuracy: loc.coords.accuracy,
+        speedMps: loc.coords.speed,
       };
       const elapsedS = this.elapsedMs(loc.timestamp) / 1000;
       const res = addPoint(this.tracker, p, elapsedS);
-      if (!res.accepted) continue;
-      this.tracker = res.state;
-      if (res.completedKm) this.announce(res.completedKm, res.state.splits);
-      const ap = autoPauseStep(this.autoPause, res.state.speedMps, loc.timestamp);
-      if (ap.paused !== this.autoPause.paused) this.setPhase(ap.paused ? 'autopaused' : 'running');
-      this.autoPause = ap;
+      // Velocidad para la auto-pausa: del tracker si aceptó; si la lectura se
+      // descartó (mala precisión) pero trae Doppler, usamos esa — así la
+      // pausa también funciona cuando el GPS se degrada al frenar.
+      let speedForPause: number | null = null;
+      if (res.accepted) {
+        this.tracker = res.state;
+        if (res.completedKm) this.announce(res.completedKm, res.state.splits);
+        speedForPause = res.state.speedMps;
+      } else if (p.speedMps != null && p.speedMps >= 0) {
+        speedForPause = p.speedMps;
+      }
+      if (speedForPause != null) {
+        const ap = autoPauseStep(this.autoPause, speedForPause, loc.timestamp);
+        if (ap.paused !== this.autoPause.paused) this.setPhase(ap.paused ? 'autopaused' : 'running');
+        this.autoPause = ap;
+      }
     }
+    this.persist();
     this.emit();
   }
 
   markSaving() { this.phase = 'saving'; this.emit(); }
+
+  /** El guardado falló: la salida vuelve a pausa en vez de perderse. */
+  abortSaving() {
+    if (this.phase !== 'saving') return;
+    this.pauseStartedMs = Date.now();
+    this.phase = 'paused';
+    this.persist(true);
+    this.emit();
+  }
+
+  // ── Persistencia (recuperación si el SO mata la app) ────────────────────────
+
+  private lastPersistMs = 0;
+
+  /** Guarda el snapshot de la salida en curso (throttled; fire-and-forget). */
+  private persist(force = false) {
+    if (this.phase !== 'running' && this.phase !== 'paused' && this.phase !== 'autopaused') return;
+    if (!this.startedAt) return;
+    const now = Date.now();
+    if (!force && now - this.lastPersistMs < PERSIST_EVERY_MS) return;
+    this.lastPersistMs = now;
+    void saveSessionSnapshot(buildSnapshot({
+      phase: this.phase,
+      startedAt: this.startedAt,
+      netElapsedMs: this.elapsedMs(now),
+      tracker: this.tracker,
+      now,
+    }));
+  }
+
+  /**
+   * Restaura una salida guardada (tras un cierre de la app). Queda en 'paused'
+   * con el tiempo neto congelado en el momento del guardado; con `autoResume`
+   * retoma sola (lo usa la tarea de background cuando el corte fue breve).
+   */
+  restoreFrom(snap: SessionSnapshotV1, opts?: { autoResume?: boolean }) {
+    if (this.phase !== 'idle') return;
+    const f = restoreFields(snap, Date.now());
+    this.startedAt = f.startedAt;
+    this.startMs = f.startMs;
+    this.pausedAccumMs = f.pausedAccumMs;
+    this.pauseStartedMs = f.pauseStartedMs;
+    this.tracker = f.tracker;
+    this.autoPause = { paused: false, stillSince: null };
+    this.phase = f.phase;
+    if (opts?.autoResume) {
+      this.resume();
+    } else {
+      this.persist(true);
+      this.emit();
+    }
+  }
 
   snapshot(): Snapshot {
     const elapsedS = Math.floor(this.elapsedMs() / 1000);
@@ -144,6 +228,7 @@ class RunSession {
       speedMps: this.tracker.speedMps,
       avgPaceSPerKm: avgPaceSPerKm(this.tracker.distanceM, elapsedS),
       curPaceSPerKm: this.phase === 'running' ? currentPaceSPerKm(this.tracker.speedMps) : null,
+      path: this.tracker.path,
     };
   }
 
@@ -167,6 +252,8 @@ class RunSession {
     this.startMs = 0;
     this.pausedAccumMs = 0;
     this.pauseStartedMs = 0;
+    this.lastPersistMs = 0;
+    void clearSessionSnapshot();
     this.emit();
   }
 }

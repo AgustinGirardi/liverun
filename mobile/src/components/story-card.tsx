@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 
+import { RouteSketch } from '@/components/route-sketch';
 import { ThemedText } from '@/components/themed-text';
 import { BrandAccent, Spacing } from '@/constants/theme';
 
@@ -30,9 +31,14 @@ export type StoryStats = {
   when?: string | null;
 };
 
-type Props = { stats: StoryStats; onClose: () => void };
+type Props = {
+  stats: StoryStats;
+  /** encoded polyline del recorrido; si está, se dibuja en el centro de la tarjeta */
+  polyline?: string | null;
+  onClose: () => void;
+};
 
-export function StoryCard({ stats, onClose }: Props) {
+export function StoryCard({ stats, polyline, onClose }: Props) {
   const cardRef = useRef<View>(null);
   const { width, height } = useWindowDimensions();
   const [photo, setPhoto] = useState<string | null>(null);
@@ -112,10 +118,21 @@ export function StoryCard({ stats, onClose }: Props) {
 
           <View style={styles.top}>
             <ThemedText style={styles.brand}>
-              CHRONO<ThemedText style={[styles.brand, styles.brandAccent]}>TRACK</ThemedText> RUN
+              LIVE<ThemedText style={[styles.brand, styles.brandAccent]}>RUN</ThemedText>
             </ThemedText>
             {stats.when ? <ThemedText style={styles.when}>{stats.when}</ThemedText> : null}
           </View>
+
+          {polyline ? (
+            <RouteSketch
+              polyline={polyline}
+              // Con foto: chico y a un costado (la foto es la protagonista);
+              // sin foto: grande en el centro de la tarjeta.
+              height={photo ? 80 : 190}
+              stroke={photo ? 'rgba(255,255,255,0.85)' : BrandAccent}
+              style={photo ? styles.routeSmall : styles.route}
+            />
+          ) : null}
 
           <View style={styles.bottom}>
             <ThemedText style={styles.km} numberOfLines={1} adjustsFontSizeToFit>{stats.km}</ThemedText>
@@ -167,6 +184,8 @@ const styles = StyleSheet.create({
   // Esquinas rectas (square) + tamaño pantalla → lista para story/post.
   card: { backgroundColor: CARD_BG, overflow: 'hidden', justifyContent: 'space-between', padding: Spacing.four },
   top: { gap: 2 },
+  route: { alignSelf: 'stretch' },
+  routeSmall: { alignSelf: 'flex-end', width: '45%' },
   brand: { color: '#f0f2f3', fontSize: 13, fontWeight: '900', letterSpacing: 3 },
   brandAccent: { color: BrandAccent },
   when: { color: '#aeb6ba', fontSize: 12, marginTop: 2 },

@@ -15,7 +15,6 @@ import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constan
 import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError, type FriendLists, type Profile, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { goPremium } from '@/lib/billing';
 import { useEntitlement } from '@/lib/entitlement';
 
 const AMBER = '#f5a524'; // estado "atención" (prueba por terminar / terminada)
@@ -38,17 +37,17 @@ function planChip(profile: Profile): { label: string; color: string } {
   return { label: '⏰ Prueba terminada', color: AMBER };
 }
 
-/** Tarjeta de estado de la suscripción. Muro "suave": informa y anima, no bloquea. */
+/** Tarjeta de estado del plan. Solo informa: sin botón ni link de compra
+ * (las tiendas no permiten dirigir a pagos externos desde la app). */
 function SubscriptionCard({ profile, card }: { profile: Profile; card: StyleProp<ViewStyle> }) {
   const left = daysUntil(profile.plan === 'premium' ? profile.premium_until : profile.trial_ends_at);
-  const [busy, setBusy] = useState(false);
 
   let title: string;
   let detail: string;
   let accent = BrandAccent;
   if (profile.plan === 'admin') {
     title = '⭐ Cuenta ilimitada';
-    detail = 'Tenés acceso total a ChronoTrack.';
+    detail = 'Tenés acceso total a LiveRun.';
   } else if (profile.plan === 'premium') {
     title = '⭐ Premium activo';
     detail = left != null ? `Te quedan ${left} ${left === 1 ? 'día' : 'días'} de premium.` : 'Suscripción activa.';
@@ -60,27 +59,14 @@ function SubscriptionCard({ profile, card }: { profile: Profile; card: StyleProp
     if (left != null && left <= 14) accent = AMBER;
   } else {
     title = '⏰ Prueba terminada';
-    detail = 'Tu prueba gratis terminó. Pasate a premium para seguir disfrutando todo.';
+    detail = 'Tu prueba gratis terminó.';
     accent = AMBER;
   }
-
-  // El botón de pago aparece para quien no es admin ni tiene premium vigente.
-  const canSubscribe = profile.plan === 'trial' || profile.plan === 'expired';
 
   return (
     <View style={[card, { borderWidth: 1, borderColor: `${accent}55` }]}>
       <ThemedText type="smallBold" style={{ color: accent }}>{title}</ThemedText>
       <ThemedText type="small" themeColor="textSecondary">{detail}</ThemedText>
-      {canSubscribe && (
-        <Pressable
-          style={[styles.premiumButton, busy && { opacity: 0.6 }]}
-          disabled={busy}
-          onPress={async () => { setBusy(true); await goPremium(); setBusy(false); }}>
-          <ThemedText type="smallBold" style={styles.onAccent}>
-            {busy ? 'Abriendo…' : '⭐ Hacerme premium'}
-          </ThemedText>
-        </Pressable>
-      )}
     </View>
   );
 }
@@ -152,6 +138,36 @@ export default function PerfilScreen() {
     } finally {
       setRedeeming(false);
     }
+  }
+
+  function confirmDeleteAccount() {
+    Alert.alert(
+      'Eliminar mi cuenta',
+      'Se borran para siempre tu cuenta, tus salidas, tus amigos y tu foto. Esto no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Continuar',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('¿Estás seguro?', 'Última confirmación: la cuenta se elimina de forma definitiva.', [
+              { text: 'No, conservar mi cuenta', style: 'cancel' },
+              {
+                text: 'Sí, eliminar todo',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await api.deleteAccount();
+                    await logout();
+                  } catch (e) {
+                    Alert.alert('Ups', e instanceof ApiError ? e.message : 'No se pudo eliminar la cuenta.');
+                  }
+                },
+              },
+            ]),
+        },
+      ],
+    );
   }
 
   async function changeAvatar() {
@@ -319,8 +335,12 @@ export default function PerfilScreen() {
           <Pressable style={[styles.logout, { borderColor: theme.border }]} onPress={logout}>
             <ThemedText type="smallBold" themeColor="textSecondary">Cerrar sesión</ThemedText>
           </Pressable>
+
+          <Pressable style={styles.deleteAccount} onPress={confirmDeleteAccount}>
+            <ThemedText type="small" style={styles.deleteText}>Eliminar mi cuenta</ThemedText>
+          </Pressable>
           <ThemedText type="small" themeColor="textSecondary" style={styles.version}>
-            ChronoTrack · v{Constants.expoConfig?.version ?? '1.0.0'}
+            LiveRun · v{Constants.expoConfig?.version ?? '1.0.0'}
           </ThemedText>
         </ScrollView>
       </SafeAreaView>
@@ -369,13 +389,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingVertical: 10,
   },
-  premiumButton: {
-    backgroundColor: BrandAccent,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: 'center',
-    marginTop: Spacing.one,
-  },
   goalRow: { flexDirection: 'row', gap: Spacing.two },
   goalChip: {
     width: 38,
@@ -390,5 +403,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
+  deleteAccount: { alignItems: 'center', paddingVertical: 6 },
+  deleteText: { color: '#ff6b6b' },
   version: { textAlign: 'center', opacity: 0.7 },
 });

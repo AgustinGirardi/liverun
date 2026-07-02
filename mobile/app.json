@@ -1,19 +1,20 @@
 {
   "expo": {
-    "name": "ChronoTrack",
+    "name": "LiveRun",
     "slug": "chronotrack-run",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "chronotrackrun",
+    "scheme": "liverun",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "bundleIdentifier": "com.agusgirarfi.liverun",
       "infoPlist": {
         "UIBackgroundModes": ["location"]
       }
     },
     "android": {
-      "package": "com.agusgirarfi.chronotrackrun",
+      "package": "com.agusgirarfi.liverun",
       "adaptiveIcon": {
         "backgroundColor": "#0d0f10",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -45,8 +46,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ChronoTrack usa tu ubicación para registrar el recorrido, la distancia y el ritmo de tus salidas.",
-          "locationAlwaysAndWhenInUsePermission": "ChronoTrack usa tu ubicación para seguir registrando tu salida (distancia, ritmo, recorrido) incluso con la pantalla bloqueada.",
+          "locationWhenInUsePermission": "LiveRun usa tu ubicación para registrar el recorrido, la distancia y el ritmo de tus salidas.",
+          "locationAlwaysAndWhenInUsePermission": "LiveRun usa tu ubicación para seguir registrando tu salida (distancia, ritmo, recorrido) incluso con la pantalla bloqueada.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
@@ -54,13 +55,13 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "ChronoTrack usa la cámara para que captures el momento al terminar tu salida."
+          "cameraPermission": "LiveRun usa la cámara para que captures el momento al terminar tu salida."
         }
       ],
       [
         "expo-media-library",
         {
-          "savePhotosPermission": "ChronoTrack guarda la imagen de tu salida en tu galería."
+          "savePhotosPermission": "LiveRun guarda la imagen de tu salida en tu galería."
         }
       ]
     ],

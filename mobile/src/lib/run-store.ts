@@ -7,8 +7,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { api, type NewActivity } from '@/lib/api';
+import { isValidSnapshot, type SessionSnapshotV1 } from '@/lib/session-snapshot';
 
 const KEY = 'ct_run_pending_uploads';
+const SESSION_KEY = 'ct_run_session_v1';
 
 async function readQueue(): Promise<NewActivity[]> {
   try {
@@ -51,4 +53,33 @@ export async function syncPending(): Promise<{ uploaded: number; pending: NewAct
 
 export async function pendingCount(): Promise<number> {
   return (await readQueue()).length;
+}
+
+// ── Snapshot de la salida en curso (recuperación si el SO mata la app) ────────
+
+export async function saveSessionSnapshot(snap: SessionSnapshotV1): Promise<void> {
+  try {
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+  } catch {
+    // sin storage no hay recuperación, pero la salida en memoria sigue
+  }
+}
+
+export async function loadSessionSnapshot(): Promise<SessionSnapshotV1 | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isValidSnapshot(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearSessionSnapshot(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(SESSION_KEY);
+  } catch {
+    // mejor esfuerzo
+  }
 }

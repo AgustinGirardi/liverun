@@ -4,13 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
 import { FadeIn } from '@/components/fade-in';
+import { RouteMap } from '@/components/route-map';
 import { StoryCard } from '@/components/story-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity, type ActivityDetail } from '@/lib/api';
-import { goPremium } from '@/lib/billing';
 import { useEntitlement } from '@/lib/entitlement';
 import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
 
@@ -29,7 +29,7 @@ export default function HistorialScreen() {
   const [details, setDetails] = useState<Record<number, ActivityDetail | 'loading'>>({});
   const [expanded, setExpanded] = useState<number | null>(null);
   const [selDay, setSelDay] = useState<number | null>(null);
-  const [sharing, setSharing] = useState<Activity | null>(null);
+  const [sharing, setSharing] = useState<{ act: Activity; polyline: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const { access } = useEntitlement();
@@ -92,14 +92,30 @@ export default function HistorialScreen() {
     setSelDay(null);
   }
 
+  /** Abre la tarjeta de compartir con el recorrido incluido: usa el detalle ya
+   *  cargado o lo trae (el listado no incluye el polyline). */
+  async function openShare(item: Activity) {
+    let det: ActivityDetail | 'loading' | undefined = details[item.id];
+    if (!det || det === 'loading') {
+      try {
+        const d = await api.activityDetail(item.id);
+        setDetails((prev) => ({ ...prev, [item.id]: d }));
+        det = d;
+      } catch {
+        det = undefined; // sin detalle igual se puede compartir (sin recorrido)
+      }
+    }
+    setSharing({ act: item, polyline: det ? det.polyline : null });
+  }
+
   function tryShare(item: Activity) {
     if (access) {
-      setSharing(item);
+      void openShare(item);
     } else {
       Alert.alert(
         '🖼 Compartir es premium',
-        'Las tarjetas para compartir tus salidas son premium. ¿Querés pasarte a premium?',
-        [{ text: 'Ahora no', style: 'cancel' }, { text: '⭐ Hacerme premium', onPress: goPremium }],
+        'Las tarjetas para compartir tus salidas son parte de premium. Tus salidas guardadas siguen intactas.',
+        [{ text: 'Entendido', style: 'cancel' }],
       );
     }
   }
@@ -218,6 +234,7 @@ export default function HistorialScreen() {
                   </View>
                   {expanded === item.id && (
                     <FadeIn>
+                      <Route detail={details[item.id]} bg={theme.backgroundSelected} />
                       <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
                       <View style={styles.actionsRow}>
                         <Pressable
@@ -245,15 +262,16 @@ export default function HistorialScreen() {
         {sharing && (
           <StoryCard
             stats={{
-              km: formatKm(sharing.distance_m),
-              time: formatDuration(sharing.duration_s),
-              pace: formatPace(sharing.avg_pace_s_per_km).replace(' /km', ''),
+              km: formatKm(sharing.act.distance_m),
+              time: formatDuration(sharing.act.duration_s),
+              pace: formatPace(sharing.act.avg_pace_s_per_km).replace(' /km', ''),
               speed:
-                sharing.duration_s > 0
-                  ? ((sharing.distance_m / sharing.duration_s) * 3.6).toFixed(1).replace('.', ',')
+                sharing.act.duration_s > 0
+                  ? ((sharing.act.distance_m / sharing.act.duration_s) * 3.6).toFixed(1).replace('.', ',')
                   : undefined,
-              when: formatWhen(sharing.started_at),
+              when: formatWhen(sharing.act.started_at),
             }}
+            polyline={sharing.polyline}
             onClose={() => setSharing(null)}
           />
         )}
@@ -339,6 +357,12 @@ function MonthCalendar({
   );
 }
 
+/** Mapa del recorrido (si la salida subió polyline). */
+function Route({ detail, bg }: { detail?: ActivityDetail | 'loading'; bg: string }) {
+  if (!detail || detail === 'loading' || !detail.polyline) return null;
+  return <RouteMap polyline={detail.polyline} height={180} style={[styles.route, { backgroundColor: bg }]} />;
+}
+
 function Splits({ detail, dividerColor }: { detail?: ActivityDetail | 'loading'; dividerColor: string }) {
   if (!detail || detail === 'loading') {
     return (
@@ -408,6 +432,7 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.one },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   metrics: { alignItems: 'flex-end' },
+  route: { borderRadius: 12, marginTop: Spacing.two, overflow: 'hidden' },
   splits: { borderTopWidth: 1, marginTop: Spacing.two, paddingTop: Spacing.two, gap: 6 },
   splitsTitle: { letterSpacing: 2, marginBottom: 2 },
   splitRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },

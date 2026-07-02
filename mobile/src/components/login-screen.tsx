@@ -75,7 +75,7 @@ export function LoginScreen() {
             resizeMode="contain"
           />
           <ThemedText style={styles.brand}>
-            CHRONO<ThemedText style={[styles.brand, { color: BrandAccent }]}>TRACK</ThemedText> RUN
+            LIVE<ThemedText style={[styles.brand, { color: BrandAccent }]}>RUN</ThemedText>
           </ThemedText>
           <ThemedText type="subtitle" style={styles.title}>
             {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}

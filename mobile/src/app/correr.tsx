@@ -7,6 +7,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { RouteMap } from '@/components/route-map';
 import { StoryCard } from '@/components/story-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -17,7 +18,7 @@ import { useEntitlement } from '@/lib/entitlement';
 import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
 import { LOCATION_TASK } from '@/lib/location-task';
 import { runSession, type FinishData } from '@/lib/run-session';
-import { saveActivity } from '@/lib/run-store';
+import { loadSessionSnapshot, saveActivity } from '@/lib/run-store';
 import { encodePolyline } from '@/lib/tracking';
 
 // Suscripción del watcher de primer plano y bandera de background a nivel de
@@ -41,6 +42,29 @@ export default function CorrerScreen() {
 
   // Re-render ante cualquier cambio de la sesión (km, pausa, etc.).
   useEffect(() => runSession.subscribe(force), []);
+
+  // Recuperación: si la app se cerró con una salida en curso, ofrecer retomarla.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (runSession.snapshot().phase !== 'idle') return;
+      const saved = await loadSessionSnapshot();
+      if (!saved || !alive || runSession.snapshot().phase !== 'idle') return;
+      runSession.restoreFrom(saved); // queda en pausa, con el tiempo neto congelado
+      const km = (saved.tracker.distanceM / 1000).toFixed(2).replace('.', ',');
+      Alert.alert(
+        'Salida recuperada',
+        `La app se cerró con una salida en curso (${km} km). Quedó en pausa: podés seguir corriendo, guardarla o descartarla.`,
+        [
+          { text: 'Descartar', style: 'destructive', onPress: discard },
+          { text: 'Guardar', onPress: finish },
+          { text: 'Reanudar', onPress: async () => { await ensureWatchers(); runSession.resume(); } },
+        ],
+      );
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const snap = runSession.snapshot();
   const phase = snap.phase;
@@ -81,6 +105,61 @@ export default function CorrerScreen() {
     setBgActive(false);
   }
 
+  /** Conecta el GPS a la sesión: background si se puede (o ya está corriendo),
+   *  si no el watcher de primer plano. Reutilizado al iniciar y al recuperar. */
+  async function ensureWatchers(): Promise<void> {
+    // Intentar tracking en background (pantalla bloqueada). En Expo Go o sin
+    // permiso de fondo, cae al watcher de primer plano.
+    let backgroundOk = false;
+    try {
+      if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) {
+        // La tarea sobrevivió al cierre de la app: reconectar sin reiniciarla.
+        usingBackground = true;
+        backgroundOk = true;
+      } else {
+        const bg = await Location.requestBackgroundPermissionsAsync();
+        if (bg.status === 'granted') {
+          await Location.startLocationUpdatesAsync(LOCATION_TASK, {
+            accuracy: Location.Accuracy.BestForNavigation,
+            timeInterval: 2000,
+            distanceInterval: 5,
+            pausesUpdatesAutomatically: false,
+            showsBackgroundLocationIndicator: true,
+            activityType: Location.ActivityType.Fitness,
+            foregroundService: {
+              notificationTitle: 'LiveRun',
+              notificationBody: 'Registrando tu salida…',
+              notificationColor: '#00e5a0',
+            },
+          });
+          usingBackground = true;
+          backgroundOk = true;
+        }
+      }
+    } catch {
+      backgroundOk = false;
+    }
+    setBgActive(backgroundOk);
+
+    if (!backgroundOk && !fgWatcher) {
+      fgWatcher = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 5 },
+        (loc) =>
+          runSession.ingest([
+            {
+              coords: {
+                latitude: loc.coords.latitude,
+                longitude: loc.coords.longitude,
+                accuracy: loc.coords.accuracy,
+                speed: loc.coords.speed,
+              },
+              timestamp: loc.timestamp,
+            },
+          ]),
+      );
+    }
+  }
+
   async function start() {
     if (startingRef.current) return;
     startingRef.current = true;
@@ -96,58 +175,21 @@ export default function CorrerScreen() {
         return;
       }
       runSession.start();
-
-      // Intentar tracking en background (pantalla bloqueada). En Expo Go o sin
-      // permiso de fondo, cae al watcher de primer plano.
-      let backgroundOk = false;
-      try {
-        const bg = await Location.requestBackgroundPermissionsAsync();
-        if (bg.status === 'granted') {
-          await Location.startLocationUpdatesAsync(LOCATION_TASK, {
-            accuracy: Location.Accuracy.BestForNavigation,
-            timeInterval: 2000,
-            distanceInterval: 5,
-            pausesUpdatesAutomatically: false,
-            showsBackgroundLocationIndicator: true,
-            activityType: Location.ActivityType.Fitness,
-            foregroundService: {
-              notificationTitle: 'ChronoTrack',
-              notificationBody: 'Registrando tu salida…',
-              notificationColor: '#00e5a0',
-            },
-          });
-          usingBackground = true;
-          backgroundOk = true;
-        }
-      } catch {
-        backgroundOk = false;
-      }
-      setBgActive(backgroundOk);
-
-      if (!backgroundOk) {
-        fgWatcher = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 3000, distanceInterval: 5 },
-          (loc) =>
-            runSession.ingest([
-              {
-                coords: {
-                  latitude: loc.coords.latitude,
-                  longitude: loc.coords.longitude,
-                  accuracy: loc.coords.accuracy,
-                },
-                timestamp: loc.timestamp,
-              },
-            ]),
-        );
-      }
+      await ensureWatchers();
     } finally {
       startingRef.current = false;
     }
   }
 
   function togglePause() {
-    if (active) runSession.pause();
-    else if (phase === 'paused') runSession.resume();
+    if (active) {
+      runSession.pause();
+    } else if (phase === 'paused') {
+      // Tras una recuperación o un guardado fallido los watchers pueden estar
+      // caídos: reconectarlos al reanudar no cuesta nada si ya están vivos.
+      ensureWatchers().catch(() => {});
+      runSession.resume();
+    }
   }
 
   function confirmFinish() {
@@ -184,8 +226,9 @@ export default function CorrerScreen() {
       }
       setPhotoData(data); // ofrecer capturar el momento con la cámara
     } catch {
-      runSession.reset();
-      Alert.alert('Ups', 'No se pudo guardar la salida.');
+      // No descartar: la salida vuelve a pausa y se puede reintentar.
+      runSession.abortSaving();
+      Alert.alert('Ups', 'No se pudo guardar la salida. Quedó en pausa: tocá Terminar para reintentar.');
     }
   }
 
@@ -200,7 +243,7 @@ export default function CorrerScreen() {
           <View style={styles.idleWrap}>
             <View style={styles.idleTop}>
               <ThemedText style={styles.brand}>
-                CHRONO<ThemedText style={[styles.brand, { color: BrandAccent }]}>TRACK</ThemedText> RUN
+                LIVE<ThemedText style={[styles.brand, { color: BrandAccent }]}>RUN</ThemedText>
               </ThemedText>
               <ThemedText type="subtitle" style={styles.idleTitle}>¿Listo para salir?</ThemedText>
             </View>
@@ -281,6 +324,10 @@ export default function CorrerScreen() {
               <Metric value={String(snap.splits.length)} label="splits" />
             </View>
 
+            {snap.path.length > 1 && (
+              <RouteMap path={snap.path} live height={170} style={styles.liveMap} />
+            )}
+
             <View style={styles.actions}>
               <Pressable
                 style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.backgroundElement }, pressed && styles.pressed]}
@@ -319,6 +366,7 @@ export default function CorrerScreen() {
                 ? ((photoData.distanceM / photoData.durationS) * 3.6).toFixed(1).replace('.', ',')
                 : undefined,
           }}
+          polyline={photoData.path.length > 1 ? encodePolyline(photoData.path) : undefined}
           onClose={() => setPhotoData(null)}
         />
       )}
@@ -368,6 +416,7 @@ const styles = StyleSheet.create({
   metric: { alignItems: 'center', gap: 2 },
   metricBig: { fontSize: 56, lineHeight: 62, fontWeight: '800', color: BrandAccent },
   metricValue: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
+  liveMap: { alignSelf: 'stretch', marginHorizontal: Spacing.three, marginTop: Spacing.two },
   actions: { flexDirection: 'row', gap: Spacing.three, marginTop: Spacing.four },
   actionButton: {
     paddingHorizontal: Spacing.four,
