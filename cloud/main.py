@@ -415,7 +415,9 @@ def delete_account(request: Request, user: PortalUser = Depends(current_user),
 
 
 @app.post("/api/claim", tags=["Corredor"])
-def claim(body: ClaimIn, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def claim(body: ClaimIn, request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    # Mismo bucket que /api/me/claim: frena adivinar apellidos por fuerza bruta.
+    rate_limit(request, "claim", limit=30, window=60.0)
     race = db.scalar(select(PublishedRace).where(PublishedRace.code == body.code.upper()))
     if not race:
         raise HTTPException(404, "No existe una carrera con ese código")

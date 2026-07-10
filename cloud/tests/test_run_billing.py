@@ -89,31 +89,41 @@ def test_webhook_pago_aprobado_extiende_premium(client, db, monkeypatch):
     assert u.premium_until is None
     _setup_payment(monkeypatch, u.id)
 
-    r = client.post("/api/run/billing/webhook?type=payment&data.id=PAY-1")
+    r = client.post("/api/run/billing/webhook?type=payment&data.id=90001")
     assert r.status_code == 200
     db.refresh(u)
     assert u.premium_until is not None and u.premium_until > datetime.now()
-    assert db.scalar(select(BillingPayment).where(BillingPayment.mp_payment_id == "PAY-1"))
+    assert db.scalar(select(BillingPayment).where(BillingPayment.mp_payment_id == "90001"))
 
 
 def test_webhook_es_idempotente(client, db, monkeypatch):
     h = make_user(client, email="p2@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p2@test.com"))
     _setup_payment(monkeypatch, u.id)
-    client.post("/api/run/billing/webhook?type=payment&data.id=PAY-2")
+    client.post("/api/run/billing/webhook?type=payment&data.id=90002")
     db.refresh(u)
     first = u.premium_until
     # Segundo aviso del MISMO pago: no vuelve a sumar.
-    client.post("/api/run/billing/webhook?type=payment&data.id=PAY-2")
+    client.post("/api/run/billing/webhook?type=payment&data.id=90002")
     db.refresh(u)
     assert u.premium_until == first
+
+
+def test_webhook_ignora_id_no_numerico(client, monkeypatch):
+    """Un id armado (p. ej. '../preapproval/1') no debe llegar a la API de MP:
+    iría inyectado en la URL del GET autenticado con nuestro token."""
+    calls = []
+    monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
+    r = client.post("/api/run/billing/webhook?type=payment&data.id=..%2Fpreapproval%2F1")
+    assert r.status_code == 200 and r.json() == {"received": True}
+    assert calls == []
 
 
 def test_webhook_pago_rechazado_no_da_premium(client, db, monkeypatch):
     h = make_user(client, email="p3@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p3@test.com"))
     _setup_payment(monkeypatch, u.id, status="rejected")
-    client.post("/api/run/billing/webhook?type=payment&data.id=PAY-3")
+    client.post("/api/run/billing/webhook?type=payment&data.id=90003")
     db.refresh(u)
     assert u.premium_until is None
 
@@ -124,7 +134,7 @@ def test_webhook_consume_descuento_pendiente(client, db, monkeypatch):
     u.pending_discount_percent = 30
     db.commit()
     _setup_payment(monkeypatch, u.id)
-    client.post("/api/run/billing/webhook?type=payment&data.id=PAY-4")
+    client.post("/api/run/billing/webhook?type=payment&data.id=90004")
     db.refresh(u)
     assert u.pending_discount_percent is None  # se usó en este cobro
 

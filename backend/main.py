@@ -69,7 +69,11 @@ if STATIC.exists():
         if full_path.startswith("api/"):
             from fastapi import HTTPException
             raise HTTPException(404)
-        file = STATIC / full_path
-        if file.exists() and file.is_file():
+        # Confinar al directorio estático: full_path llega ya URL-decodificado,
+        # así que "%2e%2e/" se vuelve "../" y sin este chequeo leería archivos
+        # de afuera (chronotrack.db, chronotrack_cloud.json con la API key).
+        base = STATIC.resolve()
+        file = (base / full_path).resolve()
+        if file.is_file() and file.is_relative_to(base):
             return FileResponse(file)
         return FileResponse(STATIC / "index.html")

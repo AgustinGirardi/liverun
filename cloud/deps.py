@@ -18,10 +18,21 @@ _STALE_AFTER = 600.0   # una IP sin actividad en 10 min se olvida
 
 
 def _client_ip(request: Request) -> str:
-    # Detrás del proxy de Render el IP real viaja en X-Forwarded-For.
+    # Render está detrás de Cloudflare: CF-Connecting-IP trae la IP real del
+    # cliente y Cloudflare descarta cualquier valor que mande el cliente, así
+    # que es infalsificable — la clave correcta para el rate limit.
+    #
+    # NO usar el primer valor de X-Forwarded-For: lo controla el cliente.
+    # Probado en producción: variando el XFF por request se saltaba el límite
+    # entero (0 respuestas 429 en 25 logins). Como fallback (acceso directo al
+    # origen, sin Cloudflare) tomamos el ÚLTIMO salto del XFF, que lo agrega la
+    # infra y no el cliente.
+    cf = request.headers.get("cf-connecting-ip")
+    if cf:
+        return cf.strip()
     fwd = request.headers.get("x-forwarded-for")
     if fwd:
-        return fwd.split(",")[0].strip()
+        return fwd.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 

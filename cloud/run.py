@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -357,8 +357,22 @@ def redeem_coupon(body: RedeemIn, request: Request,
     if err:
         raise HTTPException(400, err)
 
+    # Incremento atómico con tope: el chequeo de coupon_redeemable es solo el
+    # fast-path; dos canjes concurrentes podían pasar ambos el chequeo y
+    # superar max_redemptions. El WHERE condicional lo hace imposible. Va ANTES
+    # del INSERT de la redención: así el autoflush del execute no dispara el
+    # IntegrityError de duplicado (ese lo maneja el try/except del commit → 400).
+    claimed = db.execute(
+        update(Coupon)
+        .where(Coupon.id == c.id,
+               or_(Coupon.max_redemptions.is_(None),
+                   func.coalesce(Coupon.redeemed_count, 0) < Coupon.max_redemptions))
+        .values(redeemed_count=func.coalesce(Coupon.redeemed_count, 0) + 1)
+    )
+    if claimed.rowcount == 0:
+        db.rollback()
+        raise HTTPException(400, "Ese cupón ya alcanzó el máximo de usos.")
     db.add(CouponRedemption(coupon_id=c.id, user_id=user.id))
-    c.redeemed_count = (c.redeemed_count or 0) + 1
     if c.kind == "free_months":
         base = user.premium_until if (user.premium_until and user.premium_until > now) else now
         user.premium_until = base + timedelta(days=30 * c.months)

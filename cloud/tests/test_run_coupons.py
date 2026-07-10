@@ -91,6 +91,43 @@ def test_no_se_puede_canjear_dos_veces(client, db):
     assert client.post("/api/run/coupons/redeem", json={"code": "once"}, headers=h).status_code == 400
 
 
+def test_canje_concurrente_no_supera_el_maximo(client, db, monkeypatch):
+    """Simula la carrera check-then-increment: aunque el fast-path de
+    coupon_redeemable pase (dos requests leyeron el contador antes del
+    incremento de la otra), el UPDATE condicional no deja superar el tope."""
+    import cloud.run as run_mod
+    ha = _admin(client, db)
+    client.post("/api/run/admin/coupons",
+                json={"code": "race1", "kind": "free_months", "months": 1, "max_redemptions": 1},
+                headers=ha)
+    h1 = make_user(client, email="r1@test.com")
+    h2 = make_user(client, email="r2@test.com")
+    assert client.post("/api/run/coupons/redeem", json={"code": "race1"}, headers=h1).status_code == 200
+    # Segunda request que "ya pasó" el chequeo previo (carrera simulada).
+    monkeypatch.setattr(run_mod, "coupon_redeemable", lambda *a, **k: None)
+    r = client.post("/api/run/coupons/redeem", json={"code": "race1"}, headers=h2)
+    assert r.status_code == 400
+    c = db.scalar(select(Coupon).where(Coupon.code == "RACE1"))
+    assert c.redeemed_count == 1  # no se pasó del tope
+
+
+def test_canje_repetido_mismo_usuario_en_carrera_da_400_no_500(client, db, monkeypatch):
+    """Mismo usuario, request que saltea el fast-path `already` (carrera):
+    el INSERT duplicado de la redención debe caer en el try/except del commit
+    (400 limpio), no en un 500 por el autoflush del UPDATE del contador."""
+    import cloud.run as run_mod
+    ha = _admin(client, db)
+    client.post("/api/run/admin/coupons",
+                json={"code": "dup1", "kind": "free_months", "months": 1}, headers=ha)
+    h = make_user(client, email="dup@test.com")
+    assert client.post("/api/run/coupons/redeem", json={"code": "dup1"}, headers=h).status_code == 200
+    monkeypatch.setattr(run_mod, "coupon_redeemable", lambda *a, **k: None)  # simula el race
+    r = client.post("/api/run/coupons/redeem", json={"code": "dup1"}, headers=h)
+    assert r.status_code == 400
+    c = db.scalar(select(Coupon).where(Coupon.code == "DUP1"))
+    assert c.redeemed_count == 1  # el rollback deshizo el segundo incremento
+
+
 def test_canje_respeta_maximo_y_toggle(client, db):
     ha = _admin(client, db)
     cid = client.post("/api/run/admin/coupons",

@@ -63,7 +63,10 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         notif_type = notif_type or body.get("type") or body.get("topic")
         payment_id = payment_id or (body.get("data") or {}).get("id") or body.get("id")
     # Solo procesamos pagos; los demás avisos (preapproval, etc.) se aceptan y ya.
-    if notif_type in ("payment", "subscription_authorized_payment") and payment_id:
+    # Los ids de pago de MP son numéricos; validar acá evita que un id armado
+    # (p. ej. "../preapproval/X") se inyecte en la URL del GET a la API de MP.
+    if notif_type in ("payment", "subscription_authorized_payment") \
+            and payment_id and str(payment_id).isdigit():
         try:
             billing.apply_payment(str(payment_id), db)
         except Exception:
