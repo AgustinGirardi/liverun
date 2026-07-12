@@ -216,8 +216,11 @@ export default function HistorialScreen() {
               </ThemedText>
             }
             renderItem={({ item }) => (
-              <Pressable onPress={() => toggle(item.id)}>
-                <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+              <View style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+                {/* Solo el encabezado despliega/minimiza: así los toques sobre
+                    el mapa no colapsan la tarjeta (se mueve libre) y para cerrar
+                    se toca de nuevo acá arriba. */}
+                <Pressable onPress={() => toggle(item.id)}>
                   <ThemedText type="smallBold" themeColor="textSecondary">
                     {formatWhen(item.started_at)}
                   </ThemedText>
@@ -225,37 +228,42 @@ export default function HistorialScreen() {
                     <ThemedText type="subtitle" style={{ color: BrandAccent }}>
                       {formatKm(item.distance_m)}
                     </ThemedText>
-                    <View style={styles.metrics}>
-                      <ThemedText type="smallBold">{formatDuration(item.duration_s)}</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        {formatPace(item.avg_pace_s_per_km)}
+                    <View style={styles.rowRight}>
+                      <View style={styles.metrics}>
+                        <ThemedText type="smallBold">{formatDuration(item.duration_s)}</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {formatPace(item.avg_pace_s_per_km)}
+                        </ThemedText>
+                      </View>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.chevExpand}>
+                        {expanded === item.id ? '▴' : '▾'}
                       </ThemedText>
                     </View>
                   </View>
-                  {expanded === item.id && (
-                    <FadeIn>
-                      <Route detail={details[item.id]} bg={theme.backgroundSelected} />
-                      <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
-                      <View style={styles.actionsRow}>
-                        <Pressable
-                          style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
-                          onPress={() => tryShare(item)}>
-                          <ThemedText type="smallBold" style={{ color: BrandAccent }}>
-                            ↗ Compartir{access ? '' : ' ⭐'}
-                          </ThemedText>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
-                          onPress={() => confirmDelete(item)}>
-                          <ThemedText type="smallBold" style={styles.deleteText}>
-                            🗑 Eliminar
-                          </ThemedText>
-                        </Pressable>
-                      </View>
-                    </FadeIn>
-                  )}
-                </View>
-              </Pressable>
+                </Pressable>
+                {expanded === item.id && (
+                  <FadeIn>
+                    <Route detail={details[item.id]} bg={theme.backgroundSelected} />
+                    <Splits detail={details[item.id]} dividerColor={theme.backgroundSelected} />
+                    <View style={styles.actionsRow}>
+                      <Pressable
+                        style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
+                        onPress={() => tryShare(item)}>
+                        <ThemedText type="smallBold" style={{ color: BrandAccent }}>
+                          ↗ Compartir{access ? '' : ' ⭐'}
+                        </ThemedText>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
+                        onPress={() => confirmDelete(item)}>
+                        <ThemedText type="smallBold" style={styles.deleteText}>
+                          🗑 Eliminar
+                        </ThemedText>
+                      </Pressable>
+                    </View>
+                  </FadeIn>
+                )}
+              </View>
             )}
           />
         )}
@@ -431,6 +439,8 @@ const styles = StyleSheet.create({
   // tarjetas de salida
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.one },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
+  rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  chevExpand: { fontSize: 15 },
   metrics: { alignItems: 'flex-end' },
   route: { borderRadius: 12, marginTop: Spacing.two, overflow: 'hidden' },
   splits: { borderTopWidth: 1, marginTop: Spacing.two, paddingTop: Spacing.two, gap: 6 },

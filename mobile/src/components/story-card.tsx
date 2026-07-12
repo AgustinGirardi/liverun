@@ -18,6 +18,7 @@ import {
 import { captureRef } from 'react-native-view-shot';
 
 import { RouteSketch } from '@/components/route-sketch';
+import { RouteSnapshot } from '@/components/route-snapshot';
 import { ThemedText } from '@/components/themed-text';
 import { BrandAccent, Spacing } from '@/constants/theme';
 
@@ -124,14 +125,20 @@ export function StoryCard({ stats, polyline, onClose }: Props) {
           </View>
 
           {polyline ? (
-            <RouteSketch
-              polyline={polyline}
-              // Con foto: chico y a un costado (la foto es la protagonista);
-              // sin foto: grande en el centro de la tarjeta.
-              height={photo ? 80 : 190}
-              stroke={photo ? 'rgba(255,255,255,0.85)' : BrandAccent}
-              style={photo ? styles.routeSmall : styles.route}
-            />
+            photo ? (
+              // Con foto: la foto es la protagonista → trazo fino y a un costado
+              // (un mapa encima de la foto la taparía).
+              <RouteSketch
+                polyline={polyline}
+                height={80}
+                stroke="rgba(255,255,255,0.85)"
+                style={styles.routeSmall}
+              />
+            ) : (
+              // Sin foto: mapa real grande en el centro (el recorrido es el
+              // protagonista). Cae al croquis si no hay mapa nativo.
+              <RouteSnapshot polyline={polyline} height={190} style={styles.route} />
+            )
           ) : null}
 
           <View style={styles.bottom}>
