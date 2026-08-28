@@ -478,8 +478,13 @@ async function viewRace(code){
         <span class="pager-info">${page+1} / ${pages} · ${filtered.length} corredores</span>
         <button class="btn ghost sm pager-btn" ${page>=pages-1?'disabled':''} onclick="resNav(1)">Siguientes →</button>
       </div>` : "";
+    // Dos vacíos distintos: que no haya nadie en la distancia no es lo mismo que
+    // que el filtro del usuario no encuentre a nadie.
+    const vacio = tf
+      ? `Ningún corredor coincide con “${esc(state.textFilter)}”. <a class="lnk" onclick="limpiarFiltroCarrera()">Limpiar filtro</a>`
+      : "Sin finishers en esta distancia";
     return `<table><thead><tr><th>Pos</th><th>Dorsal</th><th>Nombre</th><th class="hide-sm">Cat.</th><th class="hide-sm">Club</th><th style="text-align:right">Tiempo</th><th></th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="7" class="empty">Sin finishers en esta distancia</td></tr>`}</tbody></table>${pager}`;
+      <tbody>${rows||`<tr><td colspan="7" class="empty">${vacio}</td></tr>`}</tbody></table>${pager}`;
   };
 
   $("rc").innerHTML = `
@@ -511,6 +516,7 @@ async function viewRace(code){
   renderPodium();
 }
 function filterRace(){ const el=document.getElementById("rfilter"); state.textFilter = el?el.value:""; state.resPage = 0; document.getElementById("tbl").innerHTML = state._renderTable(); }
+function limpiarFiltroCarrera(){ const el=document.getElementById("rfilter"); if(el) el.value=""; filterRace(); }
 function renderPodium(){
   const el = document.getElementById("podium"); if(!el || !state.curRace) return;
   const fin = state.curRace.results.filter(r=>r.status==="FINISHER" && (state.distFilter==null || r.distance_km===state.distFilter));
