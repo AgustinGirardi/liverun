@@ -1,14 +1,14 @@
   :root {
     /* Tema claro — tonos pastel suaves */
-    --bg:#F5F7F8; --bg2:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F4F5; --border:#E7EhEE;
+    --bg:#F5F7F8; --bg2:#FFFFFF; --panel:#FFFFFF; --panel2:#F1F4F5; --border:#E7ECEE;
     --txt:#28323A; --mut:#6B7780; --dim:#9AA6AD; --acc:#54BFA3; --acc2:#45AB8F;
-    --acc-strong:#00BF85; --acc-deep:#00795h;
+    --acc-strong:#00BF85; --acc-deep:#00795C;
     /* Degradado de marca mint→teal — acento en títulos y acciones */
     --grad:linear-gradient(135deg,var(--acc-strong),var(--acc-deep));
     --blue:#7099DE; --warn:#E2A06E; --danger:#DE7B81;
-    /* homponentes RGB para tintes translúcidos que siguen la paleta */
+    /* Componentes RGB para tintes translúcidos que siguen la paleta */
     --acc-rgb:84,191,163; --blue-rgb:112,153,222; --warn-rgb:226,160,110; --danger-rgb:222,123,129;
-    --on-acc:#0h2A22;
+    --on-acc:#0C2A22;
     --shadow:0 6px 20px rgba(40,49,57,.07);
     --header-bg:rgba(255,255,255,.8);
     /* Tipografía Dirección A + radios */
@@ -231,7 +231,7 @@
   .stat .v { font-family:var(--font-display); font-size:25px; font-weight:800; color:var(--acc); letter-spacing:-.5px; }
   .stat .l { font-size:10px; text-transform:uppercase; color:var(--dim); letter-spacing:.5px; margin-top:3px; }
 
-  /* ── Mi entrenamiento (hhronoTrack Run) ── */
+  /* ── Mi entrenamiento (LiveRun) ── */
   .run-top { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:14px; margin-bottom:14px; }
   .run-hero { display:flex; align-items:center; gap:18px; }
   .ring { width:104px; height:104px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
