@@ -1683,6 +1683,77 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PANEL DE INSCRIPCIÓN — cupo y link que se publican en el calendario del portal
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function InscripcionPanel({ race, onSaved }) {
+  const [cupo, setCupo] = useState(race.capacity != null ? String(race.capacity) : "")
+  const [url, setUrl]   = useState(race.registration_url || "")
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg]   = useState("")
+  const [inscriptos, setInscriptos] = useState(null)
+
+  // El portal informa los inscriptos reales al publicar; acá lo mostramos para
+  // que el organizador vea el mismo número antes de mandar el anuncio.
+  useEffect(() => {
+    fetch(API + "/races/" + race.id + "/registrations")
+      .then(r => r.json())
+      .then(d => setInscriptos(Array.isArray(d) ? d.length : null))
+      .catch(() => {})
+  }, [race.id])
+
+  const sucio = cupo !== (race.capacity != null ? String(race.capacity) : "")
+             || url !== (race.registration_url || "")
+
+  const guardar = async () => {
+    const u = url.trim()
+    if (u && !/^https?:\/\//i.test(u)) { setMsg("El link tiene que empezar con http:// o https://"); return }
+    setSaving(true); setMsg("")
+    const r = await fetch(API + "/races/" + race.id, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ capacity: cupo ? parseInt(cupo, 10) : null, registration_url: u || null }),
+    })
+    if (r.ok) { setMsg("Guardado ✓ — publicá para que se vea en el calendario"); onSaved() }
+    else { const e = await r.json().catch(() => ({})); setMsg(typeof e.detail === "string" ? e.detail : "No se pudo guardar") }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ ...CARD, marginTop: 16, border: "1px solid #4d9fff30" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#4d9fff" }}>📅 Inscripción · calendario del portal</span>
+      </div>
+      <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 12 }}>
+        Los corredores ven esto en el Calendario del portal. El link es adónde los mandás a inscribirse
+        (tu formulario, tu pasarela de pago o la web de la carrera). La cantidad de inscriptos se toma sola
+        de esta carrera: hoy son <b style={{ color: "#e8eaeb" }}>{inscriptos ?? "…"}</b>.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "160px 1fr auto", gap: 10, alignItems: "end" }}>
+        <div>
+          <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Cupo</div>
+          <input value={cupo} onChange={e => setCupo(e.target.value.replace(/\D/g, ""))}
+                 placeholder="sin límite" inputMode="numeric" style={INPUT} />
+        </div>
+        <div>
+          <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Link de inscripción</div>
+          <input value={url} onChange={e => setUrl(e.target.value)}
+                 placeholder="https://tu-formulario-de-inscripcion.com" style={INPUT}
+                 onKeyDown={e => e.key === "Enter" && sucio && guardar()} />
+        </div>
+        <button onClick={guardar} disabled={saving || !sucio}
+          style={{ ...BTN_PRIMARY, opacity: (saving || !sucio) ? 0.45 : 1, cursor: (saving || !sucio) ? "default" : "pointer" }}>
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </div>
+      {msg && <div style={{ fontSize: 12, marginTop: 10, color: msg.includes("✓") ? "#00e5a0" : "#ff4d4d" }}>{msg}</div>}
+      {!url && <div style={{ fontSize: 12, marginTop: 10, color: "#f5a623" }}>
+        Sin link, el evento se anuncia igual pero el portal muestra “Inscripción a cargo del organizador” en lugar del botón.
+      </div>}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RACE DETAIL PAGE — drill-in con sub-tabs por carrera
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1737,7 +1808,14 @@ function RaceDetailPage({ race: initialRace, onBack }) {
       alert("Primero configurá la conexión al portal en Configuración → Nube (URL + API key).")
       return
     }
-    if (!confirm(`¿Publicar los resultados de "${race.name}" en el portal público?\n\nSe enviará: nombre, categoría, club, dorsal, distancia y tiempos.\nNO se envía DNI ni fecha de nacimiento.\n\nLos corredores podrán reclamar su resultado en: ${cfg.url}`)) return
+    // Una carrera todavía en preparación se anuncia en el calendario del portal;
+    // una ya corrida publica su tabla de resultados. El backend decide según el
+    // estado, así que el aviso tiene que decir lo mismo que va a pasar.
+    const esEvento = race.status === "PLANNED"
+    const aviso = esEvento
+      ? `¿Anunciar "${race.name}" en el calendario del portal?\n\nSe enviará: nombre, fecha, lugar, distancias, cupo, cantidad de inscriptos y el link de inscripción.\nNO se envían datos de los corredores.\n\nLos corredores lo van a ver en: ${cfg.url}`
+      : `¿Publicar los resultados de "${race.name}" en el portal público?\n\nSe enviará: nombre, categoría, club, dorsal, distancia y tiempos.\nNO se envía DNI ni fecha de nacimiento.\n\nLos corredores podrán reclamar su resultado en: ${cfg.url}`
+    if (!confirm(aviso)) return
     setPublishing(true)
     try {
       const r = await fetch(API + "/races/" + race.id + "/publish", { method: "POST" })
@@ -1746,7 +1824,9 @@ function RaceDetailPage({ race: initialRace, onBack }) {
         alert("No se pudo publicar: " + (data.detail || "error desconocido"))
         return
       }
-      alert(`✅ ${data.message}\n\nResultados publicados: ${data.published_results}\nCódigo de la carrera: ${data.code}\n\nLos corredores ya pueden buscarla en el portal con ese código.`)
+      alert(data.event
+        ? `✅ ${data.message}\n\nInscriptos informados: ${data.registered_count}\nCódigo de la carrera: ${data.code}\n\nYa aparece en el Calendario del portal. Cuando publiques los resultados, pasa sola a Carreras con el mismo código.`
+        : `✅ ${data.message}\n\nResultados publicados: ${data.published_results}\nCódigo de la carrera: ${data.code}\n\nLos corredores ya pueden buscarla en el portal con ese código.`)
     } catch (e) {
       alert("No se pudo publicar: " + e.message)
     } finally {
@@ -1828,6 +1908,10 @@ function RaceDetailPage({ race: initialRace, onBack }) {
           )}
         </div>
       </div>
+
+      {/* Inscripción: sólo mientras la carrera no se corrió — es lo que viaja al
+          calendario del portal cuando se aprieta "Publicar". */}
+      {race.status === "PLANNED" && <InscripcionPanel race={race} onSaved={refreshRace} />}
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2a2e31", marginTop: 16, marginBottom: 20 }}>
@@ -2029,11 +2113,28 @@ function DashboardPage({ onNavigate }) {
 // PÁGINA: CARRERAS — lista + drill-in
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Orden por fecha con los sin fecha al final; `dir` = 1 próxima primero, -1 reciente primero.
+const porFecha = (dir) => (a, b) => {
+  if (!a.race_date) return 1
+  if (!b.race_date) return -1
+  return a.race_date < b.race_date ? -dir : a.race_date > b.race_date ? dir : 0
+}
+const GRUPOS_CARRERA = [
+  { status: "ACTIVE",   titulo: "En curso",        orden: porFecha(-1), colapsable: false,
+    ayuda: "Cronómetro corriendo. Entrá para capturar llegadas." },
+  { status: "PLANNED",  titulo: "En preparación",  orden: porFecha(1),  colapsable: false,
+    ayuda: "Todavía no se corrieron: cargá inscriptos, cupo y link, y publicalas al calendario del portal." },
+  { status: "FINISHED", titulo: "Finalizadas",     orden: porFecha(-1), colapsable: true,
+    ayuda: "Ya cronometradas. Entrá para ver resultados, publicarlos o exportarlos." },
+]
+const VISIBLES_FINALIZADAS = 6
+
 function RacesPage() {
   const [races, setRaces]       = useState([])
   const [drillRace, setDrillRace] = useState(null)
+  const [verTodas, setVerTodas] = useState(false)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: "", location: "", race_date: "" })
+  const [form, setForm] = useState({ name: "", location: "", race_date: "", capacity: "", registration_url: "" })
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState("")
 
@@ -2049,15 +2150,23 @@ function RacesPage() {
     return <RaceDetailPage race={fresh} onBack={() => { setDrillRace(null); load() }} />
   }
 
+  const EMPTY_FORM = { name: "", location: "", race_date: "", capacity: "", registration_url: "" }
+
   const create = async () => {
     if (!form.name) { setError("El nombre es obligatorio"); return }
+    const url = form.registration_url.trim()
+    if (url && !/^https?:\/\//i.test(url)) { setError("El link de inscripción debe empezar con http:// o https://"); return }
     setSaving(true); setError("")
     const r = await fetch(API + "/races", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: form.name, location: form.location || null, race_date: form.race_date || null }),
+      body: JSON.stringify({
+        name: form.name, location: form.location || null, race_date: form.race_date || null,
+        capacity: form.capacity ? parseInt(form.capacity, 10) : null,
+        registration_url: url || null,
+      }),
     })
-    if (r.ok) { setShowForm(false); setForm({ name: "", location: "", race_date: "" }); load() }
-    else { const e = await r.json(); setError(e.detail || "Error") }
+    if (r.ok) { setShowForm(false); setForm(EMPTY_FORM); load() }
+    else { const e = await r.json(); setError(typeof e.detail === "string" ? e.detail : "Error") }
     setSaving(false)
   }
 
@@ -2101,6 +2210,18 @@ function RacesPage() {
               <input value={form.race_date} onChange={e => setForm(p => ({ ...p, race_date: e.target.value }))} style={INPUT} type="date" />
             </div>
           </div>
+          {/* Calendario del portal: mientras la carrera esté en PLANNED, "Subir a
+              la web" la publica como evento con estos dos datos. */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Cupo</div>
+              <input value={form.capacity} onChange={e => setForm(p => ({ ...p, capacity: e.target.value.replace(/\D/g, "") }))} placeholder="sin límite" style={INPUT} inputMode="numeric" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Link de inscripción</div>
+              <input value={form.registration_url} onChange={e => setForm(p => ({ ...p, registration_url: e.target.value }))} placeholder="https://… (se muestra en el calendario del portal)" style={INPUT} />
+            </div>
+          </div>
           {error && <div style={{ color: "#ff4d4d", fontSize: 12, marginBottom: 10, padding: "6px 10px", background: "#ff4d4d15", borderRadius: 4 }}>{error}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button onClick={() => setShowForm(false)} style={BTN_GHOST}>Cancelar</button>
@@ -2116,38 +2237,65 @@ function RacesPage() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
-        {races.map(race => (
-          <div key={race.id}
-            onClick={() => setDrillRace(race)}
-            style={{ ...CARD, cursor: "pointer", transition: "border-color 0.15s, transform 0.1s", position: "relative" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = "#00e5a050"; e.currentTarget.style.transform = "translateY(-1px)" }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2e31"; e.currentTarget.style.transform = "translateY(0)" }}>
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, flex: 1, paddingRight: 8 }}>{race.name}</div>
-              <button onClick={(e) => deleteRace(race, e)}
-                style={{ background: "transparent", border: "none", color: "#363b3f", cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1 }}
-                onMouseEnter={e => e.currentTarget.style.color = "#ff4d4d"}
-                onMouseLeave={e => e.currentTarget.style.color = "#363b3f"}>✕</button>
+      {/* Agrupadas por estado: primero lo que necesita atención ahora (una
+          carrera en curso), después lo que viene, y al final el archivo. */}
+      {GRUPOS_CARRERA.map(g => {
+        const delGrupo = races.filter(r => r.status === g.status).sort(g.orden)
+        if (!delGrupo.length) return null
+        const colapsado = g.colapsable && !verTodas && delGrupo.length > VISIBLES_FINALIZADAS
+        const visibles = colapsado ? delGrupo.slice(0, VISIBLES_FINALIZADAS) : delGrupo
+        const s = RACE_STATUS[g.status]
+        return (
+          <div key={g.status} style={{ marginBottom: 26 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 8, background: s.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#e8eaeb" }}>{g.titulo}</span>
+              <span style={{ fontSize: 12, color: "#525a60" }}>{delGrupo.length}</span>
+              <div style={{ flex: 1, height: 1, background: "#2a2e31" }} />
+              {g.colapsable && delGrupo.length > VISIBLES_FINALIZADAS && (
+                <button onClick={() => setVerTodas(v => !v)}
+                  style={{ background: "transparent", border: "none", color: "#8a9299", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                  {colapsado ? `Ver todas (${delGrupo.length}) →` : "Ver menos ←"}
+                </button>
+              )}
             </div>
+            <div style={{ fontSize: 12, color: "#525a60", marginTop: -6, marginBottom: 12 }}>{g.ayuda}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+              {visibles.map(race => (
+                <div key={race.id}
+                  onClick={() => setDrillRace(race)}
+                  style={{ ...CARD, cursor: "pointer", transition: "border-color 0.15s, transform 0.1s", position: "relative" }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#00e5a050"; e.currentTarget.style.transform = "translateY(-1px)" }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2e31"; e.currentTarget.style.transform = "translateY(0)" }}>
 
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-              <RaceStatusBadge status={race.status} />
-              {race.race_date && <span style={{ color: "#525a60", fontSize: 12 }}>📅 {race.race_date}</span>}
-              {race.location && <span style={{ color: "#525a60", fontSize: 12 }}>📍 {race.location}</span>}
-            </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, flex: 1, paddingRight: 8 }}>{race.name}</div>
+                    <button onClick={(e) => deleteRace(race, e)}
+                      style={{ background: "transparent", border: "none", color: "#363b3f", cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1 }}
+                      onMouseEnter={e => e.currentTarget.style.color = "#ff4d4d"}
+                      onMouseLeave={e => e.currentTarget.style.color = "#363b3f"}>✕</button>
+                  </div>
 
-            {race.race_start_ns && (
-              <div style={{ fontSize: 11, color: "#00e5a060", marginBottom: 8 }}>✓ Largada registrada</div>
-            )}
+                  {/* Sin píldora de estado: la sección ya lo dice, repetirlo en
+                      cada tarjeta era ruido y tapaba fecha y lugar. */}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+                    {race.race_date && <span style={{ color: "#8a9299", fontSize: 12 }}>📅 {race.race_date}</span>}
+                    {race.location && <span style={{ color: "#8a9299", fontSize: 12 }}>📍 {race.location}</span>}
+                  </div>
 
-            <div style={{ marginTop: 8, fontSize: 12, color: "#00e5a070", fontWeight: 600 }}>
-              Entrar →
+                  {race.race_start_ns && (
+                    <div style={{ fontSize: 11, color: "#00e5a060", marginBottom: 8 }}>✓ Largada registrada</div>
+                  )}
+
+                  <div style={{ marginTop: 8, fontSize: 12, color: "#00e5a070", fontWeight: 600 }}>
+                    Entrar →
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        )
+      })}
     </div>
   )
 }

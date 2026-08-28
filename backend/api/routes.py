@@ -815,6 +815,68 @@ def _email_hash(email):
     return hashlib.sha256(("chronotrack-v1:" + e).encode()).hexdigest()
 
 
+async def _publish_event(race: Race, db: AsyncSession, cfg: dict) -> dict:
+    """Anuncia una carrera futura en el calendario del portal.
+
+    No viaja ningún dato personal: sólo nombre, fecha, lugar, distancias
+    ofrecidas, cupo, cuántos se anotaron y dónde inscribirse."""
+    dists = sorted({
+        d for (d,) in (await db.execute(
+            select(Registration.distance_km).where(
+                Registration.race_id == race.id, Registration.distance_km != None)  # noqa: E711
+            .distinct()
+        )).all()
+    })
+    if not dists and race.distance_km:
+        dists = [race.distance_km]
+    inscriptos = (await db.execute(
+        select(func.count()).select_from(Registration).where(Registration.race_id == race.id)
+    )).scalar_one()
+
+    payload = {
+        "source_id": f"ct-race-{race.id}",
+        "name": race.name,
+        "location": race.location,
+        "race_date": race.race_date.isoformat() if race.race_date else None,
+        "distances": dists,
+        "capacity": race.capacity,
+        "registered_count": inscriptos,
+        "registration_url": race.registration_url,
+    }
+    body = json.dumps(payload).encode("utf-8")
+    url = cfg["url"].rstrip("/") + "/api/events"
+
+    def _post():
+        req = urllib.request.Request(
+            url, data=body, method="POST",
+            headers={"Content-Type": "application/json", "X-API-Key": cfg["api_key"]},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, resp.read().decode("utf-8")
+
+    try:
+        _status, text = await anyio.to_thread.run_sync(_post)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        if e.code == 403:
+            raise HTTPException(502, "El portal rechazó la API key. Revisá la configuración de la nube.")
+        raise HTTPException(502, f"El portal respondió con error {e.code}: {detail}")
+    except urllib.error.URLError as e:
+        raise HTTPException(502, f"No se pudo conectar al portal: {e.reason}. Verificá la URL y tu conexión.")
+
+    try:
+        cloud_resp = json.loads(text)
+    except Exception:
+        cloud_resp = {"raw": text}
+    return {
+        "message": "Evento publicado en el calendario",
+        "code": cloud_resp.get("code"),
+        "event": True,
+        "registered_count": inscriptos,
+        "portal_url": cfg["url"].rstrip("/"),
+    }
+
+
 @router.post("/races/{race_id}/publish", tags=["Cloud"])
 async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     """Publica los resultados de una carrera en el portal público (server-to-server).
@@ -826,6 +888,14 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     cfg = cloud_config.load_config()
     if not cfg["api_key"]:
         raise HTTPException(400, "Falta configurar la API key del portal (Configuración → Nube).")
+
+    # Carrera todavía no corrida: se anuncia en el calendario del portal en vez
+    # de publicar una tabla de resultados vacía.
+    race_obj = await db.get(Race, race_id)
+    if not race_obj:
+        raise HTTPException(404, "Race not found")
+    if race_obj.status == RaceStatus.PLANNED:
+        return await _publish_event(race_obj, db, cfg)
 
     data = await get_results(race_id, db)
     race = data.race

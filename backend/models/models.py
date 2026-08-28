@@ -53,6 +53,10 @@ class Race(Base):
     distance_km    = Column(Float, nullable=True)
     status         = Column(Enum(RaceStatus), default=RaceStatus.PLANNED)
     race_start_ns  = Column(BigInteger, nullable=True)
+    # Calendario público: si la carrera todavía no se corrió, se publica en el
+    # portal como evento con estos dos datos (el cupo y dónde inscribirse).
+    registration_url = Column(String(400), nullable=True)
+    capacity         = Column(Integer, nullable=True)
     created_at     = Column(DateTime, server_default=func.now())
     registrations  = relationship("Registration", back_populates="race")
     captures       = relationship("TimestampCapture", back_populates="race")
