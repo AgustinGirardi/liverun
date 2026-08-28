@@ -103,6 +103,30 @@ class Friendship(Base):
     __table_args__ = (UniqueConstraint("requester_id", "addressee_id", name="uq_friendship_pair"),)
 
 
+class CoachAthlete(Base):
+    """Vínculo entrenador → atleta, con el mismo consentimiento explícito que
+    las amistades: el entrenador invita y el atleta acepta.
+
+    Todavía sin endpoints ni pantalla — la tabla existe para que el panel de
+    entrenadores/clubes no obligue a migrar datos cuando se construya. El plan:
+    el entrenador ve el historial y la evolución de los atletas que lo
+    aceptaron, reusando /api/me/results por atleta. El campo `club` que ya
+    viaja en cada resultado permite además agrupar por equipo.
+
+    PRIVACIDAD: sin `status='accepted'` no se comparte nada. Un resultado
+    oficial es público, pero el historial agregado de una persona no lo es.
+    """
+    __tablename__ = "run_coach_athletes"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    coach_id     = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    athlete_id   = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
+    status       = Column(String(10), nullable=False, default="pending")  # pending/accepted
+    club         = Column(String(100), nullable=True)   # equipo con el que el entrenador lo agrupa
+    created_at   = Column(DateTime, server_default=func.now())
+    accepted_at  = Column(DateTime, nullable=True)
+    __table_args__ = (UniqueConstraint("coach_id", "athlete_id", name="uq_coach_athlete_pair"),)
+
+
 class Coupon(Base):
     """Cupón para promocionar la app. Dos tipos:
     - free_months: al canjear, suma N meses de premium al instante.
