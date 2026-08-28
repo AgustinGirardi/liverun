@@ -1,4 +1,14 @@
 const API = "";  // mismo origen
+
+// ── Contacto comercial para organizadores ───────────────────────────────────
+// Formato de wa.me para Argentina: 54 + 9 + característica sin 0 + número sin 15.
+const ORG_WHATSAPP = "5493585076606";
+const ORG_WHATSAPP_MSG = "Hola! Organizo carreras y quiero saber más sobre LiveRun.";
+const ORG_EMAIL = "agustingirardi1@gmail.com";
+// Planes: mientras esté vacío, la página invita a pedir presupuesto. Cuando
+// tengas los precios definidos, cargalos acá y se renderizan solos:
+//   { nombre:"Hasta 300 corredores", precio:"$XXX por evento", detalle:["…","…"], destacado:false }
+const ORG_PLANES = [];
 const $ = (id) => document.getElementById(id);
 let TOKEN = localStorage.getItem("ct_token") || null;
 let USER  = JSON.parse(localStorage.getItem("ct_user") || "null");
@@ -63,9 +73,13 @@ function renderNav(){
   const v = state.view;
   const link = (view, label, icon) =>
     `<button class="${v === view ? 'active' : ''}" onclick="go('${view}')"><span class="nav-ic">${icon}</span>${label}</button>`;
-  let links = link('home', 'Inicio', '🏠') + link('races', 'Carreras', '🏁');
+  let links = link('home', 'Inicio', '🏠') + link('races', 'Carreras', '🏁')
+            + link('calendar', 'Calendario', '📅');
+  if (USER) links += link('historial', 'Mi historial', '📊');
   if (USER) links += link('run', 'Mi progreso', '🏃');
   if (USER && USER.is_admin) links += link('admin', 'Admin', '⚙');
+  // Separado del resto: el menú es del corredor, esto es la puerta comercial.
+  links += `<div class="nav-sep"></div>` + link('organizadores', 'Para organizadores', '🖥️');
   if (n) n.innerHTML = links;
   if (acc) {
     acc.innerHTML = USER
@@ -91,6 +105,9 @@ function go(view, arg){
   if(view==="register") return viewAuth("register");
   if(view==="admin")    return viewAdmin();
   if(view==="run")      return viewRun();
+  if(view==="historial") return viewHistorial();
+  if(view==="calendar")  return viewCalendar();
+  if(view==="organizadores") return viewOrganizers();
   if(view==="me")       return viewHome();   // el perfil ahora vive en el inicio (dashboard)
 }
 
@@ -100,7 +117,8 @@ function viewHome(){
   $("app").innerHTML = `
     <div class="home-split">
       <div class="home-hero">
-        <span class="badge">Resultados oficiales</span>
+        <span class="badge">Gestión integral de carreras</span>
+        <div class="home-kicker">Inscripciones, cronometraje y resultados en un solo lugar.</div>
         <h1 class="home-title">Encontrá tu tiempo,<br><span class="grad-text">seguí tu progreso</span>.</h1>
         <p class="home-lead">Buscá tu nombre y accedé a tus resultados al instante.</p>
         <div class="home-search">
@@ -114,6 +132,18 @@ function viewHome(){
         <div id="homeRaces"><div class="empty">Cargando…</div></div>
       </div>
     </div>
+    <div class="org-band">
+      <div class="org-band-txt">
+        <div class="org-band-k">¿Organizás carreras?</div>
+        <div class="org-band-t">Cronometrá tu carrera y publicá los resultados <span class="grad-text">el mismo día</span>.</div>
+        <div class="muted">Inscripciones, cronómetro de precisión, resultados al instante y certificados para cada corredor.</div>
+      </div>
+      <div class="org-band-cta">
+        <button class="btn grad" onclick="go('organizadores')">Ver cómo funciona →</button>
+        <a class="btn ghost" href="${waLink()}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+      </div>
+    </div>
+
     <div class="eco">
       <div class="eco-label">El ecosistema <span class="grad-text">LiveRun</span></div>
       <div class="eco-grid">
@@ -125,12 +155,12 @@ function viewHome(){
           entrenamientos, todo en un solo lugar.</p>
           <span class="pill">Muy pronto · acceso anticipado</span>
         </div>
-        <div class="card eco-card">
+        <div class="card eco-card click" onclick="go('organizadores')">
           <div class="eco-ic">🖥️</div>
           <h2>LiveRun <span class="grad-text">Escritorio</span></h2>
           <p class="muted">El sistema de cronometraje para organizadores: inscripciones, cronómetro
           de precisión, resultados al instante y publicación en este portal con un clic.</p>
-          <span class="pill">Para organizadores · consultanos</span>
+          <span class="pill green">Ver cómo funciona →</span>
         </div>
       </div>
     </div>`;
@@ -233,7 +263,7 @@ async function viewDashboard(){
     const hist = d.results.length
       ? `<div class="row" style="justify-content:space-between;margin-top:24px;align-items:center">
            <h2 style="margin:0">Mis carreras</h2>
-           <button class="btn ghost sm" onclick="manualAutolink(this)">🔄 Buscar por email</button>
+           <button class="btn ghost sm" style="width:auto" onclick="go('historial')">📊 Ver historial completo →</button>
          </div>
          <div class="card" style="padding:6px"><table>
           <thead><tr><th>Carrera</th><th class="hide-sm">Dist.</th><th>Pos.</th><th style="text-align:right">Tiempo</th><th></th></tr></thead>
@@ -376,6 +406,333 @@ function renderRun(summary, acts, ranking){
     ${rankHtml}`;
 }
 
+// ── Para organizadores (landing comercial) ───────────────────────────────────
+function waLink(msg){
+  return `https://wa.me/${ORG_WHATSAPP}?text=${encodeURIComponent(msg || ORG_WHATSAPP_MSG)}`;
+}
+function orgCtaRow(msg){
+  return `<div class="org-cta-row">
+    <a class="btn grad org-btn" href="${waLink(msg)}" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true"><path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.7 1-.9 1.2-.2.2-.3.2-.6.1-.3-.2-1.2-.5-2.3-1.4-.9-.8-1.4-1.7-1.6-2-.2-.3 0-.5.1-.6l.5-.5c.1-.2.2-.3.3-.5 0-.2 0-.4 0-.5 0-.2-.7-1.6-.9-2.2-.2-.5-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.2.2 2.1 3.2 5.1 4.4 1.9.8 2.6.9 3.5.7.6-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3zM12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.6 0-3.1-.4-4.4-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2z"/></svg>
+      Escribinos por WhatsApp
+    </a>
+    <a class="btn ghost org-btn" href="mailto:${ORG_EMAIL}?subject=${encodeURIComponent("Quiero cronometrar mi carrera con LiveRun")}">✉ Por email</a>
+  </div>`;
+}
+
+const ORG_BENEFICIOS = [
+  ["📋", "Inscripciones y dorsales", "Cargá corredores a mano o importá tu planilla. Dorsales, distancias, categorías y clubes, todo en un lugar."],
+  ["⏱️", "Cronómetro de precisión", "Reloj con centésimas y captura por dorsal. Corre en tu computadora: si se cae internet, la carrera sigue."],
+  ["🏁", "Resultados al instante", "Posiciones por distancia y por categoría apenas cruzan la meta, con DNF, DNS y descalificados."],
+  ["☁️", "Publicación con un clic", "Los resultados van al portal público con un código de carrera. Los corredores los buscan por su nombre."],
+  ["🏅", "Certificados en PDF", "Cada finisher descarga su certificado con tiempo, ritmo, puesto y categoría. Sin que hagas nada."],
+  ["📅", "Calendario e inscripción", "Anunciá la carrera antes de correrla, con cupo y tu link de inscripción."],
+];
+const ORG_PASOS = [
+  ["Cargás la carrera", "Nombre, fecha, distancias y los inscriptos. Podés importar tu planilla."],
+  ["Anunciás el evento", "Aparece en el calendario del portal con tu link de inscripción."],
+  ["Cronometrás", "Dale largada y capturá cada llegada por dorsal. El puesto se calcula solo."],
+  ["Publicás", "Un clic y los corredores ya buscan su tiempo y bajan su certificado."],
+];
+
+function viewOrganizers(){
+  const planes = ORG_PLANES.length
+    ? `<div class="org-planes">${ORG_PLANES.map(p=>`
+        <div class="card org-plan ${p.destacado?"destacado":""}">
+          ${p.destacado?`<span class="pill green">Más elegido</span>`:""}
+          <div class="org-plan-nom">${esc(p.nombre)}</div>
+          <div class="org-plan-precio">${esc(p.precio)}</div>
+          <ul class="org-plan-det">${(p.detalle||[]).map(d=>`<li>${esc(d)}</li>`).join("")}</ul>
+          <a class="btn sm grad" href="${waLink(`Hola! Me interesa el plan ${p.nombre} de LiveRun.`)}" target="_blank" rel="noopener noreferrer">Consultar</a>
+        </div>`).join("")}</div>`
+    : `<div class="card org-presu">
+         <div>
+           <h2 style="margin-bottom:6px">¿Cuánto sale?</h2>
+           <div class="muted">El presupuesto depende de la cantidad de corredores y de las distancias de tu carrera.
+           Escribinos y te lo pasamos con el detalle de lo que incluye.</div>
+         </div>
+         <a class="btn grad org-btn" href="${waLink("Hola! Quiero un presupuesto para cronometrar mi carrera con LiveRun.")}" target="_blank" rel="noopener noreferrer">Pedir presupuesto</a>
+       </div>`;
+
+  $("app").innerHTML = `
+    <div class="org-hero">
+      <span class="badge">Para organizadores</span>
+      <h1 class="org-title">Tu carrera, cronometrada y<br><span class="grad-text">publicada el mismo día</span>.</h1>
+      <p class="org-lead">LiveRun es el sistema de cronometraje que usás para tomar los tiempos, y el portal donde
+      tus corredores encuentran su resultado y su certificado. Sin planillas, sin esperar hasta el lunes.</p>
+      ${orgCtaRow()}
+    </div>
+
+    <h2 class="org-h2">Todo lo que necesitás para correr el día de la carrera</h2>
+    <div class="org-grid">${ORG_BENEFICIOS.map(([ic,t,d])=>`
+      <div class="card org-item"><div class="org-ic">${ic}</div>
+        <h3>${esc(t)}</h3><p class="muted">${esc(d)}</p></div>`).join("")}</div>
+
+    <h2 class="org-h2">Cómo funciona</h2>
+    <div class="org-pasos">${ORG_PASOS.map(([t,d],i)=>`
+      <div class="org-paso"><div class="org-num">${i+1}</div>
+        <div><div class="org-paso-t">${esc(t)}</div><div class="muted">${esc(d)}</div></div></div>`).join("")}</div>
+
+    <h2 class="org-h2">Y tus corredores se llevan esto</h2>
+    <div class="org-grid dos">
+      <div class="card org-item"><div class="org-ic">🔎</div><h3>Buscan su tiempo por el nombre</h3>
+        <p class="muted">Sin código, sin PDF adjunto, sin buscar en una lista de 500 filas.</p></div>
+      <div class="card org-item"><div class="org-ic">📊</div><h3>Su historial y su evolución</h3>
+        <p class="muted">Cada carrera que corren con vos les queda en el perfil, con sus mejores marcas.</p></div>
+    </div>
+
+    <h2 class="org-h2">Planes</h2>
+    ${planes}
+
+    <div class="card org-final">
+      <div>
+        <div class="org-final-t">¿Organizás una carrera?</div>
+        <div class="muted">Contanos cuándo es y cuántos corredores esperás. Te mostramos cómo queda.</div>
+      </div>
+      ${orgCtaRow()}
+    </div>`;
+}
+
+// ── Calendario de próximos eventos ───────────────────────────────────────────
+const MESES_AB = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+function daysUntil(iso){
+  if(!iso) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return Math.round((new Date(iso+"T00:00:00") - hoy) / 86400000);
+}
+function cuentaRegresiva(iso){
+  const d = daysUntil(iso);
+  if(d==null) return "";
+  if(d < 0)  return "";
+  if(d === 0) return "¡Es hoy!";
+  if(d === 1) return "Mañana";
+  if(d < 7)  return `En ${d} días`;
+  if(d < 14) return "La próxima semana";
+  return `En ${Math.round(d/7)} semanas`;
+}
+
+function eventCard(e){
+  const [ , m, dd] = (e.race_date || "--month--01").split("-");
+  const cupo = e.capacity
+    ? (()=>{ const n = e.registered_count || 0;
+             const pct = Math.min(100, Math.round(n / e.capacity * 100));
+             const lleno = n >= e.capacity;
+             // El estado "completo" ya lo dice la píldora de la derecha: acá va
+             // siempre el conteo, que es el dato que el corredor quiere ver.
+             return `<div class="ev-cupo">
+               <div class="ev-cupo-top">
+                 <span>${n} de ${e.capacity} inscriptos</span>
+                 <span class="dim">${lleno ? "sin lugares" : `${pct}%`}</span>
+               </div>
+               <div class="ev-bar"><i style="width:${pct}%" class="${lleno?"full":""}"></i></div>
+             </div>`; })()
+    : (e.registered_count != null
+        ? `<div class="ev-cupo"><div class="ev-cupo-top"><span>${e.registered_count} inscriptos</span>
+             <span class="dim">sin cupo límite</span></div></div>`
+        : "");
+  const lleno = e.capacity && (e.registered_count || 0) >= e.capacity;
+  const cta = e.registration_url
+    ? (lleno
+        ? `<span class="pill warn">Cupo completo</span>`
+        : `<a class="btn sm grad ev-cta" href="${esc(e.registration_url)}" target="_blank" rel="noopener noreferrer">Inscribirme →</a>`)
+    : `<span class="pill">Inscripción a cargo del organizador</span>`;
+  const falta = cuentaRegresiva(e.race_date);
+  return `<div class="card ev-card">
+    <div class="ev-date"><div class="ev-d">${+dd}</div><div class="ev-m">${MESES_AB[+m-1]||""}</div></div>
+    <div class="ev-body">
+      <div class="ev-title">${esc(e.name)}</div>
+      <div class="row ev-meta">
+        ${e.location?`<span class="dim">📍 ${esc(e.location)}</span>`:""}
+        ${falta?`<span class="pill green">${falta}</span>`:""}
+        ${e.distances.map(d=>`<span class="pill">${d} km</span>`).join("")}
+      </div>
+      ${cupo}
+    </div>
+    <div class="ev-action">${cta}</div>
+  </div>`;
+}
+
+async function viewCalendar(){
+  $("app").innerHTML = `<h1>Próximos <span class="grad-text">eventos</span></h1>
+    <div class="sub">El calendario de carreras que se vienen. Inscribite y después mirá tus resultados acá mismo.</div>
+    <div id="evBody"><div class="empty">Cargando el calendario…</div></div>`;
+  try {
+    const events = await api("GET","/api/events");
+    $("evBody").innerHTML = events.length
+      ? events.map(eventCard).join("")
+      : `<div class="empty" style="padding:44px"><div class="ic">📅</div>
+           No hay eventos próximos por el momento, volvé a consultar pronto.<br>
+           <span class="dim">Mientras tanto podés ver los</span>
+           <button class="btn ghost sm" style="margin-top:12px" onclick="go('races')">🏁 resultados publicados</button></div>`;
+  } catch(e){ $("evBody").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+// ── Mi historial (carreras oficiales) ────────────────────────────────────────
+// Tiempos cortos para ejes y tablas: fmtNs es demasiado largo (trae milésimas).
+function fmtHms(sec){
+  if(sec==null) return "—";
+  const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.round(sec%60);
+  const p=(n)=>String(n).padStart(2,"0");
+  return h ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+}
+function fmtPace(s){ return (!s||s<=0) ? "—" : `${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}/km`; }
+// Fecha compacta para ejes y tablas: "23 ago" (dos carreras del mismo mes tienen
+// que distinguirse). El año sólo aparece si no es el actual.
+function fmtShortDate(d){
+  if(!d) return "";
+  const [y,m,dd]=d.split("-");
+  const mes=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][+m-1];
+  const yr = (+y === new Date().getFullYear()) ? "" : ` ’${y.slice(2)}`;
+  return `${+dd} ${mes}${yr}`;
+}
+
+// Gráfico de evolución: una marca por carrera en la misma distancia, en orden
+// cronológico. El eje Y está invertido a propósito — más arriba = más rápido.
+// `width` es el ancho real del contenedor: dibujando el viewBox a ese ancho la
+// escala queda 1:1 y las etiquetas conservan su tamaño en pantallas chicas
+// (con un viewBox fijo, el SVG se encogía y el texto quedaba ilegible).
+function histChart(serie, mode, width){
+  const W=Math.max(320, Math.min(1000, Math.round(width||760)));
+  const H = W < 460 ? 190 : 210;
+  const L = W < 460 ? 48 : 62, R=18, T=18, B=38;
+  const val = (p)=> mode==="pace" ? p.pace_s_per_km : p.net_time_ns/1e9;
+  const lbl = (v)=> mode==="pace" ? fmtPace(v) : fmtHms(v);
+  const vals = serie.map(val);
+  const min=Math.min(...vals), max=Math.max(...vals), span=(max-min)||Math.max(1,min*0.05);
+  const lo=min-span*0.18, hi=max+span*0.18;
+  const x=(i)=> serie.length===1 ? L+(W-L-R)/2 : L + i*(W-L-R)/(serie.length-1);
+  const y=(v)=> T + (v-lo)/(hi-lo)*(H-T-B);
+  const grid=[lo,(lo+hi)/2,hi].map(v=>`
+    <line x1="${L}" y1="${y(v).toFixed(1)}" x2="${W-R}" y2="${y(v).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+    <text x="${L-8}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--dim)">${lbl(v)}</text>`).join("");
+  const pts = serie.map((p,i)=>`${x(i).toFixed(1)},${y(val(p)).toFixed(1)}`).join(" ");
+  const best = vals.indexOf(min);
+  const dots = serie.map((p,i)=>`
+    <circle cx="${x(i).toFixed(1)}" cy="${y(val(p)).toFixed(1)}" r="${i===best?6:4.5}"
+            fill="${i===best?"var(--acc)":"var(--panel)"}" stroke="var(--acc)" stroke-width="2">
+      <title>${esc(p.race_name)} · ${esc(fmtDate(p.race_date))}
+${lbl(val(p))}${p.position?` · puesto ${p.position}`:""}${p.category_position?` · ${p.category_position}º de categoría`:""}</title>
+    </circle>`).join("");
+  // En pantallas angostas las fechas se pisarían: se muestran sólo las de los extremos y el medio.
+  const maxLabels = Math.max(2, Math.floor((W-L-R)/78));
+  const showAll = serie.length <= maxLabels;
+  const xlabels = serie.map((p,i)=>{
+    if(!(showAll || i===0 || i===serie.length-1 || i===Math.floor((serie.length-1)/2))) return "";
+    const anchor = i===0 ? "start" : (i===serie.length-1 ? "end" : "middle");
+    return `<text x="${x(i).toFixed(1)}" y="${H-14}" text-anchor="${anchor}" font-size="11" fill="var(--mut)">${fmtShortDate(p.race_date)}</text>`;
+  }).join("");
+  // Sin preserveAspectRatio="none": estirar el viewBox deforma los círculos y
+  // el texto en pantallas anchas. Escala uniforme y alto automático.
+  return `<svg class="hist-svg" viewBox="0 0 ${W} ${H}" role="img"
+       aria-label="Evolución de marcas en ${state.histDist} km: ${serie.length} carreras">
+    ${grid}
+    <polyline points="${pts}" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${xlabels}
+  </svg>
+  <div class="dim hist-legend">▲ Más arriba, más rápido · el punto lleno es tu mejor marca · pasá el mouse por cada punto</div>`;
+}
+
+async function viewHistorial(){
+  if(!USER) return go("login");
+  $("app").innerHTML = `<h1>Mi <span class="grad-text">historial</span></h1>
+    <div class="sub">Todas tus carreras oficiales, tu evolución y tus mejores marcas.</div>
+    <div id="histBody"><div class="empty">Cargando tu historial…</div></div>`;
+  try {
+    state.hist = await api("GET","/api/me/results", null, true);
+    state.histDist = Object.keys(state.hist.by_distance)[0] || null;
+    state.histMode = "time";
+    renderHistorial();
+  } catch(e){ $("histBody").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+
+function renderHistorial(){
+  const box=$("histBody"), d=state.hist; if(!box||!d) return;
+  if(!d.results.length){
+    box.innerHTML = `<div class="empty" style="padding:40px"><div class="ic">🏁</div>
+      Todavía no tenés carreras en tu perfil.<br>
+      <span class="dim">Buscá tu nombre en el inicio para agregar un resultado, o</span>
+      <button class="btn ghost sm" onclick="manualAutolink(this)" style="margin-top:10px">🔄 Buscar mis resultados por email</button></div>`;
+    return;
+  }
+  const p = d.participation;
+  const stats = `<div class="stats four">
+    <div class="stat"><div class="v">${d.total_races}</div><div class="l">Carreras</div></div>
+    <div class="stat"><div class="v">${d.total_km.toFixed(0)}</div><div class="l">km en carrera</div></div>
+    <div class="stat"><div class="v">${p.streak_months}</div><div class="l">🔥 Meses seguidos</div></div>
+    <div class="stat"><div class="v">${p.races_per_month.toFixed(1).replace(".",",")}</div><div class="l">Carreras / mes</div></div>
+  </div>`;
+
+  const pbs = d.personal_bests.length ? `<div class="card">
+    <h2>Mejores marcas</h2>
+    <div class="pb-grid">${d.personal_bests.map(b=>`<div class="pb">
+      <div class="pb-d">${b.distance_km} km</div>
+      <div class="pb-t">${fmtHms(b.net_time_ns/1e9)}</div>
+      <div class="pb-r"><a class="lnk" title="${esc(b.race_name)}" onclick="go('race','${b.race_code}')">${esc(b.race_name)}</a></div>
+      <div class="dim" style="font-size:12px">${esc(fmtDate(b.race_date))}</div>
+    </div>`).join("")}</div></div>` : "";
+
+  const dists = Object.keys(d.by_distance).sort((a,b)=>a-b);
+  const chart = dists.length ? `<div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h2 style="margin:0">Evolución de marcas</h2>
+      <div class="row" style="gap:6px">
+        <button class="btn ghost sm hist-mode ${state.histMode==="time"?"on":""}" onclick="histMode('time')">Tiempo</button>
+        <button class="btn ghost sm hist-mode ${state.histMode==="pace"?"on":""}" onclick="histMode('pace')">Ritmo</button>
+      </div>
+    </div>
+    ${dists.length>1?`<div class="dist-tabs" style="margin:14px 0 4px">${dists.map(k=>
+      `<button class="${k===state.histDist?"on":""}" onclick="histDist('${k}')">${k} km</button>`).join("")}</div>`:""}
+    <div id="histChart"></div>
+  </div>` : `<div class="card"><h2>Evolución de marcas</h2>
+    <div class="dim" style="padding:10px 0">Cuando corras dos veces la misma distancia vas a ver acá cómo evolucionan tus tiempos.</div></div>`;
+
+  const rows = d.results.map((r,i)=>`<tr>
+    <td class="nw muted">${esc(fmtShortDate(r.race_date))}</td>
+    <td class="race-cell"><a class="lnk race-nm" onclick="go('race','${r.race_code}')">${esc(r.race_name)}</a>
+        ${r.location?`<div class="dim race-loc">📍 ${esc(r.location)}</div>`:""}</td>
+    <td class="nw">${r.distance_km?`<span class="pill">${r.distance_km} km</span>`:"—"}</td>
+    <td class="nw time">${r.status==="FINISHER"?fmtHms(r.net_time_ns/1e9):`<span class="pill warn">${esc(r.status)}</span>`}</td>
+    <td class="nw dim hide-sm">${r.status==="FINISHER"?fmtPace(r.pace_s_per_km):"—"}</td>
+    <td class="nw">${r.position?`${r.position}º${r.distance_finishers?`<span class="dim"> /${r.distance_finishers}</span>`:""}`:"—"}</td>
+    <td class="nw hide-sm">${r.category_position
+        ? `${r.category_position}º${r.category_total?`<span class="dim"> /${r.category_total}</span>`:""}
+           <span class="pill ${r.category&&r.category[0]==="F"?"":"green"}">${esc(r.category||"")}</span>`
+        : "—"}</td>
+    <td class="nw" style="text-align:right">${r.status==="FINISHER"?`<a class="lnk" onclick="certHist(${i})">🏅 PDF</a>`:""}</td>
+  </tr>`).join("");
+
+  box.innerHTML = `${stats}${pbs}${chart}
+    <div class="hist-head">
+      <div>
+        <h2 style="margin:0">Mis carreras <span class="muted" style="font-weight:400">· ${d.results.length}</span></h2>
+        <div class="dim" style="margin-top:4px">Desde ${esc(fmtDate(p.first_race_date))} · ${p.months_active} ${p.months_active===1?"mes":"meses"} con carreras.</div>
+      </div>
+      <button class="btn ghost sm" style="width:auto;flex-shrink:0" onclick="manualAutolink(this)">🔄 Buscar por email</button>
+    </div>
+    <div class="card table-card"><div class="table-wrap"><table class="hist-table">
+      <thead><tr><th>Fecha</th><th>Carrera</th><th>Dist.</th><th>Tiempo</th>
+        <th class="hide-sm">Ritmo</th><th>General</th><th class="hide-sm">Categoría</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div></div>`;
+  drawHistChart();
+}
+// El gráfico se dibuja después de insertar el HTML para poder medir el ancho real.
+function drawHistChart(){
+  const c=$("histChart"), d=state.hist;
+  if(!c || !d) return;
+  const serie = d.by_distance[state.histDist];
+  if(!serie) return;
+  c.innerHTML = histChart(serie, state.histMode, c.clientWidth);
+}
+window.addEventListener("resize", ()=>{
+  if(state.view !== "historial") return;
+  clearTimeout(state._histRz);
+  state._histRz = setTimeout(drawHistChart, 150);
+});
+function histDist(k){ state.histDist=k; renderHistorial(); }
+function histMode(m){ state.histMode=m; renderHistorial(); }
+function certHist(i){ const r=state.hist.results[i]; printCertificate(r, r.race_name, r.race_date, r.location, r.race_code); }
+
 // ── Búsqueda ───────────────────────────────────────────────────────────────
 async function viewSearch(q){
   $("app").innerHTML = `<a class="back" onclick="go('home')">← Inicio</a>
@@ -478,8 +835,13 @@ async function viewRace(code){
         <span class="pager-info">${page+1} / ${pages} · ${filtered.length} corredores</span>
         <button class="btn ghost sm pager-btn" ${page>=pages-1?'disabled':''} onclick="resNav(1)">Siguientes →</button>
       </div>` : "";
+    // Dos vacíos distintos: que no haya nadie en la distancia no es lo mismo que
+    // que el filtro del usuario no encuentre a nadie.
+    const vacio = tf
+      ? `Ningún corredor coincide con “${esc(state.textFilter)}”. <a class="lnk" onclick="limpiarFiltroCarrera()">Limpiar filtro</a>`
+      : "Sin finishers en esta distancia";
     return `<table><thead><tr><th>Pos</th><th>Dorsal</th><th>Nombre</th><th class="hide-sm">Cat.</th><th class="hide-sm">Club</th><th style="text-align:right">Tiempo</th><th></th></tr></thead>
-      <tbody>${rows||`<tr><td colspan="7" class="empty">Sin finishers en esta distancia</td></tr>`}</tbody></table>${pager}`;
+      <tbody>${rows||`<tr><td colspan="7" class="empty">${vacio}</td></tr>`}</tbody></table>${pager}`;
   };
 
   $("rc").innerHTML = `
@@ -511,6 +873,7 @@ async function viewRace(code){
   renderPodium();
 }
 function filterRace(){ const el=document.getElementById("rfilter"); state.textFilter = el?el.value:""; state.resPage = 0; document.getElementById("tbl").innerHTML = state._renderTable(); }
+function limpiarFiltroCarrera(){ const el=document.getElementById("rfilter"); if(el) el.value=""; filterRace(); }
 function renderPodium(){
   const el = document.getElementById("podium"); if(!el || !state.curRace) return;
   const fin = state.curRace.results.filter(r=>r.status==="FINISHER" && (state.distFilter==null || r.distance_km===state.distFilter));

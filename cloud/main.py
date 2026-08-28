@@ -123,6 +123,40 @@ def _ensure_email_hash_column():
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_published_results_email_hash ON published_results (email_hash)"))
 
 
+def _ensure_category_position_column():
+    """Migración suave para SQLite: agrega published_results.category_position.
+    Mismo criterio que _ensure_email_hash_column. Idempotente."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_results)"))]
+        if not cols:
+            return  # tabla inexistente: create_all ya la crea con la columna
+        if "category_position" not in cols:
+            conn.execute(text("ALTER TABLE published_results ADD COLUMN category_position INTEGER"))
+
+
+def _ensure_event_columns():
+    """Migración suave para SQLite: columnas de calendario en published_races.
+    Las carreras que ya estaban publicadas son resultados, así que el default
+    'finished' las deja donde estaban. Idempotente."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_races)"))]
+        if not cols:
+            return
+        wanted = {
+            "event_status":     "ALTER TABLE published_races ADD COLUMN event_status VARCHAR(12) NOT NULL DEFAULT 'finished'",
+            "registration_url": "ALTER TABLE published_races ADD COLUMN registration_url VARCHAR(400)",
+            "capacity":         "ALTER TABLE published_races ADD COLUMN capacity INTEGER",
+            "registered_count": "ALTER TABLE published_races ADD COLUMN registered_count INTEGER",
+        }
+        for col, ddl in wanted.items():
+            if col not in cols:
+                conn.execute(text(ddl))
+
+
 @app.on_event("startup")
 def _startup():
     # En producción (Render setea la env var RENDER) NO arrancar con secretos por
@@ -136,6 +170,8 @@ def _startup():
             )
     init_db()
     _ensure_email_hash_column()
+    _ensure_category_position_column()
+    _ensure_event_columns()
     _ensure_run_columns()
     _ensure_admins()
 
@@ -162,6 +198,30 @@ class PublishPayload(BaseModel):
     race_date: Optional[date] = None
     distances: list[float] = []
     results: list[PublishResult] = []
+
+
+class EventPayload(BaseModel):
+    """Anuncio de una carrera todavía no corrida (calendario)."""
+    source_id: str = Field(..., min_length=3, max_length=64)
+    name: str = Field(..., min_length=1, max_length=200)
+    location: Optional[str] = Field(None, max_length=200)
+    race_date: Optional[date] = None
+    distances: list[float] = []
+    capacity: Optional[int] = Field(None, ge=1)
+    registered_count: Optional[int] = Field(None, ge=0)
+    registration_url: Optional[str] = Field(None, max_length=400)
+
+    @field_validator("registration_url")
+    @classmethod
+    def _safe_url(cls, v: Optional[str]) -> Optional[str]:
+        # El link va a un href del portal: sólo http(s). Sin esto se podría
+        # publicar un javascript: y ejecutarlo en el navegador de los corredores.
+        if v is None or not v.strip():
+            return None
+        v = v.strip()
+        if not v.lower().startswith(("http://", "https://")):
+            raise ValueError("El link de inscripción debe empezar con http:// o https://")
+        return v
 
 
 class RegisterIn(BaseModel):
@@ -209,8 +269,27 @@ def _result_dict(r: PublishedResult) -> dict:
         "bib_number": r.bib_number, "full_name": r.full_name,
         "category": r.category, "club": r.club, "distance_km": r.distance_km,
         "net_time_ns": r.net_time_ns, "finish_time_ns": r.finish_time_ns,
-        "position": r.position, "status": r.status,
+        "position": r.position, "category_position": r.category_position,
+        "status": r.status,
     }
+
+
+def _rank_categories(results: list[PublishedResult]) -> None:
+    """Asigna category_position rankeando por tiempo dentro de cada
+    (distancia, categoría). Sólo finishers con tiempo: un DNF no tiene puesto.
+    Se llama al publicar, sobre los resultados recién insertados."""
+    groups: dict[tuple, list[PublishedResult]] = {}
+    for r in results:
+        if r.status != "FINISHER" or r.category is None:
+            continue
+        t = r.net_time_ns if r.net_time_ns is not None else r.finish_time_ns
+        if t is None:
+            continue
+        groups.setdefault((r.distance_km, r.category), []).append(r)
+    for rows in groups.values():
+        rows.sort(key=lambda r: r.net_time_ns if r.net_time_ns is not None else r.finish_time_ns)
+        for pos, r in enumerate(rows, start=1):
+            r.category_position = pos
 
 
 def _email_hash(email: str) -> str:
@@ -256,6 +335,9 @@ def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session 
     race.location = payload.location
     race.race_date = payload.race_date
     race.distances = ",".join(str(d) for d in sorted(payload.distances)) if payload.distances else None
+    # Publicar resultados cierra el ciclo: si venía del calendario, deja de ser
+    # un evento futuro y pasa al listado de carreras corridas.
+    race.event_status = "finished"
 
     # Re-publicación idempotente: reemplaza los resultados, pero los claims de los
     # corredores deben sobrevivir (si no, cada corrección del organizador les
@@ -274,6 +356,7 @@ def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session 
         res = PublishedResult(race_id=race.id, **r.model_dump())
         db.add(res)
         new_results.append(res)
+    _rank_categories(new_results)
     db.flush()
     for res in new_results:
         for uid in old_claims.get((res.bib_number, res.distance_km), []):
@@ -283,11 +366,69 @@ def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session 
     return {"code": race.code, "published_results": len(payload.results)}
 
 
+@app.post("/api/events", tags=["Organizador"])
+def publish_event(payload: EventPayload, x_api_key: str = Header(None), db: Session = Depends(get_db)):
+    """Publica (o actualiza) una carrera del calendario, todavía sin resultados.
+    Mismo id estable que usa /api/publish: cuando el organizador suba los
+    resultados, la misma fila pasa a 'finished' y aparece en Carreras."""
+    if not x_api_key or not hmac_compare(x_api_key, PUBLISH_API_KEY):
+        raise HTTPException(403, "API key inválida")
+
+    race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == payload.source_id))
+    if race is None:
+        race = PublishedRace(source_id=payload.source_id, code=_gen_code(payload.source_id, db))
+        db.add(race)
+    elif race.results:
+        # Ya tiene resultados publicados: no se vuelve atrás sola al calendario.
+        raise HTTPException(409, "Esa carrera ya tiene resultados publicados")
+
+    race.name = payload.name
+    race.location = payload.location
+    race.race_date = payload.race_date
+    race.distances = ",".join(str(d) for d in sorted(payload.distances)) if payload.distances else None
+    race.capacity = payload.capacity
+    race.registered_count = payload.registered_count
+    race.registration_url = payload.registration_url
+    race.event_status = "upcoming"
+    db.commit()
+    return {"code": race.code, "event_status": race.event_status}
+
+
+def _event_dict(r: PublishedRace) -> dict:
+    return {
+        "code": r.code, "name": r.name, "location": r.location,
+        "race_date": r.race_date.isoformat() if r.race_date else None,
+        "distances": [float(x) for x in r.distances.split(",")] if r.distances else [],
+        "capacity": r.capacity, "registered_count": r.registered_count,
+        "registration_url": r.registration_url,
+    }
+
+
+@app.get("/api/events", tags=["Público"])
+def list_events(db: Session = Depends(get_db)):
+    """Calendario: eventos anunciados que todavía no se corrieron, del más
+    próximo al más lejano. Las fechas ya pasadas no se muestran aunque el
+    organizador no haya subido los resultados todavía."""
+    races = db.scalars(
+        select(PublishedRace)
+        .where(PublishedRace.event_status == "upcoming",
+               (PublishedRace.race_date == None) | (PublishedRace.race_date >= date.today()))  # noqa: E711
+        .order_by(PublishedRace.race_date.asc())
+    ).all()
+    return [_event_dict(r) for r in races]
+
+
 # ── Lectura pública ──────────────────────────────────────────────────────────
 
 @app.get("/api/races", tags=["Público"])
 def list_races(db: Session = Depends(get_db)):
-    races = db.scalars(select(PublishedRace).order_by(PublishedRace.published_at.desc())).all()
+    # Sólo carreras con resultados: un evento del calendario aparecería acá con
+    # "0 finishers" y una tabla vacía.
+    races = db.scalars(
+        select(PublishedRace)
+        .where(PublishedRace.event_status == "finished")
+        .order_by(PublishedRace.published_at.desc())
+    ).all()
     out = []
     for race in races:
         finishers = db.scalar(
@@ -437,29 +578,107 @@ def claim(body: ClaimIn, request: Request, user: PortalUser = Depends(current_us
     return {"linked": linked, "race": race.name, "results": [_result_dict(r) for r in matches]}
 
 
+def _participation(dates: list[str]) -> dict:
+    """Frecuencia de participación a partir de las fechas de carrera (ISO).
+    `streak_months` = meses consecutivos hacia atrás con al menos una carrera;
+    el mes en curso suma si ya corriste, pero no rompe la racha si todavía no."""
+    if not dates:
+        return {"first_race_date": None, "last_race_date": None, "months_active": 0,
+                "races_per_month": 0.0, "streak_months": 0}
+    ds = sorted(dates)
+    first, last = ds[0], ds[-1]
+    months = {d[:7] for d in ds}
+    fy, fm = int(first[:4]), int(first[5:7])
+    today = date.today()
+    spanned = max(1, (today.year - fy) * 12 + (today.month - fm) + 1)
+
+    def prev(y, m):
+        return (y, m - 1) if m > 1 else (y - 1, 12)
+
+    y, m = today.year, today.month
+    streak = 0
+    if f"{y:04d}-{m:02d}" in months:
+        streak += 1
+    y, m = prev(y, m)
+    while f"{y:04d}-{m:02d}" in months:
+        streak += 1
+        y, m = prev(y, m)
+    return {"first_race_date": first, "last_race_date": last,
+            "months_active": len(months),
+            "races_per_month": round(len(ds) / spanned, 2),
+            "streak_months": streak}
+
+
 @app.get("/api/me/results", tags=["Corredor"])
 def my_results(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     claims = db.scalars(select(Claim).where(Claim.user_id == user.id)).all()
+    results = [c.result for c in claims]
+
+    # Cuántos corrieron cada (carrera, distancia, categoría): da contexto al
+    # puesto ("5º de 41 en M30-34"). Una sola consulta agrupada para todas.
+    cat_total: dict[tuple, int] = {}
+    dist_total: dict[tuple, int] = {}
+    race_ids = {r.race_id for r in results}
+    if race_ids:
+        for rid, dist, cat, n in db.execute(
+            select(PublishedResult.race_id, PublishedResult.distance_km,
+                   PublishedResult.category, func.count())
+            .where(PublishedResult.race_id.in_(race_ids), PublishedResult.status == "FINISHER")
+            .group_by(PublishedResult.race_id, PublishedResult.distance_km, PublishedResult.category)
+        ).all():
+            cat_total[(rid, dist, cat)] = n
+            dist_total[(rid, dist)] = dist_total.get((rid, dist), 0) + n
+
     items = []
-    best_by_dist: dict[float, int] = {}
-    for c in claims:
-        r = c.result
+    best_by_dist: dict[float, dict] = {}
+    by_distance: dict[str, list] = {}
+    total_km = 0.0
+    finishes = 0
+    for r in results:
         race = r.race
-        items.append({
+        pace = (r.net_time_ns / 1e9 / r.distance_km) if (r.net_time_ns and r.distance_km) else None
+        item = {
             "race_code": race.code, "race_name": race.name,
             "race_date": race.race_date.isoformat() if race.race_date else None,
             "location": race.location,
+            "category_total": cat_total.get((r.race_id, r.distance_km, r.category)),
+            "distance_finishers": dist_total.get((r.race_id, r.distance_km)),
+            "pace_s_per_km": round(pace, 1) if pace else None,
             **_result_dict(r),
-        })
-        if r.status == "FINISHER" and r.distance_km and r.net_time_ns:
-            cur = best_by_dist.get(r.distance_km)
-            if cur is None or r.net_time_ns < cur:
-                best_by_dist[r.distance_km] = r.net_time_ns
+        }
+        items.append(item)
+        if r.status == "FINISHER" and r.distance_km:
+            finishes += 1
+            total_km += r.distance_km
+            if r.net_time_ns:
+                cur = best_by_dist.get(r.distance_km)
+                if cur is None or r.net_time_ns < cur["net_time_ns"]:
+                    best_by_dist[r.distance_km] = {
+                        "distance_km": r.distance_km, "net_time_ns": r.net_time_ns,
+                        "race_code": race.code, "race_name": race.name,
+                        "race_date": item["race_date"],
+                    }
+                by_distance.setdefault(str(r.distance_km), []).append({
+                    "race_date": item["race_date"], "race_name": race.name,
+                    "race_code": race.code, "net_time_ns": r.net_time_ns,
+                    "pace_s_per_km": item["pace_s_per_km"], "position": r.position,
+                    "category_position": r.category_position,
+                })
+
     items.sort(key=lambda x: x["race_date"] or "", reverse=True)
+    # La evolución sólo tiene sentido con al menos dos marcas en la misma distancia.
+    for serie in by_distance.values():
+        serie.sort(key=lambda x: x["race_date"] or "")
+    by_distance = {k: v for k, v in by_distance.items() if len(v) >= 2}
+
     return {
         "full_name": user.full_name,
         "total_races": len({i["race_code"] for i in items}),
-        "personal_bests": [{"distance_km": k, "net_time_ns": v} for k, v in sorted(best_by_dist.items())],
+        "total_finishes": finishes,
+        "total_km": round(total_km, 1),
+        "personal_bests": [best_by_dist[k] for k in sorted(best_by_dist)],
+        "participation": _participation([i["race_date"] for i in items if i["race_date"]]),
+        "by_distance": by_distance,
         "results": items,
     }
 

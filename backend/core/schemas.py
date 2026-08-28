@@ -66,6 +66,9 @@ class RaceCreate(BaseModel):
     name:      str            = Field(..., min_length=1, max_length=200)
     location:  Optional[str]  = None
     race_date: Optional[date] = None
+    # Calendario público: dónde inscribirse y cupo (opcionales)
+    registration_url: Optional[str] = Field(None, max_length=400)
+    capacity:         Optional[int] = Field(None, ge=1)
 
 class RaceUpdate(BaseModel):
     name:        Optional[str]   = None
@@ -73,6 +76,8 @@ class RaceUpdate(BaseModel):
     race_date:   Optional[date]  = None
     distance_km: Optional[float] = None
     status:      Optional[RaceStatusSchema] = None
+    registration_url: Optional[str] = Field(None, max_length=400)
+    capacity:         Optional[int] = Field(None, ge=1)
 
 class RaceOut(BaseModel):
     id:            int
@@ -82,6 +87,8 @@ class RaceOut(BaseModel):
     distance_km:   Optional[float] = None
     status:        str
     race_start_ns: Optional[int]   = None
+    registration_url: Optional[str] = None
+    capacity:         Optional[int] = None
     created_at:    datetime
     model_config = {"from_attributes": True}
 
