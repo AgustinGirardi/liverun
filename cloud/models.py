@@ -46,6 +46,15 @@ class PublishedRace(Base):
     race_date    = Column(Date, nullable=True)
     distances    = Column(String(200), nullable=True)  # CSV de distancias, ej "5.0,10.0"
     published_at = Column(DateTime, server_default=func.now())
+    # ── Calendario ──
+    # Una carrera nace como 'upcoming' (el organizador la publica desde el
+    # escritorio con cupo y link de inscripción) y pasa a 'finished' sola cuando
+    # se publican sus resultados. El listado de resultados filtra por esto: sin
+    # el flag, una carrera todavía no corrida aparecía con "0 finishers".
+    event_status     = Column(String(12), nullable=False, default="finished", server_default="finished")
+    registration_url = Column(String(400), nullable=True)   # inscripción del organizador
+    capacity         = Column(Integer, nullable=True)       # cupo total (null = sin cupo)
+    registered_count = Column(Integer, nullable=True)       # inscriptos al momento de publicar
     results      = relationship("PublishedResult", back_populates="race", cascade="all, delete-orphan")
 
 
@@ -61,6 +70,10 @@ class PublishedResult(Base):
     net_time_ns    = Column(BigInteger, nullable=True)
     finish_time_ns = Column(BigInteger, nullable=True)
     position       = Column(Integer, nullable=True)
+    # Puesto dentro de (carrera, distancia, categoría). Lo calcula el portal al
+    # publicar: el escritorio manda el puesto general y el ranking por categoría
+    # se deriva de los mismos tiempos, así no hay dos fuentes de verdad.
+    category_position = Column(Integer, nullable=True)
     status         = Column(String(12), nullable=False, default="FINISHER")  # FINISHER/DNF/DNS/DQ
     email_hash     = Column(String(64), nullable=True, index=True)  # sha256 hex del email (privacy-preserving); ver design doc
     race           = relationship("PublishedRace", back_populates="results")
