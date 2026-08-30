@@ -79,6 +79,53 @@ al portal y te devuelve el código para que los corredores la busquen.
 
 ---
 
+## Paso 5 — Dominio propio (recomendado)
+
+`chronotrack-portal.onrender.com` es el nombre del servicio en Render: si algún día
+te mudás de proveedor, esa URL muere y con ella todos los links de resultados que
+los corredores ya compartieron. Un dominio propio te independiza para siempre.
+
+**El orden importa.** Si cambiás `CT_PUBLIC_URL` antes de que el dominio resuelva,
+se rompe el login con Google.
+
+1. **Comprar el dominio.** `liverun.com.ar` está libre. Se registra en
+   [nic.ar](https://nic.ar) y pide Clave Fiscal de AFIP. Si preferís evitar ese
+   trámite, `liverun.app` y `liverun.run` también están libres en cualquier
+   registrador internacional (~US$15/año). `liverun.com` ya está tomado.
+
+2. **Render → el servicio → Settings → Custom Domains → Add.** Cargá
+   `liverun.com.ar` y `www.liverun.com.ar`. Render te muestra los registros DNS
+   exactos que hay que crear.
+
+3. **DNS en el registrador.** NIC.ar no ofrece panel de DNS: lo práctico es poner
+   los nameservers de Cloudflare (gratis) y administrar los registros ahí.
+   - raíz (`liverun.com.ar`) → registro **ALIAS/ANAME** al host que indique Render
+   - `www` → **CNAME** a `chronotrack-portal.onrender.com`
+
+4. **Esperar el certificado.** Render emite el TLS con Let's Encrypt solo; el
+   dashboard pasa a "Certificate issued" en minutos u horas según propague el DNS.
+   No sigas hasta ver eso.
+
+5. **Google OAuth.** Google Cloud Console → Credenciales → el cliente OAuth →
+   *Authorized redirect URIs* → agregar
+   `https://liverun.com.ar/api/run/auth/google/callback`. Dejá también el viejo
+   mientras queden apps móviles publicadas con la URL anterior.
+
+6. **El interruptor.** Render → Environment → agregar
+   `CT_PUBLIC_URL=https://liverun.com.ar`. El servicio reinicia solo. Esa variable
+   cambia de una sola vez el origen permitido por CORS, el `redirect_uri` de Google
+   y la `back_url` de Mercado Pago (`cloud/main.py`, `cloud/google_auth.py`,
+   `cloud/billing.py`, `cloud/run.py` ya la leen).
+
+7. **Valores fijos que solo afectan instalaciones nuevas**, para actualizar después:
+   - `backend/core/account.py` → `DEFAULT_PORTAL` (escritorio recién instalado; los
+     que ya están instalados guardan su URL en la config de nube y no se tocan)
+   - `mobile/src/lib/api.ts` y `mobile/src/app/ranking.tsx` (requiere republicar la app)
+
+**Qué NO se rompe:** `chronotrack-portal.onrender.com` sigue respondiendo como
+origen, así que los links `/r/CODIGO` ya compartidos siguen abriendo. Los avatares
+guardan su URL absoluta en la base (`cloud/run.py`) y por eso mismo siguen cargando.
+
 ## Verificar que funciona
 
 - Abrí tu URL de Render en el navegador → deberías ver el portal.
