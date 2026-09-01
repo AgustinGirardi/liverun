@@ -237,6 +237,25 @@ def test_descuento_vuelve_al_precio_de_lista_tras_el_primer_cobro(client, db, mo
                                          "currency_id": billing.CURRENCY}})]
 
 
+def test_pago_sin_usuario_cancela_el_preapproval_zombi(client, db, monkeypatch):
+    """Si MP estaba caído al borrar la cuenta, el preapproval quedó vivo. Al
+    primer cobro que no podemos atribuir lo damos de baja: cobra una vez, no
+    todos los meses para siempre."""
+    puts = []
+    def fake(method, path, body=None, **kw):
+        if path.startswith("/v1/payments/"):
+            return {"id": "90060", "status": "approved", "external_reference": "999999",
+                    "preapproval_id": "PRE-ZOMBI", "transaction_amount": 1000.0}
+        puts.append((method, path, body))
+        return {}
+    monkeypatch.setattr(billing, "mp_request", fake)
+
+    client.post("/api/run/billing/webhook?type=payment&data.id=90060")
+    assert puts == [("PUT", "/preapproval/PRE-ZOMBI", {"status": "cancelled"})]
+
+
+# ── Firma del webhook ─────────────────────────────────────────────────────────
+
 def test_webhook_rechaza_firma_invalida(client, monkeypatch):
     """Con el secreto configurado, un aviso mal firmado no gasta ni la consulta."""
     import cloud.billing_routes as br

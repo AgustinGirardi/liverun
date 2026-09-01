@@ -528,12 +528,18 @@ def delete_account(request: Request, user: PortalUser = Depends(current_user),
     subs = db.scalars(select(BillingSubscription)
                       .where(BillingSubscription.user_id == user.id)).all()
     for sub in subs:
-        if sub.status != "cancelled" and billing.is_configured():
-            try:
-                billing.mp_request("PUT", f"/preapproval/{sub.mp_preapproval_id}",
-                                   {"status": "cancelled"})
-            except Exception:
-                pass
+        if sub.status == "cancelled" or not billing.is_configured():
+            continue
+        try:
+            billing.cancel_preapproval(sub.mp_preapproval_id)
+        except Exception as e:
+            # El borrado NO se bloquea por una caída de MP: es una decisión
+            # deliberada (ver test_borrar_sigue_aunque_mp_falle). Pero antes esto
+            # era un `pass` mudo y el preapproval quedaba vivo cobrando todos los
+            # meses sin ningún rastro. Ahora queda registrado, y si llega a
+            # cobrar, apply_payment lo cancela al no poder mapearlo a nadie.
+            print(f"[MP] no se pudo cancelar {sub.mp_preapproval_id} al borrar "
+                  f"la cuenta {user.id}: {e} — queda como huérfano", flush=True)
 
     # El avatar es un archivo en disco: el CASCADE de la DB no lo cubre.
     from cloud.run import avatar_dir

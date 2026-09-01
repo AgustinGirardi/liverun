@@ -199,6 +199,20 @@ def _user_for_payment(payment: dict, db: Session) -> Optional[PortalUser]:
     return None
 
 
+def _cancelar_huerfano(payment: dict) -> None:
+    """Un cobro sin dueño es una suscripción zombi: la cuenta se borró pero el
+    preapproval siguió vivo (MP estaba caído en ese momento). Lo damos de baja
+    para que cobre una vez y no todos los meses hasta el fin de los tiempos."""
+    pre_id = payment.get("preapproval_id") or (payment.get("metadata") or {}).get("preapproval_id")
+    if not pre_id:
+        return
+    try:
+        cancel_preapproval(str(pre_id))
+        print(f"[MP] preapproval huérfano {pre_id} cancelado", flush=True)
+    except Exception as e:
+        print(f"[MP] no se pudo cancelar el huérfano {pre_id}: {e}", flush=True)
+
+
 def apply_payment(payment_id: str, db: Session) -> dict:
     """Procesa un pago notificado por el webhook. Idempotente: si ya se aplicó,
     no hace nada. Si está aprobado, extiende premium_until +1 mes."""
@@ -208,6 +222,11 @@ def apply_payment(payment_id: str, db: Session) -> dict:
     status = payment.get("status")
     user = _user_for_payment(payment, db)
     if not user:
+        # Plata cobrada que no podemos atribuir: casi siempre un preapproval que
+        # sobrevivió al borrado de su cuenta. Cortamos el cobro recurrente para
+        # que no se repita todos los meses.
+        print(f"[MP] pago {payment_id} sin usuario asociado", flush=True)
+        _cancelar_huerfano(payment)
         return {"status": "sin_usuario"}
     if status != "approved":
         return {"status": status or "desconocido"}
