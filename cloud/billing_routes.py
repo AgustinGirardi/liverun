@@ -41,7 +41,10 @@ def _firma_valida(request: Request, data_id) -> bool:
     if not ts or not v1:
         return False
     pedido = request.headers.get("x-request-id", "")
-    manifest = f"id:{data_id};request-id:{pedido};ts:{ts};"
+    # MP arma el manifest con el data.id en minúsculas cuando es alfanumérico.
+    # Con los ids de pago (numéricos) da igual, pero los de preapproval no lo son
+    # y ahí la firma no cerraría nunca.
+    manifest = f"id:{str(data_id).lower()};request-id:{pedido};ts:{ts};"
     esperado = hmac.new(MP_WEBHOOK_SECRET.encode(), manifest.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(esperado, v1)
 

@@ -269,6 +269,29 @@ def test_webhook_rechaza_firma_invalida(client, monkeypatch):
     assert calls == []
 
 
+def test_firma_valida_con_id_alfanumerico_en_minusculas(client, db, monkeypatch):
+    """MP arma el manifest con el data.id en minúsculas. Los ids de preapproval
+    son alfanuméricos, así que sin bajar la caja la firma no cerraría nunca."""
+    import hashlib
+    import hmac as _hmac
+    import cloud.billing_routes as br
+    monkeypatch.setattr(br, "MP_WEBHOOK_SECRET", "shh")
+    make_user(client, email="firmapre@test.com")
+    u = db.scalar(select(PortalUser).where(PortalUser.email == "firmapre@test.com"))
+    db.add(BillingSubscription(user_id=u.id, mp_preapproval_id="PRE-AbC9", status="pending"))
+    db.commit()
+    sub = db.scalar(select(BillingSubscription).where(
+        BillingSubscription.mp_preapproval_id == "PRE-AbC9"))
+    monkeypatch.setattr(billing, "mp_request",
+                        lambda method, path, body=None, **kw: {"status": "authorized"})
+    v1 = _hmac.new(b"shh", b"id:pre-abc9;request-id:req-5;ts:999;", hashlib.sha256).hexdigest()
+
+    client.post("/api/run/billing/webhook?type=subscription_preapproval&data.id=PRE-AbC9",
+                headers={"x-signature": f"ts=999,v1={v1}", "x-request-id": "req-5"})
+    db.refresh(sub)
+    assert sub.status == "authorized"
+
+
 def test_webhook_acepta_firma_valida(client, db, monkeypatch):
     import hashlib
     import hmac as _hmac
