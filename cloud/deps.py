@@ -92,10 +92,13 @@ def rate_limit(request: Request, bucket: str, limit: int = 10, window: float = 6
 def current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> PortalUser:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "No autenticado")
-    uid = verify_token(authorization.split(" ", 1)[1])
-    if not uid:
+    datos = verify_token(authorization.split(" ", 1)[1])
+    if not datos:
         raise HTTPException(401, "Sesión inválida o expirada")
+    uid, iat = datos
     user = db.get(PortalUser, uid)
     if not user:
         raise HTTPException(401, "Usuario no encontrado")
+    if user.tokens_valid_from and iat < user.tokens_valid_from:
+        raise HTTPException(401, "Cerramos esta sesión porque cambiaste tu contraseña. Ingresá de nuevo.")
     return user

@@ -32,6 +32,11 @@ class PortalUser(Base):
     premium_until = Column(DateTime, nullable=True)
     # Descuento pendiente dejado por un cupón "discount"; lo consume el checkout.
     pending_discount_percent = Column(Integer, nullable=True)
+    # Momento (epoch) desde el cual un token es válido. Al cambiar la contraseña
+    # se pone en 'ahora' y todas las sesiones abiertas antes dejan de servir.
+    # Epoch y no DateTime: se compara contra el iat del token, sin ambigüedad
+    # de zona horaria.
+    tokens_valid_from = Column(Integer, nullable=True)
     claims        = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
     activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
 

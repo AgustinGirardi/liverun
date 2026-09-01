@@ -6,6 +6,7 @@ Roles:
 """
 import os
 import hashlib
+import time
 import unicodedata
 from hmac import compare_digest as hmac_compare
 from datetime import date
@@ -86,6 +87,7 @@ def _ensure_run_columns():
             "is_admin":      "ALTER TABLE portal_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
             "premium_until": "ALTER TABLE portal_users ADD COLUMN premium_until DATETIME",
             "pending_discount_percent": "ALTER TABLE portal_users ADD COLUMN pending_discount_percent INTEGER",
+            "tokens_valid_from": "ALTER TABLE portal_users ADD COLUMN tokens_valid_from INTEGER",
         }
         for col, ddl in wanted.items():
             if col not in cols:
@@ -255,6 +257,11 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     email: str
     password: str
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8)
 
 
 class ClaimIn(BaseModel):
@@ -574,6 +581,31 @@ def delete_account(request: Request, user: PortalUser = Depends(current_user),
     db.delete(user)  # el cascade del ORM borra claims y actividades
     db.commit()
     return {"deleted": True}
+
+
+@app.post("/api/auth/password", tags=["Corredor"])
+def change_password(body: ChangePasswordIn, request: Request,
+                    user: PortalUser = Depends(current_user),
+                    db: Session = Depends(get_db)):
+    """Cambia la contraseña y cierra el resto de las sesiones abiertas.
+
+    Devuelve un token nuevo para no echar de la app a quien acaba de hacer el
+    cambio: el suyo se emite después del corte, los demás quedan abajo.
+    """
+    rate_limit(request, "password", limit=5, window=300.0)
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(400, "La contraseña actual no es correcta.")
+    if body.new_password == body.current_password:
+        raise HTTPException(400, "La contraseña nueva tiene que ser distinta de la actual.")
+
+    # +1 segundo: el corte tiene que quedar por ENCIMA de cualquier token ya
+    # emitido, incluidos los de este mismo segundo. El token que devolvemos se
+    # emite exactamente en el corte, así que es el único que lo pasa.
+    corte = int(time.time()) + 1
+    user.password_hash = hash_password(body.new_password)
+    user.tokens_valid_from = corte
+    db.commit()
+    return {"token": make_token(user.id, iat=corte)}
 
 
 @app.post("/api/claim", tags=["Corredor"])
