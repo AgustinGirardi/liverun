@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/run/billing", tags=["Billing"])
 
-
 @router.get("/mode")
 def billing_mode():
     """Modo del cobro según el prefijo del token (sin exponer el secreto):
@@ -41,6 +40,11 @@ def subscribe(request: Request, user: PortalUser = Depends(current_user), db: Se
         raise HTTPException(503, "El cobro todavía no está habilitado.")
     try:
         return billing.create_subscription(user, db)
+    except billing.SubscriptionExists:
+        raise HTTPException(409, "Ya tenés una suscripción activa.")
+    except billing.RateUnavailable:
+        # El monto queda fijo en MP para siempre: mejor reintentar que cobrar mal.
+        raise HTTPException(503, "No pudimos calcular el precio ahora. Probá de nuevo en un rato.")
     except billing.MPError as e:
         # Mensaje real de Mercado Pago (útil para diagnosticar la config).
         raise HTTPException(502, f"Mercado Pago rechazó la suscripción: {e}")

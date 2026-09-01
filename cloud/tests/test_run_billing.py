@@ -15,7 +15,7 @@ def test_precio_al_dolar_del_dia(monkeypatch):
     # USD 2.00 a un dólar de 1000 → 2000 ARS (redondeado a la decena).
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
     monkeypatch.setattr(billing, "PRICE_USD", 2.0)
-    monkeypatch.setattr(billing, "usd_ars_rate", lambda: 1000.0)
+    monkeypatch.setattr(billing, "usd_ars_rate", lambda strict=False: 1000.0)
     assert billing.base_price_ars() == 2000.0
     assert billing.price_for(None) == 2000.0
     assert billing.price_for(25) == 1500.0
@@ -25,7 +25,7 @@ def test_precio_al_dolar_del_dia(monkeypatch):
 def test_precio_redondea_hacia_arriba_a_la_decena(monkeypatch):
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
     monkeypatch.setattr(billing, "PRICE_USD", 1.99)
-    monkeypatch.setattr(billing, "usd_ars_rate", lambda: 1007.0)  # 1.99*1007 = 2003.93
+    monkeypatch.setattr(billing, "usd_ars_rate", lambda strict=False: 1007.0)  # 1.99*1007 = 2003.93
     assert billing.base_price_ars() == 2010.0
 
 
@@ -49,10 +49,11 @@ def test_rate_usa_fallback_si_la_api_falla(monkeypatch):
 def test_subscribe_devuelve_init_point_y_guarda(client, db, monkeypatch):
     monkeypatch.setattr(billing, "MP_ACCESS_TOKEN", "tok")
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
-    monkeypatch.setattr(billing, "usd_ars_rate", lambda: 1000.0)  # sin red en tests
+    monkeypatch.setattr(billing, "usd_ars_rate", lambda strict=False: 1000.0)  # sin red
     calls = {}
-    def fake(method, path, body=None):
+    def fake(method, path, body=None, **kw):
         calls["body"] = body
+        calls["idem"] = kw.get("idempotency_key")
         return {"id": "PRE-123", "init_point": "https://mp/checkout/PRE-123"}
     monkeypatch.setattr(billing, "mp_request", fake)
 
@@ -75,7 +76,7 @@ def test_subscribe_sin_config_da_503(client, monkeypatch):
 # ── Webhook de pago ───────────────────────────────────────────────────────────
 
 def _setup_payment(monkeypatch, user_id, status="approved", amount=1.99):
-    def fake(method, path, body=None):
+    def fake(method, path, body=None, **kw):
         if path.startswith("/v1/payments/"):
             return {"id": path.rsplit("/", 1)[1], "status": status,
                     "external_reference": str(user_id), "transaction_amount": amount}
@@ -140,6 +141,47 @@ def test_webhook_consume_descuento_pendiente(client, db, monkeypatch):
 
 
 def test_webhook_otro_topic_se_ignora(client, db, monkeypatch):
-    # Un aviso que no es de pago no debe romper ni procesar nada.
-    r = client.post("/api/run/billing/webhook?type=preapproval&data.id=PRE-9")
+    # Un aviso que no es ni pago ni preapproval no debe llamar a MP.
+    calls = []
+    monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
+    r = client.post("/api/run/billing/webhook?type=subscription_preapproval_plan&data.id=PLAN-9")
     assert r.status_code == 200 and r.json()["received"] is True
+    assert calls == []
+
+
+# ── Ciclo de vida de la suscripción ───────────────────────────────────────────
+
+def test_subscribe_rechaza_si_ya_hay_una_autorizada(client, db, monkeypatch):
+    """Dos suscripciones autorizadas son dos débitos mensuales a la misma
+    persona, y no hay endpoint de reembolso."""
+    monkeypatch.setattr(billing, "MP_ACCESS_TOKEN", "tok")
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", "2000")
+    h = make_user(client, email="doble@test.com")
+    u = db.scalar(select(PortalUser).where(PortalUser.email == "doble@test.com"))
+    db.add(BillingSubscription(user_id=u.id, mp_preapproval_id="PRE-YA", status="authorized"))
+    db.commit()
+    calls = []
+    monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
+
+    r = client.post("/api/run/billing/subscribe", headers=h)
+    assert r.status_code == 409
+    assert calls == []          # ni se le pide a MP
+
+
+def test_subscribe_falla_si_no_hay_cotizacion(client, monkeypatch):
+    """El monto queda fijo en el preapproval y se cobra para siempre: con el
+    dólar caído preferimos 503 antes que acuñar una suscripción subvaluada."""
+    monkeypatch.setattr(billing, "MP_ACCESS_TOKEN", "tok")
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
+    monkeypatch.setattr(billing, "MANUAL_RATE", None)
+    billing._rate_cache["rate"] = 0.0
+    def boom():
+        raise RuntimeError("sin red")
+    monkeypatch.setattr(billing, "_fetch_usd_ars_rate", boom)
+    calls = []
+    monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
+
+    h = make_user(client, email="sindolar@test.com")
+    r = client.post("/api/run/billing/subscribe", headers=h)
+    assert r.status_code == 503
+    assert calls == []

@@ -55,8 +55,20 @@ def _fetch_usd_ars_rate() -> float:
         return float(json.loads(resp.read())["venta"])
 
 
-def usd_ars_rate() -> float:
-    """Tipo de cambio vigente. Override manual > caché (1h) > API > último > fallback."""
+class RateUnavailable(Exception):
+    """No hay cotización creíble del dólar en este momento."""
+
+
+def usd_ars_rate(strict: bool = False) -> float:
+    """Tipo de cambio vigente. Override manual > caché (1h) > API > último conocido.
+
+    `strict=True` se usa al CREAR una suscripción. El monto que mandamos a MP
+    queda fijo y se cobra todos los meses para siempre, así que si lo único que
+    nos queda es RATE_FALLBACK (una constante que envejece mal con la inflación)
+    preferimos fallar y que el usuario reintente antes que acuñar una
+    suscripción permanentemente subvaluada. Una cotización vieja del caché sí
+    sirve: es real, solo desactualizada.
+    """
     if MANUAL_RATE:
         return float(MANUAL_RATE)
     now = _time.time()
@@ -68,21 +80,25 @@ def usd_ars_rate() -> float:
         _rate_cache["ts"] = now
         return r
     except Exception:
-        return _rate_cache["rate"] or RATE_FALLBACK  # último conocido o piso configurable
+        if _rate_cache["rate"]:
+            return _rate_cache["rate"]      # último conocido: real, aunque viejo
+        if strict:
+            raise RateUnavailable("Sin cotización del dólar para fijar el precio")
+        return RATE_FALLBACK                # solo para mostrar, nunca para cobrar
 
 
-def base_price_ars() -> float:
+def base_price_ars(strict: bool = False) -> float:
     """Precio mensual base en pesos: monto fijo si se definió, o USD×dólar del día
     redondeado hacia arriba a la decena (para no quedar corto)."""
     if FIXED_PRICE_ARS:
         return float(FIXED_PRICE_ARS)
-    ars = PRICE_USD * usd_ars_rate()
+    ars = PRICE_USD * usd_ars_rate(strict=strict)
     return float(math.ceil(ars / 10.0) * 10)
 
 
-def price_for(discount_percent: Optional[int]) -> float:
+def price_for(discount_percent: Optional[int], strict: bool = False) -> float:
     """Precio mensual con el descuento del cupón aplicado (redondeado a 2)."""
-    p = base_price_ars()
+    p = base_price_ars(strict=strict)
     if discount_percent:
         p = p * (1 - min(max(discount_percent, 0), 100) / 100)
     return round(p, 2)
@@ -92,12 +108,17 @@ class MPError(Exception):
     """Error de la API de Mercado Pago, con el mensaje que ellos devuelven."""
 
 
-def mp_request(method: str, path: str, body: Optional[dict] = None) -> dict:
+def mp_request(method: str, path: str, body: Optional[dict] = None,
+               idempotency_key: Optional[str] = None) -> dict:
     """Llamada a la API de Mercado Pago. Se monkeypatchea en tests."""
     data = json.dumps(body).encode() if body is not None else None
+    headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    if idempotency_key:
+        # Un doble click no debe crear dos preapprovals: MP colapsa los reintentos
+        # con la misma clave en una sola operación.
+        headers["X-Idempotency-Key"] = idempotency_key
     req = urllib.request.Request(
-        MP_API + path, data=data, method=method,
-        headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}", "Content-Type": "application/json"},
+        MP_API + path, data=data, method=method, headers=headers,
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
@@ -113,9 +134,23 @@ def mp_request(method: str, path: str, body: Optional[dict] = None) -> dict:
         raise MPError(detail)
 
 
+class SubscriptionExists(Exception):
+    """El usuario ya tiene una suscripción autorizada."""
+
+
 def create_subscription(user: PortalUser, db: Session) -> dict:
     """Crea el preapproval en MP y devuelve {init_point, amount}."""
-    amount = price_for(user.pending_discount_percent)
+    # Una segunda suscripción autorizada es un segundo débito mensual sobre la
+    # misma persona, y no tenemos endpoint de reembolso. Las 'pending' no
+    # bloquean: son checkouts abandonados que el usuario puede reintentar.
+    ya = db.scalar(select(BillingSubscription).where(
+        BillingSubscription.user_id == user.id,
+        BillingSubscription.status == "authorized"))
+    if ya:
+        raise SubscriptionExists("Ya tenés una suscripción activa")
+
+    # strict: el monto queda fijo en el preapproval y se cobra para siempre.
+    amount = price_for(user.pending_discount_percent, strict=True)
     payload = {
         "reason": "LiveRun Premium",
         "external_reference": str(user.id),
@@ -129,7 +164,9 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
         "back_url": f"{PUBLIC_URL}/?sub=ok",
         "status": "pending",
     }
-    res = mp_request("POST", "/preapproval", payload)
+    hoy = datetime.now(timezone.utc).date().isoformat()
+    res = mp_request("POST", "/preapproval", payload,
+                     idempotency_key=f"sub-{user.id}-{amount}-{hoy}")
     pre_id = str(res.get("id") or "")
     # En modo prueba MP devuelve sandbox_init_point (checkout de sandbox); en
     # producción solo init_point. Preferimos el de sandbox cuando existe para
