@@ -185,3 +185,27 @@ def test_subscribe_falla_si_no_hay_cotizacion(client, monkeypatch):
     r = client.post("/api/run/billing/subscribe", headers=h)
     assert r.status_code == 503
     assert calls == []
+
+
+def test_descuento_vuelve_al_precio_de_lista_tras_el_primer_cobro(client, db, monkeypatch):
+    """El cupón descuenta el PRIMER cobro. Como el monto vive dentro del
+    preapproval, MP lo seguiría cobrando descontado de por vida."""
+    make_user(client, email="cupon@test.com")
+    u = db.scalar(select(PortalUser).where(PortalUser.email == "cupon@test.com"))
+    u.pending_discount_percent = 50
+    db.add(BillingSubscription(user_id=u.id, mp_preapproval_id="PRE-CUP", status="authorized"))
+    db.commit()
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", "2000")
+    puts = []
+    def fake(method, path, body=None, **kw):
+        if path.startswith("/v1/payments/"):
+            return {"id": "90050", "status": "approved",
+                    "external_reference": str(u.id), "transaction_amount": 1000.0}
+        puts.append((method, path, body))
+        return {}
+    monkeypatch.setattr(billing, "mp_request", fake)
+
+    client.post("/api/run/billing/webhook?type=payment&data.id=90050")
+    assert puts == [("PUT", "/preapproval/PRE-CUP",
+                     {"auto_recurring": {"transaction_amount": 2000.0,
+                                         "currency_id": billing.CURRENCY}})]

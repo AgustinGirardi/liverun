@@ -215,6 +215,7 @@ def apply_payment(payment_id: str, db: Session) -> dict:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     base = user.premium_until if (user.premium_until and user.premium_until > now) else now
     user.premium_until = base + timedelta(days=30)
+    tenia_descuento = user.pending_discount_percent
     user.pending_discount_percent = None  # el descuento ya se usó en este cobro
     db.add(BillingPayment(
         user_id=user.id, mp_payment_id=str(payment_id),
@@ -226,4 +227,37 @@ def apply_payment(payment_id: str, db: Session) -> dict:
         # Webhook duplicado en paralelo: el unique de mp_payment_id gana.
         db.rollback()
         return {"status": "ya_procesado"}
+    if tenia_descuento:
+        _restaurar_precio_de_lista(payment, db, user)
     return {"status": "premium_extendido", "premium_until": user.premium_until.isoformat()}
+
+
+def _restaurar_precio_de_lista(payment: dict, db: Session, user: PortalUser) -> None:
+    """El cupón descuenta el PRIMER cobro, no todos.
+
+    El monto vive dentro del preapproval, así que MP lo sigue cobrando
+    descontado para siempre; limpiar pending_discount_percent solo limpia
+    nuestra columna. Acá devolvemos el preapproval al precio de lista.
+
+    Best effort: si MP no responde queda logueado y el usuario conserva el
+    descuento — preferible a romper el webhook de un pago ya aplicado.
+    """
+    pre_id = payment.get("preapproval_id") or (payment.get("metadata") or {}).get("preapproval_id")
+    if not pre_id:
+        sub = db.scalar(select(BillingSubscription)
+                        .where(BillingSubscription.user_id == user.id,
+                               BillingSubscription.status != "cancelled")
+                        .order_by(BillingSubscription.id.desc()))
+        pre_id = sub.mp_preapproval_id if sub else None
+    if not pre_id:
+        return
+    try:
+        lista = base_price_ars(strict=True)
+    except RateUnavailable:
+        print(f"[MP] sin cotización para restaurar el precio de {pre_id}", flush=True)
+        return
+    try:
+        mp_request("PUT", f"/preapproval/{pre_id}",
+                   {"auto_recurring": {"transaction_amount": lista, "currency_id": CURRENCY}})
+    except Exception as e:
+        print(f"[MP] no se pudo restaurar el precio de lista en {pre_id}: {e}", flush=True)
