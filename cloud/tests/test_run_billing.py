@@ -151,6 +151,32 @@ def test_webhook_otro_topic_se_ignora(client, db, monkeypatch):
 
 # ── Ciclo de vida de la suscripción ───────────────────────────────────────────
 
+def test_webhook_preapproval_sincroniza_estado(client, db, monkeypatch):
+    """Un aviso de preapproval actualiza el estado local. Sin esto la fila se
+    queda en 'pending' para siempre y una baja hecha desde MP es invisible."""
+    make_user(client, email="p5@test.com")
+    u = db.scalar(select(PortalUser).where(PortalUser.email == "p5@test.com"))
+    db.add(BillingSubscription(user_id=u.id, mp_preapproval_id="PRE-77", status="pending"))
+    db.commit()
+    sub = db.scalar(select(BillingSubscription).where(
+        BillingSubscription.mp_preapproval_id == "PRE-77"))
+    monkeypatch.setattr(billing, "mp_request",
+                        lambda method, path, body=None, **kw: {"status": "authorized"})
+
+    client.post("/api/run/billing/webhook?type=subscription_preapproval&data.id=PRE-77")
+    db.refresh(sub)
+    assert sub.status == "authorized"
+
+
+def test_webhook_preapproval_id_invalido_no_llama_a_mp(client, monkeypatch):
+    """Mismo criterio que con los ids de pago: un id armado no entra en la URL."""
+    calls = []
+    monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
+    r = client.post("/api/run/billing/webhook?type=preapproval&data.id=..%2Fv1%2Fpayments%2F1")
+    assert r.status_code == 200
+    assert calls == []
+
+
 def test_subscribe_rechaza_si_ya_hay_una_autorizada(client, db, monkeypatch):
     """Dos suscripciones autorizadas son dos débitos mensuales a la misma
     persona, y no hay endpoint de reembolso."""
@@ -209,3 +235,32 @@ def test_descuento_vuelve_al_precio_de_lista_tras_el_primer_cobro(client, db, mo
     assert puts == [("PUT", "/preapproval/PRE-CUP",
                      {"auto_recurring": {"transaction_amount": 2000.0,
                                          "currency_id": billing.CURRENCY}})]
+
+
+def test_webhook_rechaza_firma_invalida(client, monkeypatch):
+    """Con el secreto configurado, un aviso mal firmado no gasta ni la consulta."""
+    import cloud.billing_routes as br
+    monkeypatch.setattr(br, "MP_WEBHOOK_SECRET", "shh")
+    calls = []
+    monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
+
+    r = client.post("/api/run/billing/webhook?type=payment&data.id=90070",
+                    headers={"x-signature": "ts=1,v1=deadbeef", "x-request-id": "req-1"})
+    assert r.json() == {"received": True, "ignored": "firma"}
+    assert calls == []
+
+
+def test_webhook_acepta_firma_valida(client, db, monkeypatch):
+    import hashlib
+    import hmac as _hmac
+    import cloud.billing_routes as br
+    monkeypatch.setattr(br, "MP_WEBHOOK_SECRET", "shh")
+    make_user(client, email="firmado@test.com")
+    u = db.scalar(select(PortalUser).where(PortalUser.email == "firmado@test.com"))
+    _setup_payment(monkeypatch, u.id)
+    v1 = _hmac.new(b"shh", b"id:90071;request-id:req-9;ts:12345;", hashlib.sha256).hexdigest()
+
+    client.post("/api/run/billing/webhook?type=payment&data.id=90071",
+                headers={"x-signature": f"ts=12345,v1={v1}", "x-request-id": "req-9"})
+    db.refresh(u)
+    assert u.premium_until is not None

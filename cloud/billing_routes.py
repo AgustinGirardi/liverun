@@ -1,4 +1,9 @@
 """Endpoints de cobro (Mercado Pago) para ChronoTrack Run."""
+import hashlib
+import hmac
+import os
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from cloud import billing
@@ -8,6 +13,38 @@ from cloud.models import PortalUser
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/run/billing", tags=["Billing"])
+
+# Clave secreta del webhook, del panel de MP. Es un valor DISTINTO del access
+# token: mezclarlos hace que la verificación falle en silencio.
+MP_WEBHOOK_SECRET = os.environ.get("CT_MP_WEBHOOK_SECRET", "")
+
+# Los ids de preapproval de MP son alfanuméricos. Igual que con los ids de pago,
+# validamos el formato antes de meterlos en la URL del GET autenticado.
+_ID_PREAPPROVAL = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _firma_valida(request: Request, data_id) -> bool:
+    """Verifica el HMAC que MP manda en x-signature.
+
+    Es defensa en profundidad: la autenticidad ya está garantizada porque nunca
+    confiamos en el body y re-consultamos el pago a MP con nuestro token. La
+    firma agrega que ni siquiera gastemos esa consulta en un aviso inventado.
+
+    Si CT_MP_WEBHOOK_SECRET no está configurada no rechazamos nada: el re-fetch
+    sigue siendo la defensa real y no queremos romper un deploy existente.
+    """
+    if not MP_WEBHOOK_SECRET:
+        return True
+    crudo = request.headers.get("x-signature") or ""
+    partes = dict(t.split("=", 1) for t in crudo.split(",") if "=" in t)
+    ts, v1 = partes.get("ts", "").strip(), partes.get("v1", "").strip()
+    if not ts or not v1:
+        return False
+    pedido = request.headers.get("x-request-id", "")
+    manifest = f"id:{data_id};request-id:{pedido};ts:{ts};"
+    esperado = hmac.new(MP_WEBHOOK_SECRET.encode(), manifest.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(esperado, v1)
+
 
 @router.get("/mode")
 def billing_mode():
@@ -69,6 +106,10 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     # Solo procesamos pagos; los demás avisos (preapproval, etc.) se aceptan y ya.
     # Los ids de pago de MP son numéricos; validar acá evita que un id armado
     # (p. ej. "../preapproval/X") se inyecte en la URL del GET a la API de MP.
+    if not _firma_valida(request, payment_id):
+        # 200 a propósito: no queremos que MP reintente un aviso que descartamos.
+        return {"received": True, "ignored": "firma"}
+
     if notif_type in ("payment", "subscription_authorized_payment") \
             and payment_id and str(payment_id).isdigit():
         try:
@@ -77,5 +118,13 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
             # No reventamos: MP reintenta. Responder 200 evita reintentos infinitos
             # por errores transitorios nuestros; los pagos no procesados se
             # recuperan en el próximo aviso.
+            pass
+    elif notif_type in ("subscription_preapproval", "preapproval") \
+            and payment_id and _ID_PREAPPROVAL.match(str(payment_id)):
+        # Altas y bajas de la suscripción. Sin esto el estado local se queda
+        # en "pending" para siempre y no nos enteramos de una cancelación.
+        try:
+            billing.sync_preapproval(str(payment_id), db)
+        except Exception:
             pass
     return {"received": True}

@@ -261,3 +261,29 @@ def _restaurar_precio_de_lista(payment: dict, db: Session, user: PortalUser) -> 
                    {"auto_recurring": {"transaction_amount": lista, "currency_id": CURRENCY}})
     except Exception as e:
         print(f"[MP] no se pudo restaurar el precio de lista en {pre_id}: {e}", flush=True)
+
+
+def sync_preapproval(pre_id: str, db: Session) -> dict:
+    """Refleja en nuestra base el estado real de la suscripción en MP.
+
+    Sin esto, BillingSubscription.status se queda en 'pending' para siempre: no
+    sabríamos quién está realmente suscripto ni nos enteraríamos de una baja
+    hecha desde el lado de Mercado Pago.
+    """
+    data = mp_request("GET", f"/preapproval/{pre_id}")
+    status = str(data.get("status") or "").lower()
+    if status not in ("pending", "authorized", "paused", "cancelled"):
+        return {"status": "desconocido"}
+    sub = db.scalar(select(BillingSubscription).where(
+        BillingSubscription.mp_preapproval_id == str(pre_id)))
+    if not sub:
+        return {"status": "sin_suscripcion"}
+    sub.status = status
+    db.commit()
+    return {"status": status}
+
+
+def cancel_preapproval(pre_id: str) -> None:
+    """Cancela el cobro recurrente en MP. Propaga el error si falla: quien
+    llama tiene que poder distinguir 'cancelado' de 'seguimos cobrando'."""
+    mp_request("PUT", f"/preapproval/{pre_id}", {"status": "cancelled"})
