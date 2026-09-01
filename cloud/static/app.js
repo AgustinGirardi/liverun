@@ -251,7 +251,34 @@ async function viewDashboard(){
       <button class="btn ghost sm" style="width:auto" onclick="go('races')">Ver todas →</button>
     </div>
     <div class="sub" style="margin:6px 0 14px">Explorá los resultados publicados y entrá a cualquier carrera.</div>
-    <div id="dashRaces"><div class="empty">Cargando…</div></div>`;
+    <div id="dashRaces"><div class="empty">Cargando…</div></div>
+    <div class="card" style="margin-top:24px">
+      <h2>Contraseña</h2>
+      <div class="muted" style="margin-bottom:12px">Al cambiarla cerramos las sesiones abiertas en otros dispositivos. Esta se mantiene.</div>
+      <div id="pwMsg"></div>
+      <div class="field"><label>Contraseña actual</label>
+        <div class="pw-wrap">
+          <input type="password" id="pwCur" placeholder="••••••">
+          <button type="button" class="pw-eye" id="pwCurEye" onclick="togglePw('pwCur','pwCurEye')" title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">👁</button>
+        </div>
+      </div>
+      <div class="field"><label>Contraseña nueva</label>
+        <div class="pw-wrap">
+          <input type="password" id="pwNew" placeholder="mínimo 8 caracteres" oninput="pwMeter('pwNew','pwNewFill','pwNewLbl')">
+          <button type="button" class="pw-eye" id="pwNewEye" onclick="togglePw('pwNew','pwNewEye')" title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">👁</button>
+        </div>
+        <div class="pw-meter"><div class="pw-bar"><i id="pwNewFill"></i></div><span class="pw-lbl" id="pwNewLbl"></span></div>
+      </div>
+      <div class="field"><label>Repetir la nueva</label>
+        <input type="password" id="pwRep" placeholder="••••••" onkeydown="if(event.key==='Enter')changePassword($('pwBtn'))">
+      </div>
+      <button class="btn grad" id="pwBtn" onclick="changePassword(this)">Cambiar contraseña</button>
+    </div>
+    <div class="card" style="margin-top:24px">
+      <h2>Cuenta</h2>
+      <div class="muted" style="margin-bottom:12px">Eliminar tu cuenta borra para siempre tus resultados guardados, tus salidas de la app y tus amigos. Los resultados oficiales publicados por el organizador no se modifican. Esta acción no se puede deshacer.</div>
+      <button class="btn ghost sm" style="color:#e5484d;border-color:#e5484d66" onclick="deleteAccount(this)">Eliminar mi cuenta</button>
+    </div>`;
 
   // Mi historial + mejores marcas
   try {
@@ -967,7 +994,7 @@ function viewAuth(mode){
     </div>`;
 }
 function showAuthErr(msg){ $("amsg").innerHTML = `<div class="err">${esc(msg)}</div>`; }
-function togglePw(){ const i=$("pw"), e=$("pwEye"); if(!i) return; const show = i.type==="password"; i.type = show ? "text" : "password"; e.textContent = show ? "🙈" : "👁"; i.focus(); }
+function togglePw(idIn, idEye){ const i=$(idIn||"pw"), e=$(idEye||"pwEye"); if(!i) return; const show = i.type==="password"; i.type = show ? "text" : "password"; e.textContent = show ? "🙈" : "👁"; i.focus(); }
 function pwScore(pw){
   if(pw.length < 8) return 0;                 // por debajo del mínimo: siempre "muy débil"
   let s = 1;
@@ -977,8 +1004,8 @@ function pwScore(pw){
   if(/[^A-Za-z0-9]/.test(pw)) s++;
   return Math.min(s, 4);                        // 0..4
 }
-function pwMeter(){
-  const i=$("pw"), fill=$("pwFill"), lbl=$("pwLbl");
+function pwMeter(idIn, idFill, idLbl){
+  const i=$(idIn||"pw"), fill=$(idFill||"pwFill"), lbl=$(idLbl||"pwLbl");
   if(!i || !fill) return;
   const pw = i.value;
   if(!pw){ fill.style.width="0"; lbl.textContent=""; return; }
@@ -1019,6 +1046,28 @@ async function viewMe(){
       <button class="btn ghost sm" style="color:#e5484d;border-color:#e5484d66" onclick="deleteAccount(this)">Eliminar mi cuenta</button>
     </div>`;
   meTab("hist");
+}
+
+/** Cambio de contraseña. El backend cierra las demás sesiones y devuelve un
+    token nuevo, así que hay que reemplazar el guardado o quedaríamos afuera. */
+async function changePassword(btn){
+  const cur = $("pwCur").value, nue = $("pwNew").value, rep = $("pwRep").value;
+  const msg = $("pwMsg");
+  const err = (m) => { msg.innerHTML = `<div class="err">${esc(m)}</div>`; };
+  msg.innerHTML = "";
+  if(!cur) return err("Ingresá tu contraseña actual.");
+  if(nue.length < 8) return err("La contraseña nueva debe tener al menos 8 caracteres.");
+  if(nue === cur) return err("La contraseña nueva tiene que ser distinta de la actual.");
+  if(nue !== rep) return err("Las dos contraseñas nuevas no coinciden.");
+  btn.disabled = true; btn.textContent = "Cambiando…";
+  try {
+    const d = await api("POST","/api/auth/password",{current_password:cur,new_password:nue},true);
+    TOKEN = d.token; localStorage.setItem("ct_token", TOKEN);
+    $("pwCur").value = $("pwNew").value = $("pwRep").value = "";
+    pwMeter("pwNew","pwNewFill","pwNewLbl");
+    toast("Contraseña cambiada. Cerramos las sesiones en otros dispositivos.");
+  } catch(e){ err(e.message || "No se pudo cambiar la contraseña"); }
+  btn.disabled = false; btn.textContent = "Cambiar contraseña";
 }
 
 /** Borrado de cuenta (requisito de las tiendas: también accesible por web). */
