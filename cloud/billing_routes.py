@@ -110,6 +110,10 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     # Los ids de pago de MP son numéricos; validar acá evita que un id armado
     # (p. ej. "../preapproval/X") se inyecte en la URL del GET a la API de MP.
     if not _firma_valida(request, payment_id):
+        # Queda logueado: si algún día rechazáramos un aviso legítimo (por un
+        # cambio de MP en cómo arma el manifest) sería un pago perdido, y sin
+        # esta línea no habría forma de enterarse.
+        print(f"[MP] aviso {notif_type}/{payment_id} descartado: firma inválida", flush=True)
         # 200 a propósito: no queremos que MP reintente un aviso que descartamos.
         return {"received": True, "ignored": "firma"}
 
