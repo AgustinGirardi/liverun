@@ -5,7 +5,7 @@ Solo datos públicos de resultado: nombre, dorsal, categoría, club, tiempo, pos
 """
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Float, Date, DateTime, Text,
+    Column, Integer, BigInteger, String, Float, Numeric, Date, DateTime, Text,
     ForeignKey, UniqueConstraint, func,
 )
 from sqlalchemy.orm import relationship
@@ -188,7 +188,7 @@ class BillingPayment(Base):
     id            = Column(Integer, primary_key=True, autoincrement=True)
     user_id       = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
     mp_payment_id = Column(String(64), nullable=False, unique=True, index=True)
-    amount        = Column(Float, nullable=True)
+    amount        = Column(Numeric(12, 2), nullable=True)   # plata: escala fija, no binario flotante
     status        = Column(String(20), nullable=True)
     created_at    = Column(DateTime, server_default=func.now())
 
