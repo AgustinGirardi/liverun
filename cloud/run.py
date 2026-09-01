@@ -41,6 +41,18 @@ def _is_real_image(ext: str, data: bytes) -> bool:
     return ext != "webp" or data[8:12] == b"WEBP"
 
 
+def avatar_absoluto(url: Optional[str]) -> Optional[str]:
+    """Convierte el avatar propio en URL completa para el cliente.
+
+    Los nuestros se GUARDAN relativos ("/avatars/7.jpg?v=..") para que un cambio
+    de dominio no deje las filas viejas apuntando al host anterior para siempre.
+    La foto de Google se guarda entera y se devuelve tal cual.
+    """
+    if url and url.startswith("/"):
+        return f"{PUBLIC_URL}{url}"
+    return url
+
+
 def avatar_dir() -> Path:
     """Carpeta de avatares junto a la base SQLite (en Render: /var/data/avatars)."""
     if DB_URL.startswith("sqlite:///"):
@@ -156,7 +168,8 @@ def _activity_dict(a: Activity, full: bool = False) -> dict:
 
 
 def _user_public(u: PortalUser) -> dict:
-    return {"username": u.username, "full_name": u.full_name, "avatar_url": u.avatar_url}
+    return {"username": u.username, "full_name": u.full_name,
+            "avatar_url": avatar_absoluto(u.avatar_url)}
 
 
 def _friend_ids(user_id: int, db: Session) -> set[int]:
@@ -180,7 +193,7 @@ def get_profile(user: PortalUser = Depends(current_user)):
         "full_name": user.full_name,
         "username": user.username,
         "weekly_goal": user.weekly_goal or 3,
-        "avatar_url": user.avatar_url,
+        "avatar_url": avatar_absoluto(user.avatar_url),
         "is_admin": bool(user.is_admin),
         "access": acc["access"],
         "plan": acc["plan"],
@@ -435,7 +448,8 @@ def upload_avatar(request: Request, file: UploadFile = File(...),
         old.unlink(missing_ok=True)
     (d / f"{user.id}.{ext}").write_bytes(data)
     # ?v= rompe el caché de la app cuando se cambia la foto.
-    user.avatar_url = f"{PUBLIC_URL}/avatars/{user.id}.{ext}?v={int(time.time())}"
+    # Relativo a propósito: ver avatar_absoluto().
+    user.avatar_url = f"/avatars/{user.id}.{ext}?v={int(time.time())}"
     db.commit()
     return get_profile(user)
 

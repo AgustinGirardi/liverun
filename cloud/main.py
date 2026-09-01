@@ -108,6 +108,20 @@ def _ensure_admins():
             conn.execute(text("UPDATE portal_users SET is_admin=1 WHERE lower(email)=:e"), {"e": e})
 
 
+def _migrar_avatares_a_relativo():
+    """Los avatares propios se guardaban con el host adentro, así que un cambio
+    de dominio los rompía en la base. Los pasa a ruta relativa. Idempotente.
+    No toca las fotos de Google: esas no contienen "/avatars/"."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE portal_users "
+            "SET avatar_url = substr(avatar_url, instr(avatar_url, '/avatars/')) "
+            "WHERE avatar_url LIKE '%/avatars/%' AND avatar_url NOT LIKE '/avatars/%'"
+        ))
+
+
 def _ensure_email_hash_column():
     """Migración suave para SQLite: agrega published_results.email_hash si falta.
     create_all() no altera tablas existentes, así que en bases ya creadas
@@ -173,6 +187,7 @@ def _startup():
     _ensure_category_position_column()
     _ensure_event_columns()
     _ensure_run_columns()
+    _migrar_avatares_a_relativo()
     _ensure_admins()
 
 
