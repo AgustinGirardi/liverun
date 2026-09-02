@@ -124,7 +124,9 @@ se rompe el login con Google.
 
 **Qué NO se rompe:** `chronotrack-portal.onrender.com` sigue respondiendo como
 origen, así que los links `/r/CODIGO` ya compartidos siguen abriendo. Los avatares
-guardan su URL absoluta en la base (`cloud/run.py`) y por eso mismo siguen cargando.
+se guardan con ruta relativa y la URL completa se arma al responder con
+`CT_PUBLIC_URL` (`cloud/run.py`), así que pasan solos al dominio nuevo. Las fotos
+que vienen de Google se guardan enteras y no se tocan.
 
 ## Verificar que funciona
 
