@@ -33,11 +33,14 @@ GOOGLE_CLIENT_SECRET = os.environ.get("CT_GOOGLE_CLIENT_SECRET", "")
 PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
 
 # Esquemas de deep link aceptados: la app instalada (liverun; se mantiene el
-# scheme viejo por builds anteriores) y Expo Go (exp/exps) — estos últimos se
-# pueden apagar al lanzar con CT_ALLOW_EXPO_REDIRECT=0, porque un exp:// puede
-# apuntar a CUALQUIER proyecto de Expo Go (vector de phishing del token).
+# scheme viejo por builds anteriores) y, sólo si se enciende a mano, Expo Go.
 _APP_SCHEMES = ("liverun", "chronotrackrun")
-_EXPO_SCHEMES = ("exp", "exps") if os.environ.get("CT_ALLOW_EXPO_REDIRECT", "1") == "1" else ()
+# Por defecto APAGADO: un exp:// puede apuntar a CUALQUIER proyecto de Expo Go,
+# y como el callback vuelve con el token en la query, alcanzaba con que la
+# victima abriera un link nuestro para que el token de 30 dias terminara en el
+# proyecto del atacante. Se enciende a mano (CT_ALLOW_EXPO_REDIRECT=1) solo en
+# desarrollo, nunca en produccion.
+_EXPO_SCHEMES = ("exp", "exps") if os.environ.get("CT_ALLOW_EXPO_REDIRECT") == "1" else ()
 ALLOWED_SCHEMES = _EXPO_SCHEMES + _APP_SCHEMES
 STATE_TTL_S = 600
 

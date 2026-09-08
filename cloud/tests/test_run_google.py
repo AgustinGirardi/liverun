@@ -10,14 +10,14 @@ from cloud.tests.conftest import make_user
 # ── state ─────────────────────────────────────────────────────────────────────
 
 def test_state_roundtrip():
-    s = ga.make_state("exp://192.168.0.99:8081/--/auth")
-    assert ga.verify_state(s) == "exp://192.168.0.99:8081/--/auth"
+    s = ga.make_state("liverun://auth")
+    assert ga.verify_state(s) == "liverun://auth"
 
 
 def test_state_adulterado_o_vencido():
-    s = ga.make_state("exp://host/--/auth")
+    s = ga.make_state("liverun://auth")
     assert ga.verify_state(s + "x") is None
-    vencido = ga.make_state("exp://host/--/auth", now=0)  # expiró hace décadas
+    vencido = ga.make_state("liverun://auth", now=0)  # expiró hace décadas
     assert ga.verify_state(vencido) is None
 
 
@@ -25,6 +25,21 @@ def test_state_rechaza_esquemas_no_permitidos():
     assert ga.verify_state(ga.make_state("https://evil.com/phish")) is None
     assert not ga.valid_app_redirect("javascript:alert(1)")
     assert ga.valid_app_redirect("chronotrackrun://auth")
+
+
+def test_expo_apagado_por_defecto(monkeypatch):
+    """exp:// puede apuntar a cualquier proyecto de Expo Go, y el callback vuelve
+    con el token en la query: aceptarlo era regalar la sesión a quien armara el
+    link. Queda apagado salvo que se encienda a mano en desarrollo."""
+    assert not ga.valid_app_redirect("exp://cualquier-proyecto.expo.dev/--/cb")
+    assert not ga.valid_app_redirect("exps://192.168.0.99:8081/--/auth")
+    # …y el state tampoco lo firma, así que no hay forma de colarlo por el callback.
+    assert ga.verify_state(ga.make_state("exp://evil.expo.dev/--/cb")) is None
+
+
+def test_expo_se_puede_encender_para_desarrollo(monkeypatch):
+    monkeypatch.setattr(ga, "ALLOWED_SCHEMES", ga.ALLOWED_SCHEMES + ("exp", "exps"))
+    assert ga.valid_app_redirect("exp://192.168.0.99:8081/--/auth")
 
 
 def test_redirect_al_propio_portal_permitido():
@@ -75,7 +90,7 @@ def test_start_redirige_a_google(client, monkeypatch):
     monkeypatch.setattr(ga, "GOOGLE_CLIENT_SECRET", "secret")
     r = client.get(
         "/api/run/auth/google/start",
-        params={"app_redirect": "exp://host/--/auth"},
+        params={"app_redirect": "liverun://auth"},
         follow_redirects=False,
     )
     assert r.status_code == 302
@@ -85,7 +100,7 @@ def test_start_redirige_a_google(client, monkeypatch):
 
 def test_start_sin_config_da_503(client, monkeypatch):
     monkeypatch.setattr(ga, "GOOGLE_CLIENT_ID", "")
-    r = client.get("/api/run/auth/google/start", params={"app_redirect": "exp://host/--/auth"})
+    r = client.get("/api/run/auth/google/start", params={"app_redirect": "liverun://auth"})
     assert r.status_code == 503
 
 
@@ -100,7 +115,7 @@ def test_callback_feliz_devuelve_token_al_deep_link(client, monkeypatch):
     monkeypatch.setattr(ga, "exchange_code", lambda code: {
         "sub": "g-55", "email": "ana@test.com", "email_verified": True, "name": "Ana",
     })
-    state = ga.make_state("exp://host/--/auth")
+    state = ga.make_state("liverun://auth")
     r = client.get(
         "/api/run/auth/google/callback",
         params={"state": state, "code": "abc"},
@@ -108,12 +123,12 @@ def test_callback_feliz_devuelve_token_al_deep_link(client, monkeypatch):
     )
     assert r.status_code == 302
     loc = r.headers["location"]
-    assert loc.startswith("exp://host/--/auth?")
+    assert loc.startswith("liverun://auth?")
     assert "token=" in loc and "email=ana%40test.com" in loc
 
 
 def test_callback_con_error_de_google_vuelve_con_error(client):
-    state = ga.make_state("exp://host/--/auth")
+    state = ga.make_state("liverun://auth")
     r = client.get(
         "/api/run/auth/google/callback",
         params={"state": state, "error": "access_denied"},

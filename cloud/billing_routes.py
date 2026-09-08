@@ -18,6 +18,10 @@ router = APIRouter(prefix="/api/run/billing", tags=["Billing"])
 # token: mezclarlos hace que la verificación falle en silencio.
 MP_WEBHOOK_SECRET = os.environ.get("CT_MP_WEBHOOK_SECRET", "")
 
+# En produccion no aceptamos avisos sin firma. Fuera de produccion si, para no
+# obligar a configurar el secreto del webhook en cada entorno de desarrollo.
+_EXIGIR_FIRMA = bool(os.environ.get("RENDER"))
+
 # Los ids de preapproval de MP son alfanuméricos. Igual que con los ids de pago,
 # validamos el formato antes de meterlos en la URL del GET autenticado.
 _ID_PREAPPROVAL = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -30,11 +34,14 @@ def _firma_valida(request: Request, data_id) -> bool:
     confiamos en el body y re-consultamos el pago a MP con nuestro token. La
     firma agrega que ni siquiera gastemos esa consulta en un aviso inventado.
 
-    Si CT_MP_WEBHOOK_SECRET no está configurada no rechazamos nada: el re-fetch
-    sigue siendo la defensa real y no queremos romper un deploy existente.
+    Si CT_MP_WEBHOOK_SECRET no está configurada, en desarrollo no rechazamos
+    nada (el re-fetch sigue siendo la defensa real), pero en producción sí:
+    sin firma, cualquiera podía disparar en bucle una consulta autenticada
+    nuestra a la API de MP por cada request, quemando la cuota de la cuenta del
+    vendedor y bloqueando el worker 20 s por vez.
     """
     if not MP_WEBHOOK_SECRET:
-        return True
+        return not _EXIGIR_FIRMA
     crudo = request.headers.get("x-signature") or ""
     partes = dict(t.split("=", 1) for t in crudo.split(",") if "=" in t)
     ts, v1 = partes.get("ts", "").strip(), partes.get("v1", "").strip()
@@ -97,6 +104,10 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     """Recibe las notificaciones de Mercado Pago. MP manda el tipo y el id por
     query o body; solo nos interesan los pagos. La autenticidad se garantiza
     consultando el pago real a MP con nuestro token (no confiamos en el body)."""
+    # Endpoint publico que dispara una llamada saliente a MP por request: sin
+    # tope es un amplificador contra nuestra propia cuota. El limite es holgado
+    # para no perder avisos legitimos en una rafaga de cobros.
+    rate_limit(request, "mp_webhook", limit=120, window=60.0)
     payment_id = request.query_params.get("data.id") or request.query_params.get("id")
     notif_type = request.query_params.get("type") or request.query_params.get("topic")
     if not payment_id or not notif_type:

@@ -74,7 +74,17 @@ def _client_ip(request: Request) -> str:
 
 def rate_limit(request: Request, bucket: str, limit: int = 10, window: float = 60.0):
     """Lanza 429 si se superan `limit` intentos por IP en `window` segundos."""
-    key = f"{bucket}:{_client_ip(request)}"
+    rate_limit_key(f"{bucket}:{_client_ip(request)}", limit, window)
+
+
+def rate_limit_key(key: str, limit: int = 10, window: float = 60.0):
+    """Igual que rate_limit pero contra una clave arbitraria en vez de la IP.
+
+    Existe para los limites que tienen que sobrevivir a la rotacion de IPs: con
+    IPv6 conseguir una direccion nueva por request es trivial y barato, asi que
+    un tope por IP no protege nada que se pueda adivinar (por ejemplo un codigo
+    de cupon). Ahi la clave util es el usuario autenticado.
+    """
     now = time.time()
     # Purga periódica: sin esto el diccionario acumula IPs para siempre.
     if now - _LAST_SWEEP[0] > _SWEEP_EVERY:

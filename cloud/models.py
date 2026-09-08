@@ -60,6 +60,10 @@ class PublishedRace(Base):
     registration_url = Column(String(400), nullable=True)   # inscripción del organizador
     capacity         = Column(Integer, nullable=True)       # cupo total (null = sin cupo)
     registered_count = Column(Integer, nullable=True)       # inscriptos al momento de publicar
+    # sha256 de la API key que publico la carrera: identifica al organizador
+    # dueño. NULL en las carreras anteriores a esta columna (adoptan dueño al
+    # republicarse). Es un hash, no la key: la base nunca guarda el secreto.
+    owner_key_hash   = Column(String(64), nullable=True)
     results      = relationship("PublishedResult", back_populates="race", cascade="all, delete-orphan")
 
 

@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cloud.db import DB_URL, get_db
-from cloud.deps import current_user, rate_limit
+from cloud.deps import current_user, rate_limit, rate_limit_key
 from cloud.models import Activity, Coupon, CouponRedemption, Friendship, PortalUser
 
 router = APIRouter(prefix="/api/run", tags=["Run"])
@@ -270,27 +270,41 @@ def admin_grant(user_id: int, body: GrantIn,
 
 # ── Cupones ───────────────────────────────────────────────────────────────────
 
-COUPON_RE = re.compile(r"^[A-Z0-9]{4,32}$")
+# Longitud minima 8 para los cupones NUEVOS: con 4 caracteres el espacio es de
+# 36^4 (~1,7 M) y se barre por fuerza bruta. Los cupones ya emitidos con codigos
+# mas cortos se siguen canjeando (el canje busca por igualdad exacta, no valida
+# contra esta expresion); esto solo gobierna el alta.
+COUPON_RE = re.compile(r"^[A-Z0-9]{8,32}$")
+
+
+_CUPON_INVALIDO = "Ese cupón no es válido o ya no está disponible."
 
 
 def coupon_redeemable(coupon: Optional[Coupon], already: bool, now: datetime) -> Optional[str]:
     """Devuelve un mensaje de error si el cupón no se puede canjear, o None si sí.
-    Pura: no toca la DB (recibe el cupón y si el usuario ya lo canjeó)."""
-    if coupon is None:
-        return "Ese código no existe."
-    if not coupon.active:
-        return "Ese cupón ya no está activo."
-    if coupon.expires_at and coupon.expires_at < now:
-        return "Ese cupón venció."
-    if coupon.max_redemptions is not None and coupon.redeemed_count >= coupon.max_redemptions:
-        return "Ese cupón ya alcanzó el máximo de usos."
+    Pura: no toca la DB (recibe el cupón y si el usuario ya lo canjeó).
+
+    Todos los motivos comparten un único mensaje salvo el de "ya lo usaste".
+    Distinguir "no existe" de "venció" o "sin usos" confirmaba que un código
+    adivinado era real, que es justo lo que busca quien prueba códigos al voleo;
+    "ya usaste este cupón" sí se distingue porque solo lo puede ver quien
+    efectivamente lo canjeó, y sin ese texto el mensaje es incomprensible.
+    """
     if already:
         return "Ya usaste este cupón."
+    if coupon is None:
+        return _CUPON_INVALIDO
+    if not coupon.active:
+        return _CUPON_INVALIDO
+    if coupon.expires_at and coupon.expires_at < now:
+        return _CUPON_INVALIDO
+    if coupon.max_redemptions is not None and coupon.redeemed_count >= coupon.max_redemptions:
+        return _CUPON_INVALIDO
     return None
 
 
 class CouponCreate(BaseModel):
-    code: str = Field(..., min_length=4, max_length=32)
+    code: str = Field(..., min_length=8, max_length=32)
     kind: str  # free_months | discount
     months: Optional[int] = Field(None, ge=1, le=120)
     percent_off: Optional[int] = Field(None, ge=1, le=100)
@@ -316,7 +330,7 @@ def admin_create_coupon(body: CouponCreate,
                         admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     code = body.code.strip().upper()
     if not COUPON_RE.match(code):
-        raise HTTPException(400, "El código debe tener 4-32 caracteres (letras y números)")
+        raise HTTPException(400, "El código debe tener 8-32 caracteres (letras y números)")
     if body.kind not in ("free_months", "discount"):
         raise HTTPException(400, "kind debe ser 'free_months' o 'discount'")
     if body.kind == "free_months" and not body.months:
@@ -359,6 +373,9 @@ def redeem_coupon(body: RedeemIn, request: Request,
     """Canjea un cupón. free_months suma premium al instante; discount deja el
     descuento pendiente para el próximo pago."""
     rate_limit(request, "redeem", limit=20, window=60.0)
+    # Ademas del tope por IP: rotar IPv6 es trivial, y sin un tope atado a la
+    # cuenta el espacio de codigos se puede barrer igual desde miles de origenes.
+    rate_limit_key(f"redeem_user:{user.id}", limit=10, window=3600.0)
     code = (body.code or "").strip().upper()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     c = db.scalar(select(Coupon).where(Coupon.code == code))
@@ -384,7 +401,7 @@ def redeem_coupon(body: RedeemIn, request: Request,
     )
     if claimed.rowcount == 0:
         db.rollback()
-        raise HTTPException(400, "Ese cupón ya alcanzó el máximo de usos.")
+        raise HTTPException(400, _CUPON_INVALIDO)
     db.add(CouponRedemption(coupon_id=c.id, user_id=user.id))
     if c.kind == "free_months":
         base = user.premium_until if (user.premium_until and user.premium_until > now) else now

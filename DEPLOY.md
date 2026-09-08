@@ -20,7 +20,7 @@ La app de escritorio NO se sube: solo se publica `cloud/` (el portal).
 
 ## Paso 1 — Subir el código a un repo privado de GitHub
 
-Desde la carpeta del proyecto (`C:\Users\agust\chronotrack`):
+Desde la carpeta del proyecto:
 
 ```bash
 # (Ya inicializamos git y dejamos el primer commit listo. Si no, ver "Notas" abajo.)

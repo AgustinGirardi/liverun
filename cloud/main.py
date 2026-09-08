@@ -44,8 +44,28 @@ def _name_tokens(s: str) -> set[str]:
 def _name_matches(a: str, b: str) -> bool:
     return bool(_name_tokens(a) & _name_tokens(b))
 
+def _last_name_matches(provisto: str, full_name: str) -> bool:
+    """El apellido provisto tiene que ser una palabra COMPLETA del nombre.
 
-app = FastAPI(title="LiveRun Cloud", version="1.0")
+    Antes esto era `provisto in full_name.lower()`, un substring sin longitud
+    minima: `last_name="a"` matcheaba a casi cualquier corredor y permitia
+    adjudicarse resultados ajenos en masa (los result_id son publicos).
+    `_name_tokens` ya descarta tokens de menos de 3 letras.
+    """
+    return bool(_name_tokens(provisto) & _name_tokens(full_name))
+
+
+# Docs interactivas: utiles en desarrollo, pero en produccion son un catalogo
+# gratis de los endpoints de admin y organizador para cualquier escaneo
+# automatizado. RENDER lo setea la plataforma; en local siguen disponibles.
+_EN_PRODUCCION = bool(os.environ.get("RENDER"))
+app = FastAPI(
+    title="LiveRun Cloud",
+    version="1.0",
+    docs_url=None if _EN_PRODUCCION else "/docs",
+    redoc_url=None if _EN_PRODUCCION else "/redoc",
+    openapi_url=None if _EN_PRODUCCION else "/openapi.json",
+)
 
 # CORS cerrado al propio portal (el SPA es same-origin; esto cubre subdominios
 # o un dominio propio futuro vía CT_PUBLIC_URL) + localhost para desarrollo.
@@ -59,6 +79,27 @@ app.add_middleware(
 )
 
 
+# 'unsafe-inline' en script-src es deuda conocida, no un descuido: el SPA arma
+# la UI con innerHTML y engancha los handlers como atributos onclick (~60), asi
+# que sin esto la web deja de funcionar. Igual acota lo que importa: no se puede
+# cargar script de otro origen, no hay 'unsafe-eval', y nadie puede embeber el
+# portal ni reescribir la base de las URLs relativas. Para poder sacarlo habria
+# que migrar los onclick a addEventListener.
+# img-src incluye https: por las fotos de perfil de Google, que se guardan con
+# su URL completa (lh3.googleusercontent.com).
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' https: data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
+
+
 @app.middleware("http")
 async def _security_headers(request: Request, call_next):
     """Cabeceras defensivas: sin sniffing de content-type (avatares subidos),
@@ -67,6 +108,11 @@ async def _security_headers(request: Request, call_next):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Content-Security-Policy", _CSP)
+    if _EN_PRODUCCION:
+        # Solo en produccion: en local el portal se sirve por http y el HSTS
+        # dejaria el navegador forzando https contra localhost.
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return resp
 
 
@@ -152,6 +198,20 @@ def _ensure_category_position_column():
             conn.execute(text("ALTER TABLE published_results ADD COLUMN category_position INTEGER"))
 
 
+def _ensure_owner_key_column():
+    """Migracion suave para SQLite: agrega published_races.owner_key_hash.
+    Las carreras que ya existian quedan en NULL y adoptan dueño la proxima vez
+    que se republican, asi una base viva no se bloquea sola. Idempotente."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_races)"))]
+        if not cols:
+            return  # tabla inexistente: create_all ya la crea con la columna
+        if "owner_key_hash" not in cols:
+            conn.execute(text("ALTER TABLE published_races ADD COLUMN owner_key_hash VARCHAR(64)"))
+
+
 def _ensure_event_columns():
     """Migración suave para SQLite: columnas de calendario en published_races.
     Las carreras que ya estaban publicadas son resultados, así que el default
@@ -188,6 +248,7 @@ def _startup():
     _ensure_email_hash_column()
     _ensure_category_position_column()
     _ensure_event_columns()
+    _ensure_owner_key_column()
     _ensure_run_columns()
     _migrar_avatares_a_relativo()
     _ensure_admins()
@@ -206,6 +267,20 @@ class PublishResult(BaseModel):
     position: Optional[int] = None
     status: str = "FINISHER"
     email_hash: Optional[str] = Field(None, max_length=64)  # sha256 hex (64 chars); el escritorio lo calcula, el cloud nunca ve el email en claro
+
+    @field_validator("email_hash")
+    @classmethod
+    def _hash_bien_formado(cls, v):
+        """Solo sha256 en hex. El algoritmo es publico y sin salt, asi que un
+        hash arbitrario en el payload es la forma de intentar colgarle un
+        resultado inventado al email de otra persona; al menos exigimos que
+        tenga la forma correcta."""
+        if v is None:
+            return v
+        v = v.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", v):
+            raise ValueError("email_hash debe ser un sha256 en hexadecimal (64 caracteres)")
+        return v
 
 
 class PublishPayload(BaseModel):
@@ -332,6 +407,14 @@ def _autolink(user: PortalUser, db: Session) -> int:
     ).all())
     created = 0
     for res in results:
+        # El email_hash viaja en el payload de publicacion y el algoritmo es
+        # publico: solo con el hash, un organizador podia colgarle a cualquier
+        # email un resultado inventado, que aparecia como propio en el siguiente
+        # login. Pedir que el nombre tambien coincida cierra esa via. Si la
+        # cuenta todavia no cargo su nombre, el hash sigue alcanzando (es el
+        # caso de las cuentas viejas y del alta por Google sin nombre).
+        if user.full_name and not _name_matches(user.full_name, res.full_name):
+            continue
         if res.id not in claimed_ids:
             db.add(Claim(user_id=user.id, result_id=res.id))
             created += 1
@@ -340,18 +423,51 @@ def _autolink(user: PortalUser, db: Session) -> int:
     return created
 
 
+# ── Autenticación del organizador ────────────────────────────────────────────
+
+def _check_publish_key(x_api_key: Optional[str]) -> str:
+    """Valida la API key de publicación y devuelve su hash (identidad del dueño).
+
+    Se compara en bytes y no en str: hmac.compare_digest sobre str exige ASCII
+    puro, y como Starlette decodifica los headers en latin-1 un `X-API-Key: á`
+    reventaba con TypeError → 500 en vez de un 403 limpio.
+    """
+    if not x_api_key:
+        raise HTTPException(403, "API key inválida")
+    # compare_digest: comparación en tiempo constante (no filtra la key por timing).
+    if not hmac_compare(x_api_key.encode("utf-8", "ignore"), PUBLISH_API_KEY.encode("utf-8")):
+        raise HTTPException(403, "API key inválida")
+    return hashlib.sha256(x_api_key.encode("utf-8", "ignore")).hexdigest()
+
+
+def _check_race_owner(race: PublishedRace, key_hash: str) -> None:
+    """Una carrera pertenece a la key que la publicó.
+
+    Hoy hay una sola CT_PUBLISH_KEY y esto no rechaza nada, pero deja la
+    propiedad grabada desde el primer día: cuando haya una key por organizador,
+    ninguno va a poder pisar ni borrar las carreras de otro sólo por conocer el
+    source_id. Las carreras previas a la migración tienen owner_key_hash NULL y
+    adoptan dueño en su próxima publicación.
+    """
+    if race.owner_key_hash and not hmac_compare(race.owner_key_hash, key_hash):
+        raise HTTPException(403, "Esa carrera fue publicada por otro organizador")
+
+
 # ── Publicación (organizador) ────────────────────────────────────────────────
 
 @app.post("/api/publish", tags=["Organizador"])
-def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session = Depends(get_db)):
-    # compare_digest: comparación en tiempo constante (no filtra la key por timing).
-    if not x_api_key or not hmac_compare(x_api_key, PUBLISH_API_KEY):
-        raise HTTPException(403, "API key inválida")
+def publish(payload: PublishPayload, request: Request, x_api_key: str = Header(None), db: Session = Depends(get_db)):
+    # Publicar es caro (borra y reinserta toda la carrera): sin tope, una key
+    # filtrada permite machacar el servicio además de falsear resultados.
+    rate_limit(request, "publish", limit=30, window=60.0)
+    key_hash = _check_publish_key(x_api_key)
 
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == payload.source_id))
     if race is None:
         race = PublishedRace(source_id=payload.source_id, code=_gen_code(payload.source_id, db))
         db.add(race)
+    _check_race_owner(race, key_hash)
+    race.owner_key_hash = key_hash
 
     race.name = payload.name
     race.location = payload.location
@@ -389,12 +505,12 @@ def publish(payload: PublishPayload, x_api_key: str = Header(None), db: Session 
 
 
 @app.post("/api/events", tags=["Organizador"])
-def publish_event(payload: EventPayload, x_api_key: str = Header(None), db: Session = Depends(get_db)):
+def publish_event(payload: EventPayload, request: Request, x_api_key: str = Header(None), db: Session = Depends(get_db)):
     """Publica (o actualiza) una carrera del calendario, todavía sin resultados.
     Mismo id estable que usa /api/publish: cuando el organizador suba los
     resultados, la misma fila pasa a 'finished' y aparece en Carreras."""
-    if not x_api_key or not hmac_compare(x_api_key, PUBLISH_API_KEY):
-        raise HTTPException(403, "API key inválida")
+    rate_limit(request, "publish", limit=30, window=60.0)
+    key_hash = _check_publish_key(x_api_key)
 
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == payload.source_id))
     if race is None:
@@ -451,12 +567,16 @@ def list_races(db: Session = Depends(get_db)):
         .where(PublishedRace.event_status == "finished")
         .order_by(PublishedRace.published_at.desc())
     ).all()
+    # Un solo COUNT agrupado en vez de una query por carrera: con el listado
+    # completo esto era un N+1 que escalaba con cada carrera publicada.
+    conteos = dict(db.execute(
+        select(PublishedResult.race_id, func.count())
+        .where(PublishedResult.status == "FINISHER")
+        .group_by(PublishedResult.race_id)
+    ).all())
     out = []
     for race in races:
-        finishers = db.scalar(
-            select(func.count()).select_from(PublishedResult)
-            .where(PublishedResult.race_id == race.id, PublishedResult.status == "FINISHER")
-        )
+        finishers = conteos.get(race.id, 0)
         out.append({
             "code": race.code, "name": race.name, "location": race.location,
             "race_date": race.race_date.isoformat() if race.race_date else None,
@@ -491,6 +611,10 @@ def race_detail(code: str, db: Session = Depends(get_db)):
 
 # ── Cuentas de corredor ──────────────────────────────────────────────────────
 
+# Hash de descarte para igualar el tiempo del login cuando el email no existe.
+# Se calcula una vez al importar (200.000 iteraciones no son gratis).
+_DUMMY_HASH = hash_password("contraseña-que-nunca-va-a-coincidir")
+
 @app.post("/api/auth/register", tags=["Corredor"])
 def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
     # Registro permisivo: en un evento muchos corredores se anotan desde la misma
@@ -522,7 +646,14 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
     # Login más estricto: es el vector de fuerza-bruta de contraseñas.
     rate_limit(request, "login", limit=15, window=60.0)
     user = db.scalar(select(PortalUser).where(PortalUser.email == body.email.lower()))
-    if not user or not verify_password(body.password, user.password_hash):
+    if not user:
+        # Gastar el mismo PBKDF2 que gastariamos con un usuario real. Sin esto
+        # un email inexistente respondia en ~1 ms y uno registrado en ~80 ms
+        # (200.000 iteraciones), y esa diferencia sola permite listar quien
+        # tiene cuenta en el portal.
+        verify_password(body.password, _DUMMY_HASH)
+        raise HTTPException(401, "Email o contraseña incorrectos")
+    if not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Email o contraseña incorrectos")
     try:
         linked = _autolink(user, db)
@@ -615,10 +746,10 @@ def claim(body: ClaimIn, request: Request, user: PortalUser = Depends(current_us
     race = db.scalar(select(PublishedRace).where(PublishedRace.code == body.code.upper()))
     if not race:
         raise HTTPException(404, "No existe una carrera con ese código")
-    last = body.last_name.strip().lower()
+    last = body.last_name.strip()
     matches = [
         r for r in race.results
-        if r.bib_number == body.bib_number.strip() and last in r.full_name.lower()
+        if r.bib_number == body.bib_number.strip() and _last_name_matches(last, r.full_name)
     ]
     if not matches:
         raise HTTPException(404, "No se encontró un resultado con ese dorsal y apellido en esa carrera")
@@ -739,17 +870,23 @@ def my_results(user: PortalUser = Depends(current_user), db: Session = Depends(g
 # ── Búsqueda (corredor por nombre, o carrera por nombre/código) ───────────────
 
 @app.get("/api/search", tags=["Público"])
-def search(q: str, db: Session = Depends(get_db)):
+def search(q: str, request: Request, db: Session = Depends(get_db)):
+    # Endpoint publico y caro: dos LIKE '%...%' sin indice sobre toda la tabla
+    # de resultados, en un unico proceso uvicorn. Sin tope alcanzaba con un
+    # bucle de curl para dejar el portal sin CPU.
+    rate_limit(request, "search", limit=60, window=60.0)
     q = (q or "").strip()
     if len(q) < 2:
         return {"races": [], "results": []}
     ql = q.lower()
-    like = f"%{ql}%"
+    # Escapar los comodines del usuario: sin esto `q=%` matcheaba TODO y
+    # convertia cada busqueda en un scan completo de la tabla.
+    like = "%" + ql.replace("\\", "\\\\").replace("%", "\%").replace("_", "\_") + "%"
 
     # Carreras por nombre o código exacto
     races = db.scalars(
         select(PublishedRace)
-        .where(func.lower(PublishedRace.name).like(like) | (func.lower(PublishedRace.code) == ql))
+        .where(func.lower(PublishedRace.name).like(like, escape="\\") | (func.lower(PublishedRace.code) == ql))
         .order_by(PublishedRace.published_at.desc())
         .limit(20)
     ).all()
@@ -763,7 +900,7 @@ def search(q: str, db: Session = Depends(get_db)):
     rows = db.execute(
         select(PublishedResult, PublishedRace)
         .join(PublishedRace, PublishedResult.race_id == PublishedRace.id)
-        .where(func.lower(PublishedResult.full_name).like(like))
+        .where(func.lower(PublishedResult.full_name).like(like, escape="\\"))
         .order_by(PublishedResult.full_name)
         .limit(60)
     ).all()
@@ -790,9 +927,9 @@ def claim_result(body: ClaimResultIn, request: Request, user: PortalUser = Depen
     res = db.get(PublishedResult, body.result_id)
     if not res:
         raise HTTPException(404, "Resultado no encontrado")
-    prov_last = (body.last_name or "").strip().lower()
+    prov_last = (body.last_name or "").strip()
     identity_ok = (
-        (prov_last and prov_last in res.full_name.lower())
+        _last_name_matches(prov_last, res.full_name)
         or (user.full_name and _name_matches(user.full_name, res.full_name))
     )
     if not identity_ok:
@@ -822,14 +959,15 @@ def autolink_me(request: Request, user: PortalUser = Depends(current_user), db: 
 # ── Despublicar (organizador) ─────────────────────────────────────────────────
 
 @app.delete("/api/publish/{source_id}", tags=["Organizador"])
-def unpublish(source_id: str, x_api_key: str = Header(None), db: Session = Depends(get_db)):
+def unpublish(source_id: str, request: Request, x_api_key: str = Header(None), db: Session = Depends(get_db)):
     """Elimina una carrera publicada (y sus resultados/claims). Idempotente:
     si no existe, no es error. Lo usa la app de escritorio al borrar una carrera."""
-    if not x_api_key or not hmac_compare(x_api_key, PUBLISH_API_KEY):
-        raise HTTPException(403, "API key inválida")
+    rate_limit(request, "publish", limit=30, window=60.0)
+    key_hash = _check_publish_key(x_api_key)
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == source_id))
     if not race:
         return {"deleted": False, "reason": "no existía"}
+    _check_race_owner(race, key_hash)
     code = race.code
     result_ids = [r.id for r in race.results]
     if result_ids:
