@@ -1,5 +1,13 @@
 """Limpieza total de datos del portal cloud — deja todo en cero MENOS una cuenta.
 
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ⚠  DESTRUCTIVO E IRREVERSIBLE. Borra TODOS los datos del portal en          ║
+║     producción: carreras publicadas, resultados, claims, salidas, amistades,  ║
+║     cupones y pagos. Solo se recupera desde el backup que genera el paso 1.   ║
+║     No lo corras "para ver qué hace".                                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+
 Pensado para correr en la Render Shell del servicio chronotrack-portal, donde
 CT_CLOUD_DB apunta al SQLite del disco persistente (/var/data/cloud.db).
 
@@ -14,7 +22,7 @@ Qué hace:
 Borra explícitamente las tablas hijas (SQLite NO aplica ON DELETE CASCADE si no
 está PRAGMA foreign_keys=ON por conexión), así no quedan filas huérfanas.
 
-Uso:   python scripts/wipe_cloud_data.py
+Uso:   KEEP_EMAIL=tu@email.com python scripts/wipe_cloud_data.py
 Recuperar:  reemplazar cloud.db por el cloud.db.bak.<ts> generado.
 """
 import os
@@ -23,7 +31,16 @@ import sys
 import time
 from pathlib import Path
 
-KEEP_EMAIL = os.environ.get("KEEP_EMAIL", "agustingirardi1@gmail.com")
+# Sin default a proposito: la cuenta que sobrevive se nombra explicitamente al
+# invocar el script. Un default aca es un pie de bala (te lleva a correrlo sin
+# pensar contra la cuenta equivocada) y, en un repo publico, publica cual es la
+# cuenta con privilegios del portal.
+KEEP_EMAIL = (os.environ.get("KEEP_EMAIL") or "").strip().lower()
+if not KEEP_EMAIL:
+    sys.exit(
+        "Falta KEEP_EMAIL: es el email de la unica cuenta que se conserva. "
+        "Uso:  KEEP_EMAIL=tu@email.com python scripts/wipe_cloud_data.py"
+    )
 
 # Orden hijas → padres (por las FKs). portal_users se trata aparte (se conserva 1).
 DATA_TABLES = [

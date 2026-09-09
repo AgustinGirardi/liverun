@@ -130,7 +130,7 @@ def test_publish_and_list_race(client):
 - [ ] **Step 5: Correr el smoke test (debe pasar)**
 
 Run: `python -m pytest cloud/tests/test_smoke.py -v`
-Expected: PASS (1 passed). Si falla por import, verificar que se corre desde la raíz del repo (`C:\Users\agust\chronotrack`) para que `cloud` sea importable.
+Expected: PASS (1 passed). Si falla por import, verificar que se corre desde la raíz del repo para que `cloud` sea importable.
 
 - [ ] **Step 6: Commit**
 

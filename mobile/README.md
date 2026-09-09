@@ -1,56 +1,32 @@
-# Welcome to your Expo app 👋
+# LiveRun — app móvil
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App de running de [LiveRun](../README.md): registra las salidas con GPS en
+segundo plano, guarda el historial, lleva la racha semanal y muestra el ranking
+entre amigos. Comparte la cuenta con el portal, así los resultados de las
+carreras oficiales y los entrenamientos viven en el mismo perfil.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Expo (SDK 54) + React Native 0.81 + expo-router, en TypeScript.
 
 ```bash
-npm run reset-project
+npm install
+npx expo start        # Expo Go, o un development build
+npm test              # tests de tracking, progreso y snapshots de sesión
+npm run lint
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Cómo está organizado
 
-### Other setup steps
+| Carpeta | Qué hay |
+|---|---|
+| `src/app/` | Pantallas y navegación por archivos (`expo-router`): inicio, correr, historial, ranking, perfil |
+| `src/lib/` | La lógica sin UI y testeable: tracking GPS, sesión de carrera, progreso, cliente de la API, auth |
+| `src/components/` | Componentes de UI (mapa de ruta, tarjetas, tabs, avatares) |
+| `src/constants/theme.ts` | Tokens de marca — usar `BrandAccent` y `BrandGradient`, no hex sueltos |
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+El backend que consume es el portal (`cloud/`); la URL sale de
+`src/lib/api.ts`.
 
-## Learn more
+## Publicar
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+`.github/workflows/eas-update.yml` publica un update OTA a EAS en cada push a
+`main` que toque `mobile/`. Los cambios nativos necesitan rebuild.

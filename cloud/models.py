@@ -5,7 +5,7 @@ Solo datos públicos de resultado: nombre, dorsal, categoría, club, tiempo, pos
 """
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Float, Date, DateTime, Text,
+    Column, Integer, BigInteger, String, Float, Numeric, Date, DateTime, Text,
     ForeignKey, UniqueConstraint, func,
 )
 from sqlalchemy.orm import relationship
@@ -32,6 +32,11 @@ class PortalUser(Base):
     premium_until = Column(DateTime, nullable=True)
     # Descuento pendiente dejado por un cupón "discount"; lo consume el checkout.
     pending_discount_percent = Column(Integer, nullable=True)
+    # Momento (epoch) desde el cual un token es válido. Al cambiar la contraseña
+    # se pone en 'ahora' y todas las sesiones abiertas antes dejan de servir.
+    # Epoch y no DateTime: se compara contra el iat del token, sin ambigüedad
+    # de zona horaria.
+    tokens_valid_from = Column(Integer, nullable=True)
     claims        = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
     activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
 
@@ -55,6 +60,10 @@ class PublishedRace(Base):
     registration_url = Column(String(400), nullable=True)   # inscripción del organizador
     capacity         = Column(Integer, nullable=True)       # cupo total (null = sin cupo)
     registered_count = Column(Integer, nullable=True)       # inscriptos al momento de publicar
+    # sha256 de la API key que publico la carrera: identifica al organizador
+    # dueño. NULL en las carreras anteriores a esta columna (adoptan dueño al
+    # republicarse). Es un hash, no la key: la base nunca guarda el secreto.
+    owner_key_hash   = Column(String(64), nullable=True)
     results      = relationship("PublishedResult", back_populates="race", cascade="all, delete-orphan")
 
 
@@ -188,7 +197,7 @@ class BillingPayment(Base):
     id            = Column(Integer, primary_key=True, autoincrement=True)
     user_id       = Column(Integer, ForeignKey("portal_users.id", ondelete="CASCADE"), nullable=False, index=True)
     mp_payment_id = Column(String(64), nullable=False, unique=True, index=True)
-    amount        = Column(Float, nullable=True)
+    amount        = Column(Numeric(12, 2), nullable=True)   # plata: escala fija, no binario flotante
     status        = Column(String(20), nullable=True)
     created_at    = Column(DateTime, server_default=func.now())
 

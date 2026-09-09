@@ -10,6 +10,7 @@ chronotrack_cloud.json
 chronotrack_email.json
 .env
 .env.*
+!.env.example
 
 # ── Python ──
 __pycache__/

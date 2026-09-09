@@ -45,3 +45,18 @@ services:
       # Generado por Render; nunca necesita salir del servidor.
       - key: CT_CLOUD_SECRET
         generateValue: true
+      # Cobro con Mercado Pago. sync:false = lo cargás a mano en el dashboard
+      # (Environment) y no vive en el repo. Sin CT_MP_WEBHOOK_SECRET el portal
+      # descarta TODOS los avisos de pago: es obligatoria si cobrás.
+      - key: CT_MP_ACCESS_TOKEN
+        sync: false
+      - key: CT_MP_WEBHOOK_SECRET
+        sync: false
+      # Google Sign-In (opcional; sin esto el login con Google responde 503).
+      - key: CT_GOOGLE_CLIENT_ID
+        sync: false
+      - key: CT_GOOGLE_CLIENT_SECRET
+        sync: false
+      # Emails admin del portal, separados por coma.
+      - key: CT_ADMIN_EMAILS
+        sync: false
