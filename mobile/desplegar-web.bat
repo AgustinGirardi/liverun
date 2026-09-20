@@ -16,15 +16,8 @@ if errorlevel 1 (
   if errorlevel 1 goto :error
 )
 
-echo  [2/4] Primer despliegue para averiguar el dominio...
-call npx --yes vercel@latest deploy dist --prod --yes --archive=tgz > "%TEMP%\lr_deploy.txt" 2>&1
-type "%TEMP%\lr_deploy.txt" | findstr /i "https://"
-for /f "tokens=*" %%u in ('findstr /r /c:"^https://" "%TEMP%\lr_deploy.txt"') do set "URL=%%u"
-if "!URL!"=="" (
-  echo        No se pudo leer el dominio. Revisa la salida de arriba.
-  goto :error
-)
-echo        Dominio: !URL!
+set "URL=https://liverun-ochre.vercel.app"
+echo  [2/4] Proyecto ya creado. Dominio: !URL!
 
 echo  [3/4] Reconstruyendo con la API apuntada a ese dominio...
 REM Sin esto las llamadas irian al backend directo y el CORS las rechaza.
@@ -35,6 +28,10 @@ call node_modules\.bin\expo export --platform web --clear
 if errorlevel 1 goto :error
 
 echo  [4/4] Despliegue final...
+REM vercel.json viaja adentro de dist: los rewrites se leen desde la raiz
+REM de lo que se despliega, no desde la carpeta del proyecto.
+copy /y vercel.json distercel.json >nul
+call npx --yes vercel@latest link --project liverun --yes --cwd dist >nul 2>&1
 call npx --yes vercel@latest deploy dist --prod --yes --archive=tgz
 if errorlevel 1 goto :error
 
