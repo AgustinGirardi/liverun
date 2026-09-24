@@ -66,6 +66,12 @@ async def init_db():
             "ALTER TABLE runners ADD COLUMN email VARCHAR(200)",
             "ALTER TABLE races ADD COLUMN registration_url VARCHAR(400)",
             "ALTER TABLE races ADD COLUMN capacity INTEGER",
+            "ALTER TABLE races ADD COLUMN cloud_source_id VARCHAR(64)",
+            # Las carreras anteriores a cloud_source_id se publicaban como
+            # "ct-race-{id}": lo conservan para que republicar actualice la misma
+            # carrera del portal. Idempotente: sólo toca las que no tienen valor.
+            # (La tabla race_starts la crea create_all de arriba.)
+            "UPDATE races SET cloud_source_id = 'ct-race-' || id WHERE cloud_source_id IS NULL",
         ]
         for sql in migrations:
             try:
