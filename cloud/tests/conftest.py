@@ -1,3 +1,4 @@
+import time
 import os
 import tempfile
 import pytest
@@ -64,5 +65,25 @@ def publish_race(client, source_id="ct-race-1", name="Maratón Test", results=No
         "results": results or [],
     }
     r = client.post("/api/publish", json=payload, headers={"X-API-Key": PUBLISH_KEY})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def verificar_email(client, email="runner@test.com"):
+    """Helper: verifica el email de una cuenta existente por el camino real
+    (token del link del mail → POST /api/auth/verify). Devuelve el JSON."""
+    from sqlalchemy import select
+    from cloud.models import PortalUser
+    from cloud.security import make_mail_token, make_token
+    s = SessionLocal()
+    try:
+        u = s.scalar(select(PortalUser).where(PortalUser.email == email.strip().lower()))
+        token = make_mail_token("verificar", u.id, u.email)
+        # Verificar exige la sesión de esa cuenta (o su contraseña).
+        sesion = make_token(u.id, iat=max(int(time.time()), u.tokens_valid_from or 0))
+    finally:
+        s.close()
+    r = client.post("/api/auth/verify", json={"token": token},
+                    headers={"Authorization": f"Bearer {sesion}"})
     assert r.status_code == 200, r.text
     return r.json()

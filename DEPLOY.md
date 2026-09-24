@@ -128,6 +128,46 @@ se guardan con ruta relativa y la URL completa se arma al responder con
 `CT_PUBLIC_URL` (`cloud/run.py`), así que pasan solos al dominio nuevo. Las fotos
 que vienen de Google se guardan enteras y no se tocan.
 
+---
+
+## Paso 6 — Mails (verificar email y "olvidé mi contraseña")
+
+El portal manda dos mails: el de verificación al crear la cuenta y el link para
+elegir contraseña nueva. **Sin configurar un remitente, esos mails no salen**: el
+portal arranca igual y deja un aviso en el log (`CT_SMTP_HOST no está
+configurado`), pero nadie puede verificar su email ni recuperar la contraseña.
+
+En Render → servicio → **Environment**, cargá:
+
+| Variable | Qué va |
+|---|---|
+| `CT_SMTP_HOST` | servidor SMTP |
+| `CT_SMTP_PORT` | `587` (STARTTLS) o `465` (SSL) |
+| `CT_SMTP_USER` | usuario SMTP |
+| `CT_SMTP_PASSWORD` | contraseña SMTP |
+| `CT_SMTP_FROM` | remitente visible, ej. `LiveRun <no-responder@tudominio.com>` |
+| `CT_PUBLIC_URL` | la URL del portal (con dominio propio, esa); los links del mail apuntan acá |
+
+Opciones de remitente:
+
+- **Gmail** (lo más rápido para arrancar): `smtp.gmail.com`, puerto `587`, usuario =
+  tu cuenta de Gmail, contraseña = una **contraseña de aplicación** (Cuenta de
+  Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones; la
+  contraseña normal no sirve). El remitente tiene que ser esa misma cuenta.
+  Tope de ~500 mails por día.
+- **Brevo** o **Resend** (mejor para dominio propio y para no caer en spam): los
+  dos dan un SMTP (`smtp-relay.brevo.com:587` / `smtp.resend.com:465`, usuario
+  `resend` y la API key como contraseña). Hay que verificar el dominio en su
+  panel (registros DNS SPF/DKIM) para usar `no-responder@tudominio.com`.
+
+Después de guardar, Render redeploya solo. Para probar: en el portal, **Ingresar →
+¿Olvidaste tu contraseña?** con tu email; tiene que llegar el mail (mirá spam la
+primera vez). Si no llega, el log del servicio dice por qué (`No se pudo mandar
+el mail ...`).
+
+Las cuentas que ya existían: las que entran con Google quedan verificadas solas;
+las de email y contraseña ven un aviso en el inicio para verificar.
+
 ## Verificar que funciona
 
 - Abrí tu URL de Render en el navegador → deberías ver el portal.

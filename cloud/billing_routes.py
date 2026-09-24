@@ -3,8 +3,10 @@ import hashlib
 import hmac
 import os
 import re
+import traceback
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from cloud import billing
 from cloud.db import get_db
@@ -99,11 +101,36 @@ def subscribe(request: Request, user: PortalUser = Depends(current_user), db: Se
         raise HTTPException(502, "No se pudo iniciar el pago. Intentá de nuevo en un rato.")
 
 
+async def _cuerpo_json(request: Request) -> dict:
+    """Body del aviso, tolerante: MP a veces manda todo por query y el body
+    viene vacío o no es JSON. Es async (leer el body lo exige) pero no hace
+    I/O bloqueante; el trabajo pesado corre en el endpoint sync."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
+def _reintentar(notif_type, data_id) -> JSONResponse:
+    """500 para que MP reintente el aviso. Antes un error nuestro (MP caído,
+    base bloqueada) se tragaba con 200 y un pago aprobado quedaba sin premium
+    para siempre. Reintentar es seguro: apply_payment es idempotente por
+    mp_payment_id y sync_preapproval solo copia el estado."""
+    print(f"[MP] error procesando {notif_type}/{data_id}; MP va a reintentar\n"
+          f"{traceback.format_exc()}", flush=True)
+    return JSONResponse({"received": False}, status_code=500)
+
+
 @router.post("/webhook")
-async def webhook(request: Request, db: Session = Depends(get_db)):
+def webhook(request: Request, body: dict = Depends(_cuerpo_json), db: Session = Depends(get_db)):
     """Recibe las notificaciones de Mercado Pago. MP manda el tipo y el id por
-    query o body; solo nos interesan los pagos. La autenticidad se garantiza
-    consultando el pago real a MP con nuestro token (no confiamos en el body)."""
+    query o body. La autenticidad se garantiza consultando el recurso real a MP
+    con nuestro token (no confiamos en el body).
+
+    Es `def` y no `async def` a propósito: consulta a MP con urllib (hasta
+    20 s) y usa SQLAlchemy sync. En un async eso bloqueaba el event loop y con
+    él a todo el portal; como def, FastAPI lo corre en el threadpool."""
     # Endpoint publico que dispara una llamada saliente a MP por request: sin
     # tope es un amplificador contra nuestra propia cuota. El limite es holgado
     # para no perder avisos legitimos en una rafaga de cobros.
@@ -111,15 +138,8 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
     payment_id = request.query_params.get("data.id") or request.query_params.get("id")
     notif_type = request.query_params.get("type") or request.query_params.get("topic")
     if not payment_id or not notif_type:
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
         notif_type = notif_type or body.get("type") or body.get("topic")
         payment_id = payment_id or (body.get("data") or {}).get("id") or body.get("id")
-    # Solo procesamos pagos; los demás avisos (preapproval, etc.) se aceptan y ya.
-    # Los ids de pago de MP son numéricos; validar acá evita que un id armado
-    # (p. ej. "../preapproval/X") se inyecte en la URL del GET a la API de MP.
     if not _firma_valida(request, payment_id):
         # Queda logueado: si algún día rechazáramos un aviso legítimo (por un
         # cambio de MP en cómo arma el manifest) sería un pago perdido, y sin
@@ -128,15 +148,20 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         # 200 a propósito: no queremos que MP reintente un aviso que descartamos.
         return {"received": True, "ignored": "firma"}
 
-    if notif_type in ("payment", "subscription_authorized_payment") \
-            and payment_id and str(payment_id).isdigit():
+    # Los ids de pago de MP son numéricos; validar acá evita que un id armado
+    # (p. ej. "../preapproval/X") se inyecte en la URL del GET a la API de MP.
+    es_numerico = bool(payment_id) and str(payment_id).isdigit()
+    if notif_type == "payment" and es_numerico:
         try:
             billing.apply_payment(str(payment_id), db)
         except Exception:
-            # No reventamos: MP reintenta. Responder 200 evita reintentos infinitos
-            # por errores transitorios nuestros; los pagos no procesados se
-            # recuperan en el próximo aviso.
-            pass
+            return _reintentar(notif_type, payment_id)
+    elif notif_type == "subscription_authorized_payment" and es_numerico:
+        # Su data.id es de /authorized_payments, no de /v1/payments.
+        try:
+            billing.apply_authorized_payment(str(payment_id), db)
+        except Exception:
+            return _reintentar(notif_type, payment_id)
     elif notif_type in ("subscription_preapproval", "preapproval") \
             and payment_id and _ID_PREAPPROVAL.match(str(payment_id)):
         # Altas y bajas de la suscripción. Sin esto el estado local se queda
@@ -144,5 +169,7 @@ async def webhook(request: Request, db: Session = Depends(get_db)):
         try:
             billing.sync_preapproval(str(payment_id), db)
         except Exception:
-            pass
+            return _reintentar(notif_type, payment_id)
+    # Los demás avisos (tipos que no usamos, ids mal formados) se aceptan con
+    # 200: reintentarlos no cambiaría nada.
     return {"received": True}

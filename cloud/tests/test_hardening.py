@@ -8,7 +8,7 @@ import hashlib
 from sqlalchemy import select
 
 from cloud.models import PublishedRace
-from cloud.tests.conftest import PUBLISH_KEY, make_user, publish_race
+from cloud.tests.conftest import PUBLISH_KEY, make_user, publish_race, verificar_email
 
 
 def _h(email):
@@ -105,7 +105,8 @@ def test_autolink_exige_que_el_nombre_coincida(client):
         _resultado(name="Persona Inventada", email="victima@test.com")])
     r = client.post("/api/auth/register", json={
         "email": "victima@test.com", "password": "supersecreta", "full_name": "Ana Gomez"})
-    assert r.json()["linked"] == 0
+    # Aun con el email verificado, el nombre tiene que coincidir.
+    assert verificar_email(client, "victima@test.com")["linked"] == 0
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {r.json()['token']}"})
     assert me.json()["results"] == []
 
@@ -113,9 +114,9 @@ def test_autolink_exige_que_el_nombre_coincida(client):
 def test_autolink_sigue_funcionando_con_el_nombre_correcto(client):
     publish_race(client, source_id="ct-1", results=[
         _resultado(name="Ana Gomez", email="ana@test.com")])
-    r = client.post("/api/auth/register", json={
+    client.post("/api/auth/register", json={
         "email": "ana@test.com", "password": "supersecreta", "full_name": "Ana Gomez"})
-    assert r.json()["linked"] == 1
+    assert verificar_email(client, "ana@test.com")["linked"] == 1
 
 
 # ── MEDIO-1: el login no dice si el email existe ─────────────────────────────

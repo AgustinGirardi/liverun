@@ -72,7 +72,12 @@ def test_acepta_tokens_del_formato_viejo_hasta_que_se_cambie_la_clave(client, db
     from cloud.models import PortalUser
 
     make_user(client, email="viejo@test.com")
-    uid = db.scalar(select(PortalUser.id).where(PortalUser.email == "viejo@test.com"))
+    # Los tokens de 3 partes solo existen en cuentas anteriores al deploy, que
+    # no tienen tokens_valid_from (las nuevas lo fijan al registrarse).
+    u = db.scalar(select(PortalUser).where(PortalUser.email == "viejo@test.com"))
+    u.tokens_valid_from = None
+    db.commit()
+    uid = u.id
     exp = int(time.time()) + 3600
     payload = f"{uid}.{exp}"
     sig = _hmac.new(SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()

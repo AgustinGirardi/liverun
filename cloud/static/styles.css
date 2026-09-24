@@ -207,6 +207,11 @@
   .time { font-family:ui-monospace,monospace; color:var(--acc); font-weight:600; text-align:right; white-space:nowrap; }
   .lnk { color:var(--blue); font-weight:600; font-size:12px; white-space:nowrap; }
   .lnk:hover { color:var(--acc); }
+  /* Botón con aspecto de link (acciones secundarias: "¿Olvidaste tu contraseña?"). */
+  .btn-link { background:none; border:none; padding:0; color:var(--acc); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-link:hover { text-decoration:underline; }
+  .btn-link:focus-visible { outline:2px solid var(--acc); outline-offset:2px; border-radius:4px; }
+  .forgot-row { text-align:right; margin-top:8px; }
 
   .dist-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
   .dist-tabs button { background:transparent; border:1.5px solid var(--border); color:var(--mut); padding:7px 16px; border-radius:var(--r-pill); font-size:13px; font-weight:600; transition:all .15s; }

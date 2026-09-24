@@ -44,7 +44,7 @@ async function api(method, path, body, auth){
   try { res = await fetch(API+path, { method, headers:h, body: body!=null?JSON.stringify(body):undefined }); }
   catch(netErr){ throw new Error("No se pudo conectar con el servidor. Revisá tu conexión e intentá de nuevo."); }
   const data = await res.json().catch(()=>null);
-  if(!res.ok) throw new Error(fmtErr(data && data.detail, res.status));
+  if(!res.ok){ const err = new Error(fmtErr(data && data.detail, res.status)); err.status = res.status; throw err; }
   return data;
 }
 
@@ -61,6 +61,7 @@ async function manualAutolink(btn){
   const orig = btn.textContent; btn.disabled=true; btn.textContent="Buscando…";
   try {
     const d = await api("POST","/api/me/autolink", null, true);
+    if(d.email_verified === false){ toast("Primero verificá tu email: te mandamos un link cuando creaste la cuenta.", "warn"); btn.disabled=false; btn.textContent=orig; return; }
     if(d.linked > 0){ toast(`Vinculamos ${d.linked} resultado${d.linked===1?"":"s"} 🎉`); viewDashboard(); }
     else { toast("No encontramos resultados nuevos con tu email.", "warn"); btn.disabled=false; btn.textContent=orig; }
   } catch(e){ toast(e.message, "warn"); btn.disabled=false; btn.textContent=orig; }
@@ -103,6 +104,9 @@ function go(view, arg){
   if(view==="race")     return viewRace(arg);
   if(view==="login")    return viewAuth("login");
   if(view==="register") return viewAuth("register");
+  if(view==="olvide")   return viewForgot();
+  if(view==="reset")    return viewReset(arg);
+  if(view==="verificar") return viewVerify(arg);
   if(view==="admin")    return viewAdmin();
   if(view==="run")      return viewRun();
   if(view==="historial") return viewHistorial();
@@ -240,6 +244,7 @@ async function viewDashboard(){
   $("app").innerHTML = `
     <h1>Hola, <span class="grad-text">${first}</span> 👋</h1>
     <div class="sub">Tu historial personal y todas las carreras publicadas.</div>
+    <div id="dashVerif"></div>
     <div id="dashSub"></div>
     <div class="search-hero" style="max-width:560px;margin-bottom:24px">
       <input id="q" placeholder="Buscá tu nombre para agregar un resultado…" onkeydown="if(event.key==='Enter')homeSearch()">
@@ -325,6 +330,7 @@ async function loadDashSub(){
   const box = $("dashSub"); if(!box) return;
   try {
     const p = await api("GET","/api/run/profile", null, true);
+    renderVerifBanner(p);
     if(p.plan === "admin"){ box.innerHTML = ""; return; }  // tu cuenta: sin banner
     const daysLeft = (iso)=> iso ? Math.ceil((new Date(iso)-Date.now())/86400000) : null;
     let cls="sub-trial", title, detail, cta=false;
@@ -978,7 +984,8 @@ function viewAuth(mode){
             <input type="password" id="pw" placeholder="${reg?'mínimo 8 caracteres':'••••••'}" ${reg?'oninput="pwMeter()"':''} onkeydown="if(event.key==='Enter')doAuth('${mode}')">
             <button type="button" class="pw-eye" id="pwEye" onclick="togglePw()" title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">👁</button>
           </div>
-          ${reg?`<div class="pw-meter"><div class="pw-bar"><i id="pwFill"></i></div><span class="pw-lbl" id="pwLbl"></span></div>`:""}
+          ${reg?`<div class="pw-meter"><div class="pw-bar"><i id="pwFill"></i></div><span class="pw-lbl" id="pwLbl"></span></div>`
+               :`<div class="forgot-row"><button type="button" class="btn-link" onclick="go('olvide')">¿Olvidaste tu contraseña?</button></div>`}
         </div>
         <button class="btn grad" id="abtn" onclick="doAuth('${mode}')">${reg?"Crear cuenta":"Ingresar"}</button>
         <div class="auth-divider">o</div>
@@ -1032,6 +1039,144 @@ async function doAuth(mode){
     setSession(d); await refreshAdminFlag(); renderNav(); go("home");
     if(d.linked > 0) toast(`Vinculamos ${d.linked} resultado${d.linked===1?"":"s"} a tu perfil 🎉`);
   } catch(e){ showAuthErr(e.message); b.disabled=false; }
+}
+
+// ── Olvidé mi contraseña / reset / verificación de email ──────────────────
+// Los mails traen /?reset=TOKEN y /?verificar=TOKEN; la app móvil abre
+// /?olvide=1. handleMailLinks() los levanta al cargar y limpia la URL.
+function viewForgot(){
+  $("app").innerHTML = `
+    <div style="max-width:400px;margin:24px auto">
+      <h1>Recuperar <span class="grad-text">contraseña</span></h1>
+      <div class="sub">Te mandamos un link para elegir una nueva.</div>
+      <div class="card" id="fgCard">
+        <div id="fgMsg"></div>
+        <div class="field"><label for="fgEm">Email de tu cuenta</label>
+          <input type="email" id="fgEm" placeholder="vos@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')doForgot()">
+        </div>
+        <button type="button" class="btn grad" id="fgBtn" onclick="doForgot()">Mandarme el link</button>
+        <div style="text-align:center;margin-top:15px" class="muted">
+          <button type="button" class="btn-link" onclick="go('login')">Volver a ingresar</button>
+        </div>
+      </div>
+    </div>`;
+  $("fgEm").focus();
+}
+async function doForgot(){
+  const email = $("fgEm").value.trim(), msg = $("fgMsg");
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ msg.innerHTML = `<div class="err">Ingresá un email válido (ej. vos@email.com).</div>`; return; }
+  const b = $("fgBtn"); b.disabled = true; msg.innerHTML = "";
+  try {
+    const d = await api("POST","/api/auth/password/forgot",{email});
+    $("fgCard").innerHTML = `<div class="ok">${esc(d.message)}</div>
+      <button type="button" class="btn ghost" onclick="go('login')">Volver a ingresar</button>`;
+  } catch(e){ msg.innerHTML = `<div class="err">${esc(e.message)}</div>`; b.disabled = false; }
+}
+
+function viewReset(token){
+  $("app").innerHTML = `
+    <div style="max-width:400px;margin:24px auto">
+      <h1>Contraseña <span class="grad-text">nueva</span></h1>
+      <div class="sub">Al cambiarla cerramos las sesiones abiertas en todos tus dispositivos.</div>
+      <div class="card">
+        <div id="rsMsg"></div>
+        <div class="field"><label for="rsPw">Contraseña nueva</label>
+          <div class="pw-wrap">
+            <input type="password" id="rsPw" placeholder="mínimo 8 caracteres" autocomplete="new-password" oninput="pwMeter('rsPw','rsFill','rsLbl')">
+            <button type="button" class="pw-eye" id="rsEye" onclick="togglePw('rsPw','rsEye')" title="Mostrar u ocultar la contraseña" aria-label="Mostrar u ocultar la contraseña">👁</button>
+          </div>
+          <div class="pw-meter"><div class="pw-bar"><i id="rsFill"></i></div><span class="pw-lbl" id="rsLbl"></span></div>
+        </div>
+        <div class="field"><label for="rsRep">Repetir la nueva</label>
+          <input type="password" id="rsRep" placeholder="••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')doReset()">
+        </div>
+        <button type="button" class="btn grad" id="rsBtn" onclick="doReset()">Guardar contraseña</button>
+      </div>
+    </div>`;
+  state.resetToken = token;
+  $("rsPw").focus();
+}
+async function doReset(){
+  const nue = $("rsPw").value, rep = $("rsRep").value, msg = $("rsMsg");
+  const err = (m) => { msg.innerHTML = `<div class="err">${esc(m)}</div>`; };
+  msg.innerHTML = "";
+  if(nue.length < 8) return err("La contraseña debe tener al menos 8 caracteres.");
+  if(nue !== rep) return err("Las dos contraseñas no coinciden.");
+  const b = $("rsBtn"); b.disabled = true;
+  try {
+    const d = await api("POST","/api/auth/password/reset",{token:state.resetToken,new_password:nue});
+    state.resetToken = null;
+    setSession(d); await refreshAdminFlag(); renderNav(); go("home");
+    toast("Listo, cambiaste tu contraseña.");
+  } catch(e){
+    err(e.message || "No se pudo cambiar la contraseña.");
+    msg.insertAdjacentHTML("beforeend", `<button type="button" class="btn ghost sm" onclick="go('olvide')">Pedir otro link</button>`);
+    b.disabled = false;
+  }
+}
+
+async function viewVerify(token){
+  $("app").innerHTML = `
+    <div style="max-width:400px;margin:24px auto">
+      <h1>Verificar <span class="grad-text">email</span></h1>
+      <div class="card" id="vfCard"><div class="muted">Verificando…</div></div>
+    </div>`;
+  VF_TOKEN = token;
+  await confirmVerify(null);
+}
+
+// Sin la sesión de esa cuenta, el servidor pide la contraseña: el link solo
+// prueba el buzón, y así nadie verifica una cuenta que otro creó con su email.
+let VF_TOKEN = null;
+async function confirmVerify(password){
+  const card = $("vfCard"); if(!card) return;
+  try {
+    const d = await api("POST","/api/auth/verify",{token:VF_TOKEN, password}, true);
+    const linked = d.linked > 0 ? ` Vinculamos ${d.linked} resultado${d.linked===1?"":"s"} a tu perfil.` : "";
+    card.innerHTML = `<div class="ok">¡Listo! Verificamos <b>${esc(d.email)}</b>.${esc(linked)}</div>
+      ${USER ? `<button type="button" class="btn grad" onclick="go('home')">Ir a mi inicio</button>`
+             : `<button type="button" class="btn grad" onclick="go('login')">Ingresar</button>`}`;
+    if(USER) await refreshAdminFlag();
+  } catch(e){
+    if(e.status === 401){
+      card.innerHTML = `
+        <p class="muted">Para confirmar que la cuenta es tuya, ingresá su contraseña.</p>
+        ${password ? `<div class="err">${esc(e.message)}</div>` : ""}
+        <label for="vfPass">Contraseña</label>
+        <input id="vfPass" type="password" autocomplete="current-password">
+        <button type="button" class="btn grad" id="vfBtn">Confirmar</button>
+        <p class="muted" style="font-size:13px">¿No creaste esta cuenta? No confirmes nada: si alguien
+          la creó con tu email, entrá con Google y la cuenta pasa a ser tuya.</p>`;
+      const enviar = () => { const v=$("vfPass").value; if(v){ $("vfBtn").disabled=true; confirmVerify(v); } };
+      $("vfBtn").onclick = enviar;
+      $("vfPass").onkeydown = ev => { if(ev.key==="Enter") enviar(); };
+      $("vfPass").focus();
+      return;
+    }
+    card.innerHTML = `<div class="err">${esc(e.message)}</div>
+      ${USER ? `<button type="button" class="btn ghost" onclick="resendVerification(this)">Mandarme otro link</button>`
+             : `<div class="muted">Ingresá a tu cuenta y pedí un link nuevo desde el inicio.</div>`}`;
+  }
+}
+
+/** Aviso en el inicio para cuentas con el email sin verificar. */
+function renderVerifBanner(p){
+  const box = $("dashVerif"); if(!box) return;
+  box.innerHTML = p.email_verified === false
+    ? `<div class="card subcard sub-trial">
+         <div class="dim" style="font-size:13px">Verificá tu email para vincular tus resultados automáticamente.</div>
+         <button type="button" class="btn ghost sm" onclick="resendVerification(this)">Reenviar mail</button>
+       </div>`
+    : "";
+}
+async function resendVerification(btn){
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = "Enviando…";
+  try {
+    const d = await api("POST","/api/auth/verify/send", null, true);
+    if(d.email_verified){ toast("Tu email ya está verificado."); const box=$("dashVerif"); if(box) box.innerHTML=""; return; }
+    toast("Te mandamos el mail. Revisá también spam.");
+    btn.textContent = "Mail enviado";
+  } catch(e){ toast(e.message, "warn"); btn.disabled = false; btn.textContent = orig; }
 }
 
 // ── Mi perfil ──────────────────────────────────────────────────────────────
@@ -1264,5 +1409,21 @@ async function handleGoogleReturn(){
   return true;
 }
 
+/** Links de los mails (?verificar= / ?reset=) y de la app (?olvide=1).
+    Devuelve [vista, arg] o null. Limpia la URL: el token no queda en el historial. */
+function handleMailLinks(){
+  const p = new URLSearchParams(location.search);
+  const ver = p.get("verificar"), rst = p.get("reset"), olv = p.get("olvide");
+  if(!ver && !rst && !olv) return null;
+  history.replaceState(null, "", location.pathname);
+  if(ver) return ["verificar", ver];
+  if(rst) return ["reset", rst];
+  return ["olvide"];
+}
+
 // init
-handleGoogleReturn().finally(()=>{ renderNav(); go("home"); });
+handleGoogleReturn().catch(()=>{}).then(()=>{
+  const dest = handleMailLinks();
+  renderNav();
+  if(dest) go(dest[0], dest[1]); else go("home");
+});
