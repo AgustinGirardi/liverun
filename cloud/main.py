@@ -48,6 +48,16 @@ def _name_tokens(s: str) -> set[str]:
     s = "".join(c for c in s if not unicodedata.combining(c))
     return {t for t in re.findall(r"[a-z]+", s) if len(t) >= 3}
 
+def normalizar_nombre(s: str) -> str:
+    """Forma buscable de un nombre: minúsculas, sin acentos (la ñ queda como n)
+    y solo letras y números separados por un espacio. "José Pérez-Núñez" →
+    "jose perez nunez". Se guarda en PublishedResult.name_norm y se aplica
+    igual a lo que escribe el usuario, así las dos puntas comparan lo mismo."""
+    s = unicodedata.normalize("NFKD", (s or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(re.findall(r"[a-z0-9]+", s))
+
+
 def _name_matches(a: str, b: str) -> bool:
     return bool(_name_tokens(a) & _name_tokens(b))
 
@@ -97,17 +107,15 @@ app.add_middleware(
 )
 
 
-# 'unsafe-inline' en script-src es deuda conocida, no un descuido: el SPA arma
-# la UI con innerHTML y engancha los handlers como atributos onclick (~60), asi
-# que sin esto la web deja de funcionar. Igual acota lo que importa: no se puede
-# cargar script de otro origen, no hay 'unsafe-eval', y nadie puede embeber el
-# portal ni reescribir la base de las URLs relativas. Para poder sacarlo habria
-# que migrar los onclick a addEventListener.
+# script-src sin 'unsafe-inline': el portal engancha sus acciones con
+# data-act/data-submit y un solo listener (static/js/ui/acciones.js), así que un
+# HTML inyectado no puede ejecutar nada. style-src sí lo mantiene: las vistas
+# usan algún style="" (alto de las barras, ancho del cupo).
 # img-src incluye https: por las fotos de perfil de Google, que se guardan con
 # su URL completa (lh3.googleusercontent.com).
 _CSP = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline'; "
+    "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' https: data:; "
     "connect-src 'self'; "
@@ -116,6 +124,20 @@ _CSP = (
     "form-action 'self'; "
     "frame-ancestors 'none'"
 )
+
+
+def _cache_control(path: str) -> Optional[str]:
+    """Caché de los archivos del portal. Sin esta cabecera el navegador aplica
+    su heurística (un 10 % de la edad del archivo) y, después de publicar,
+    podía juntar un index.html nuevo con un app.js viejo. HTML, JS y CSS se
+    revalidan siempre (un 304 con ETag cuesta poco); las imágenes duran un día."""
+    if path.startswith("/api/"):
+        return None
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        return "no-cache"
+    if path.endswith((".svg", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff2")):
+        return "public, max-age=86400"
+    return None
 
 
 @app.middleware("http")
@@ -127,6 +149,9 @@ async def _security_headers(request: Request, call_next):
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("Content-Security-Policy", _CSP)
+    cache = _cache_control(request.url.path)
+    if cache:
+        resp.headers.setdefault("Cache-Control", cache)
     if _EN_PRODUCCION:
         # Solo en produccion: en local el portal se sirve por http y el HSTS
         # dejaria el navegador forzando https contra localhost.
@@ -243,6 +268,35 @@ def _ensure_email_hash_column():
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_published_results_email_hash ON published_results (email_hash)"))
 
 
+def _ensure_name_norm_column(lote: int = 500):
+    """Migración suave para SQLite: agrega published_results.name_norm y la
+    completa para los resultados que ya estaban publicados. El relleno va en
+    Python (SQLite no sabe sacar acentos) y por lotes, cada uno en su propia
+    transacción, para no tener la base bloqueada de una sola vez. Idempotente:
+    si no quedan filas en NULL, no hace nada."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_results)"))]
+        if not cols:
+            return  # tabla inexistente: create_all ya la crea con la columna
+        if "name_norm" not in cols:
+            conn.execute(text("ALTER TABLE published_results ADD COLUMN name_norm VARCHAR(200)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_published_results_name_norm "
+                          "ON published_results (name_norm)"))
+    while True:
+        with engine.begin() as conn:
+            filas = conn.execute(text(
+                "SELECT id, full_name FROM published_results WHERE name_norm IS NULL LIMIT :n"
+            ), {"n": lote}).all()
+            if not filas:
+                return
+            conn.execute(
+                text("UPDATE published_results SET name_norm = :nn WHERE id = :id"),
+                [{"id": fid, "nn": normalizar_nombre(nombre)} for fid, nombre in filas],
+            )
+
+
 def _ensure_category_position_column():
     """Migración suave para SQLite: agrega published_results.category_position.
     Mismo criterio que _ensure_email_hash_column. Idempotente."""
@@ -268,6 +322,22 @@ def _ensure_owner_key_column():
             return  # tabla inexistente: create_all ya la crea con la columna
         if "owner_key_hash" not in cols:
             conn.execute(text("ALTER TABLE published_races ADD COLUMN owner_key_hash VARCHAR(64)"))
+
+
+def _ensure_password_set_column():
+    """Migración suave para SQLite: agrega portal_users.password_set. Las
+    cuentas sin Google eligieron su contraseña al registrarse (1); las
+    vinculadas a Google quedan en NULL porque no se puede saber si alguna vez
+    eligieron una. Idempotente."""
+    from sqlalchemy import text
+    from cloud.db import engine
+    with engine.begin() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(portal_users)"))]
+        if not cols:
+            return  # tabla inexistente: create_all ya la crea con la columna
+        if "password_set" not in cols:
+            conn.execute(text("ALTER TABLE portal_users ADD COLUMN password_set INTEGER"))
+            conn.execute(text("UPDATE portal_users SET password_set = 1 WHERE google_id IS NULL"))
 
 
 def _ensure_event_columns():
@@ -309,10 +379,12 @@ def _startup():
             "'olvidé mi contraseña' NO van a salir (ver DEPLOY.md).")
     init_db()
     _ensure_email_hash_column()
+    _ensure_name_norm_column()
     _ensure_category_position_column()
     _ensure_event_columns()
     _ensure_owner_key_column()
     _ensure_run_columns()
+    _ensure_password_set_column()
     _ensure_billing_columns()
     _migrar_avatares_a_relativo()
     _ensure_admins()
@@ -399,7 +471,9 @@ class LoginIn(BaseModel):
 
 
 class ChangePasswordIn(BaseModel):
-    current_password: str
+    # Opcional sólo para cuentas que nunca eligieron contraseña (entran con
+    # Google): ver change_password.
+    current_password: Optional[str] = None
     new_password: str = Field(..., min_length=8)
 
 
@@ -580,7 +654,7 @@ def publish(payload: PublishPayload, request: Request, x_api_key: str = Header(N
 
     new_results = []
     for r in payload.results:
-        res = PublishedResult(race_id=race.id, **r.model_dump())
+        res = PublishedResult(race_id=race.id, name_norm=normalizar_nombre(r.full_name), **r.model_dump())
         db.add(res)
         new_results.append(res)
     _rank_categories(new_results)
@@ -711,7 +785,9 @@ def race_detail(code: str, db: Session = Depends(get_db)):
         "code": race.code, "name": race.name, "location": race.location,
         "race_date": race.race_date.isoformat() if race.race_date else None,
         "distances": [float(x) for x in race.distances.split(",")] if race.distances else [],
-        "results": [_result_dict(r) for r in results],
+        # result_id: para "guardar en mi perfil" desde la tabla de la carrera
+        # (ya era público: la búsqueda lo devuelve).
+        "results": [{"result_id": r.id, **_result_dict(r)} for r in results],
     }
 
 
@@ -734,7 +810,7 @@ def register(body: RegisterIn, request: Request, background: BackgroundTasks,
     # tokens_valid_from = alta: si SQLite le reasigna el id de una cuenta
     # borrada, los tokens de aquella (mismo id, iat anterior) no abren esta.
     user = PortalUser(email=email, password_hash=hash_password(body.password), full_name=body.full_name,
-                      tokens_valid_from=int(time.time()))
+                      tokens_valid_from=int(time.time()), password_set=1)
     db.add(user)
     try:
         db.commit()
@@ -832,16 +908,23 @@ def change_password(body: ChangePasswordIn, request: Request,
     cambio: el suyo se emite después del corte, los demás quedan abajo.
     """
     rate_limit(request, "password", limit=5, window=300.0)
-    if not verify_password(body.current_password, user.password_hash):
-        raise HTTPException(400, "La contraseña actual no es correcta.")
-    if body.new_password == body.current_password:
-        raise HTTPException(400, "La contraseña nueva tiene que ser distinta de la actual.")
+    # Una cuenta creada con Google tiene de contraseña un valor al azar que
+    # nadie conoce: pedirle "la actual" la dejaba sin forma de elegir una. Ahí
+    # la sesión (que salió de Google) alcanza como prueba. Solo con 0 explícito:
+    # en NULL (cuentas viejas vinculadas a Google) no se sabe y se pide igual.
+    sin_contrasena = user.password_set == 0
+    if not sin_contrasena:
+        if not body.current_password or not verify_password(body.current_password, user.password_hash):
+            raise HTTPException(400, "La contraseña actual no es correcta.")
+        if body.new_password == body.current_password:
+            raise HTTPException(400, "La contraseña nueva tiene que ser distinta de la actual.")
 
     # +1 segundo: el corte tiene que quedar por ENCIMA de cualquier token ya
     # emitido, incluidos los de este mismo segundo. El token que devolvemos se
     # emite exactamente en el corte, así que es el único que lo pasa.
     corte = int(time.time()) + 1
     user.password_hash = hash_password(body.new_password)
+    user.password_set = 1
     user.tokens_valid_from = corte
     db.commit()
     return {"token": make_token(user.id, iat=corte)}
@@ -970,6 +1053,7 @@ def reset_password(body: ResetIn, request: Request, db: Session = Depends(get_db
     # exactamente en el corte y los de este mismo segundo quedan afuera.
     corte = int(time.time()) + 1
     user.password_hash = hash_password(body.new_password)
+    user.password_set = 1
     user.tokens_valid_from = corte
     _marcar_verificado(user)
     db.commit()
@@ -1112,43 +1196,61 @@ def my_results(user: PortalUser = Depends(current_user), db: Session = Depends(g
 
 # ── Búsqueda (corredor por nombre, o carrera por nombre/código) ───────────────
 
+# Tope de corredores por búsqueda. Si hay más, se avisa con `truncated` para
+# que la web pida afinar en vez de mostrar una lista cortada sin decirlo.
+SEARCH_LIMIT = 60
+
+
+def _like_escapado(palabra: str) -> str:
+    # Escapar los comodines del usuario: sin esto `q=%` matcheaba TODO y
+    # convertia cada busqueda en un scan completo de la tabla. (Con la
+    # normalización ya no llegan, pero el escape no cuesta nada.)
+    return "%" + palabra.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 @app.get("/api/search", tags=["Público"])
 def search(q: str, request: Request, db: Session = Depends(get_db)):
-    # Endpoint publico y caro: dos LIKE '%...%' sin indice sobre toda la tabla
+    """Busca corredores por nombre y carreras por nombre o código.
+
+    Ignora acentos, mayúsculas y el orden de las palabras: "perez jose" encuentra
+    a "José Pérez". Cada palabra tiene que aparecer (AND), en cualquier parte."""
+    # Endpoint publico y caro: LIKE '%...%' sin indice util sobre toda la tabla
     # de resultados, en un unico proceso uvicorn. Sin tope alcanzaba con un
     # bucle de curl para dejar el portal sin CPU.
     rate_limit(request, "search", limit=60, window=60.0)
-    q = (q or "").strip()
-    if len(q) < 2:
-        return {"races": [], "results": []}
-    ql = q.lower()
-    # Escapar los comodines del usuario: sin esto `q=%` matcheaba TODO y
-    # convertia cada busqueda en un scan completo de la tabla.
-    like = "%" + ql.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    norm = normalizar_nombre((q or "").strip())
+    palabras = norm.split()
+    if len(norm.replace(" ", "")) < 2:
+        return {"races": [], "results": [], "truncated": False, "too_short": True}
+    compacto = norm.replace(" ", "")
 
-    # Carreras por nombre o código exacto
-    races = db.scalars(
-        select(PublishedRace)
-        .where(func.lower(PublishedRace.name).like(like, escape="\\") | (func.lower(PublishedRace.code) == ql))
-        .order_by(PublishedRace.published_at.desc())
-        .limit(20)
-    ).all()
+    # Carreras por nombre (todas las palabras) o por código exacto. Son pocas
+    # filas: se normaliza en Python, que sí sabe sacar acentos.
+    races = []
+    for r in db.scalars(select(PublishedRace).order_by(PublishedRace.published_at.desc())):
+        nombre = normalizar_nombre(" ".join(filter(None, [r.name, r.location])))
+        if (r.code or "").lower() == compacto or all(p in nombre for p in palabras):
+            races.append(r)
+            if len(races) >= 20:
+                break
     race_out = [{
         "code": r.code, "name": r.name, "location": r.location,
         "race_date": r.race_date.isoformat() if r.race_date else None,
         "distances": [float(x) for x in r.distances.split(",")] if r.distances else [],
     } for r in races]
 
-    # Resultados por nombre del corredor
+    # Resultados por nombre del corredor: cada palabra en name_norm (AND).
+    cond = [PublishedResult.name_norm.like(_like_escapado(p), escape="\\") for p in palabras]
     rows = db.execute(
         select(PublishedResult, PublishedRace)
         .join(PublishedRace, PublishedResult.race_id == PublishedRace.id)
-        .where(func.lower(PublishedResult.full_name).like(like, escape="\\"))
-        .order_by(PublishedResult.full_name)
-        .limit(60)
+        .where(*cond)
+        .order_by(PublishedResult.full_name, PublishedRace.race_date.desc())
+        .limit(SEARCH_LIMIT + 1)
     ).all()
+    truncated = len(rows) > SEARCH_LIMIT
     results = []
-    for res, race in rows:
+    for res, race in rows[:SEARCH_LIMIT]:
         results.append({
             "result_id": res.id,
             "race_code": race.code, "race_name": race.name,
@@ -1156,7 +1258,8 @@ def search(q: str, request: Request, db: Session = Depends(get_db)):
             "location": race.location,
             **_result_dict(res),
         })
-    return {"races": race_out, "results": results}
+    return {"races": race_out, "results": results, "truncated": truncated,
+            "limit": SEARCH_LIMIT, "too_short": False}
 
 
 @app.post("/api/me/claim", tags=["Corredor"])

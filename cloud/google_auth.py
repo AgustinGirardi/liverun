@@ -161,6 +161,7 @@ def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str],
         user.google_id = sub
         if not user.email_verified_at:
             user.password_hash = hash_password(secrets.token_urlsafe(32))
+            user.password_set = 0
             user.tokens_valid_from = int(time.time()) + 1
             user.email_verified_at = ahora_utc()
         if not user.full_name and name:
@@ -176,6 +177,7 @@ def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str],
         # Sin contraseña utilizable: solo entra con Google (puede elegir una
         # después con "olvidé mi contraseña").
         password_hash=hash_password(secrets.token_urlsafe(32)),
+        password_set=0,
         full_name=name,
         google_id=sub,
         email_verified_at=ahora_utc(),

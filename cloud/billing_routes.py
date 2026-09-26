@@ -95,8 +95,14 @@ def subscribe(request: Request, user: PortalUser = Depends(current_user), db: Se
         # El monto queda fijo en MP para siempre: mejor reintentar que cobrar mal.
         raise HTTPException(503, "No pudimos calcular el precio ahora. Probá de nuevo en un rato.")
     except billing.MPError as e:
-        # Mensaje real de Mercado Pago (útil para diagnosticar la config).
-        raise HTTPException(502, f"Mercado Pago rechazó la suscripción: {e}")
+        # El mensaje crudo de MP sirve para diagnosticar la config, pero al
+        # corredor no le dice nada: va al log y el usuario ve qué hacer.
+        print(f"[MP] no se pudo crear la suscripción de user {user.id}: {e}", flush=True)
+        raise HTTPException(
+            502,
+            "Mercado Pago no pudo iniciar la suscripción en este momento. "
+            "No se te cobró nada: probá de nuevo en unos minutos.",
+        )
     except Exception:
         raise HTTPException(502, "No se pudo iniciar el pago. Intentá de nuevo en un rato.")
 

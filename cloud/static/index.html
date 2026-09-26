@@ -1,34 +1,63 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>LiveRun · Resultados</title>
-<script>document.documentElement.setAttribute("data-theme",localStorage.getItem("ct_theme")==="light"?"light":"dark");</script>
+<meta name="description" content="Buscá tu resultado en carreras de calle de Argentina: tiempo oficial, puesto y certificado de llegada.">
+<meta name="theme-color" content="#0d0f10">
+<script src="/theme.js"></script>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <link rel="stylesheet" href="/styles.css">
+<!-- Precarga: sin esto el navegador descubre cada import recién al leer el
+     módulo anterior y las descargas van en fila. -->
+<link rel="modulepreload" href="/js/app.js">
+<link rel="modulepreload" href="/js/nucleo/api.js">
+<link rel="modulepreload" href="/js/nucleo/formato.js">
+<link rel="modulepreload" href="/js/ui/acciones.js">
+<link rel="modulepreload" href="/js/ui/componentes.js">
+<link rel="modulepreload" href="/js/ui/iconos.js">
+<link rel="modulepreload" href="/js/ui/navegar.js">
+<link rel="modulepreload" href="/js/pantallas/inicio.js">
+<link rel="modulepreload" href="/js/nucleo/contacto.js">
+<link rel="modulepreload" href="/js/ui/acciones-cuenta.js">
 </head>
 <body>
+<a class="skip" href="#contenido" data-act="skip">Saltar al contenido</a>
+
+<header class="topbar">
+  <a class="logo" href="#/" aria-label="LiveRun, inicio"><img class="logo-mark" src="/logo.svg" alt="" width="24" height="24">LIVE<span>RUN</span></a>
+  <a class="icon-btn" href="#/buscar" aria-label="Buscar corredor o carrera"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg></a>
+</header>
+
 <div class="layout">
-  <aside class="sidebar">
-    <div class="logo" onclick="go('home')"><img class="logo-mark" src="/logo.svg" alt="" width="26" height="26">LIVE<span>RUN</span></div>
-    <div class="side-search">
-      <input id="hq" placeholder="🔎 Buscar corredor o carrera…" onkeydown="if(event.key==='Enter')headerSearch()">
-    </div>
-    <nav class="side-nav" id="nav"></nav>
+  <aside class="sidebar" aria-label="Navegación principal">
+    <a class="logo" href="#/" aria-label="LiveRun, inicio"><img class="logo-mark" src="/logo.svg" alt="" width="26" height="26">LIVE<span>RUN</span></a>
+    <form class="side-search" role="search" data-submit="buscarLateral">
+      <label for="hq" class="sr-only">Buscar corredor o carrera</label>
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+      <input id="hq" type="search" name="q" placeholder="Corredor o carrera" autocomplete="off" enterkeyhint="search">
+    </form>
+    <nav class="side-nav" id="nav" aria-label="Secciones"></nav>
     <div class="side-foot">
       <div id="account"></div>
-      <button id="themeBtn" class="theme-toggle" onclick="toggleTheme()" title="Cambiar tema" aria-label="Cambiar tema claro u oscuro">◐ Tema</button>
+      <button type="button" id="themeBtn" class="theme-toggle" data-act="cambiarTema">Tema</button>
     </div>
   </aside>
   <div class="content">
-    <main id="app"></main>
-    <footer>
+    <main id="app" tabindex="-1"></main>
+    <footer class="site-foot">
       <div class="logo"><img class="logo-mark" src="/logo.svg" alt="" width="20" height="20">LIVE<span>RUN</span></div>
-      <div>Resultados oficiales de cronometraje · Hecho con LiveRun</div>
+      <div>Resultados oficiales de cronometraje · <a class="lnk" href="#/organizadores">Para organizadores</a></div>
     </footer>
   </div>
 </div>
-<script src="/app.js"></script>
+
+<nav class="tabnav" id="tabnav" aria-label="Secciones"></nav>
+<div class="more-menu" id="moreMenu" hidden></div>
+<div id="ctToast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle"></dialog>
+
+<script type="module" src="/js/app.js"></script>
 </body>
 </html>

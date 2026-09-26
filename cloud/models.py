@@ -41,7 +41,12 @@ class PortalUser(Base):
     # verificación, reset de contraseña o login con Google. NULL = sin
     # verificar: no se autovinculan resultados ni se promueve a admin.
     email_verified_at = Column(DateTime, nullable=True)
-    claims       = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
+    # ¿La contraseña guardada la eligió el usuario? 1 = sí (registro, reset,
+    # cambio); 0 = no: la cuenta nació con Google (o Google la tomó) y el hash
+    # es de una contraseña al azar que nadie conoce. NULL = cuenta anterior a
+    # esta columna vinculada a Google: no se sabe, se pide la actual igual.
+    password_set  = Column(Integer, nullable=True)
+    claims     = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
     activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
     # AUTOINCREMENT real en SQLite: sin esto, borrar el usuario de id más alto
     # hace que el próximo registro reciba el mismo id. Solo aplica a bases
@@ -95,6 +100,10 @@ class PublishedResult(Base):
     category_position = Column(Integer, nullable=True)
     status         = Column(String(12), nullable=False, default="FINISHER")  # FINISHER/DNF/DNS/DQ
     email_hash     = Column(String(64), nullable=True, index=True)  # sha256 hex del email (privacy-preserving); ver design doc
+    # Nombre normalizado para buscar: minúsculas, sin acentos y con un solo
+    # espacio entre palabras ("José  Pérez" → "jose perez"). Lo llena el portal
+    # al publicar (ver cloud/main.py, normalizar_nombre).
+    name_norm      = Column(String(200), nullable=True, index=True)
     race           = relationship("PublishedRace", back_populates="results")
     claims         = relationship("Claim", back_populates="result", cascade="all, delete-orphan")
     __table_args__ = (UniqueConstraint("race_id", "bib_number", "distance_km", name="uq_race_bib_dist"),)

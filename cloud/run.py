@@ -263,6 +263,8 @@ def get_profile(user: PortalUser = Depends(current_user)):
         "weekly_goal": user.weekly_goal or 3,
         "avatar_url": avatar_absoluto(user.avatar_url),
         "is_admin": bool(user.is_admin),
+        # True/False si se sabe; None en cuentas viejas vinculadas a Google.
+        "has_password": None if user.password_set is None else bool(user.password_set),
         "access": acc["access"],
         "plan": acc["plan"],
         "premium_until": iso_utc(user.premium_until),
