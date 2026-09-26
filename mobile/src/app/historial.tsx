@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -10,9 +10,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { api, type Activity, type ActivityDetail } from '@/lib/api';
+import { api, type Activity, type ActivityDetail, type NewActivity } from '@/lib/api';
 import { useEntitlement } from '@/lib/entitlement';
-import { formatDuration, formatKm, formatPace, formatWhen } from '@/lib/format';
+import { formatDuration, formatKm, formatPace, formatWhen, parseFechaServidor } from '@/lib/format';
+import { onColaCambio, pendingActivities, syncPending } from '@/lib/run-store';
 
 const num = (n: number, d = 1) => n.toFixed(d).replace('.', ',');
 
@@ -40,33 +41,73 @@ export default function HistorialScreen() {
   const curD = now.getDate();
   const [sel, setSel] = useState({ y: curY, m: curM });
 
+  const [pendientes, setPendientes] = useState<NewActivity[]>([]);
+  const [subiendo, setSubiendo] = useState(false);
+
+  const loadPendientes = useCallback(() => {
+    pendingActivities().then(setPendientes).catch(() => {});
+  }, []);
+
   const load = useCallback(() => {
+    loadPendientes();
     api.activities(100)
       .then((a) => { setActivities(a); setError(null); })
       .catch((e) => setError(e.message))
       .finally(() => setRefreshing(false));
-  }, []);
+  }, [loadPendientes]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+
+  // Si la cola cambia (se subió algo en segundo plano), refrescar todo.
+  useEffect(() => onColaCambio(load), [load]);
+
+  /** Salidas guardadas en el teléfono que todavía no están en el servidor. */
+  const pendientesVisibles = useMemo(() => {
+    const subidas = new Set((activities ?? []).map((a) => a.client_uuid));
+    return pendientes.filter((p) => !subidas.has(p.client_uuid));
+  }, [pendientes, activities]);
+
+  function reintentarSubida() {
+    setSubiendo(true);
+    syncPending()
+      .then(({ pending, motivo, rechazadas }) => {
+        if (rechazadas.length) {
+          Alert.alert(
+            rechazadas.length === 1 ? 'Una salida no se pudo registrar' : `${rechazadas.length} salidas no se pudieron registrar`,
+            rechazadas.map((r) => r.detalle || 'Datos no válidos.').join('\n'),
+          );
+        } else if (pending.length && motivo === 'sin-red') {
+          Alert.alert('Sin conexión', 'Se suben solas cuando vuelva la señal.');
+        } else if (pending.length && motivo === 'servidor') {
+          Alert.alert('Ups', 'El servidor no las pudo recibir ahora. Se reintenta sola más tarde.');
+        }
+      })
+      .catch(() => {})
+      .finally(() => { setSubiendo(false); load(); });
+  }
+
+  const bloquePendientes = pendientesVisibles.length > 0 && (
+    <PendientesBlock items={pendientesVisibles} subiendo={subiendo} onRetry={reintentarSubida} />
+  );
 
   // Salidas del mes seleccionado, días corridos y límites de navegación.
   const { monthRuns, runDays, monthKm, canPrev, canNext } = useMemo(() => {
     const acts = activities ?? [];
     const inMonth = acts
       .filter((a) => {
-        const d = new Date(a.started_at);
+        const d = parseFechaServidor(a.started_at);
         return d.getFullYear() === sel.y && d.getMonth() === sel.m;
       })
-      .sort((a, b) => +new Date(b.started_at) - +new Date(a.started_at));
+      .sort((a, b) => +parseFechaServidor(b.started_at) - +parseFechaServidor(a.started_at));
     const days = new Set<number>();
     let meters = 0;
-    for (const a of inMonth) { days.add(new Date(a.started_at).getDate()); meters += a.distance_m; }
+    for (const a of inMonth) { days.add(parseFechaServidor(a.started_at).getDate()); meters += a.distance_m; }
 
     const selKey = sel.y * 12 + sel.m;
     const curKey = curY * 12 + curM;
     let earliestKey = curKey;
     for (const a of acts) {
-      const d = new Date(a.started_at);
+      const d = parseFechaServidor(a.started_at);
       earliestKey = Math.min(earliestKey, d.getFullYear() * 12 + d.getMonth());
     }
     return {
@@ -79,7 +120,7 @@ export default function HistorialScreen() {
   }, [activities, sel, curY, curM]);
 
   const visibleRuns = selDay != null
-    ? monthRuns.filter((a) => new Date(a.started_at).getDate() === selDay)
+    ? monthRuns.filter((a) => parseFechaServidor(a.started_at).getDate() === selDay)
     : monthRuns;
   const dayKm = visibleRuns.reduce((s, a) => s + a.distance_m, 0) / 1000;
 
@@ -164,8 +205,14 @@ export default function HistorialScreen() {
         {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
 
         {activities == null ? (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>Cargando…</ThemedText>
-        ) : activities.length === 0 ? (
+          <>
+            {/* Sin servidor igual se ven las guardadas en el teléfono. */}
+            {bloquePendientes && <View style={styles.pendWrap}>{bloquePendientes}</View>}
+            <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+              {error ? 'No se pudo cargar el historial.' : 'Cargando…'}
+            </ThemedText>
+          </>
+        ) : activities.length === 0 && !bloquePendientes ? (
           <View style={styles.emptyWrap}>
             <ThemedText style={styles.emptyEmoji}>👟</ThemedText>
             <ThemedText type="smallBold">Tu historial está vacío</ThemedText>
@@ -183,6 +230,7 @@ export default function HistorialScreen() {
             }
             ListHeaderComponent={
               <>
+                {bloquePendientes}
                 <MonthCalendar
                   y={sel.y}
                   m={sel.m}
@@ -285,6 +333,43 @@ export default function HistorialScreen() {
         )}
       </SafeAreaView>
     </ThemedView>
+  );
+}
+
+/** Salidas guardadas en el teléfono que todavía no se subieron: se muestran
+ *  para que no parezca que se perdieron. */
+function PendientesBlock({ items, subiendo, onRetry }: {
+  items: NewActivity[]; subiendo: boolean; onRetry: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.pendBlock}>
+      {items.map((p) => (
+        <View key={p.client_uuid} style={[styles.card, { backgroundColor: theme.backgroundElement }]}>
+          <View style={styles.row}>
+            <ThemedText type="smallBold" themeColor="textSecondary">{formatWhen(p.started_at)}</ThemedText>
+            <View style={[styles.pendBadge, { backgroundColor: theme.backgroundSelected }]}>
+              <ThemedText type="small" themeColor="textSecondary">Pendiente de subir</ThemedText>
+            </View>
+          </View>
+          <View style={styles.row}>
+            <ThemedText type="subtitle" style={{ color: BrandAccent }}>{formatKm(p.distance_m)}</ThemedText>
+            <View style={styles.metrics}>
+              <ThemedText type="smallBold">{formatDuration(p.duration_s)}</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary">{formatPace(p.avg_pace_s_per_km)}</ThemedText>
+            </View>
+          </View>
+        </View>
+      ))}
+      <Pressable
+        disabled={subiendo}
+        onPress={onRetry}
+        style={[styles.shareRow, { backgroundColor: theme.backgroundSelected }]}>
+        <ThemedText type="smallBold" style={{ color: BrandAccent }}>
+          {subiendo ? 'Subiendo…' : `↑ Subir ${items.length === 1 ? 'la pendiente' : `las ${items.length} pendientes`} ahora`}
+        </ThemedText>
+      </Pressable>
+    </View>
   );
 }
 
@@ -459,4 +544,8 @@ const styles = StyleSheet.create({
   actionsRow: { flexDirection: 'row', gap: Spacing.two },
   actionFlex: { flex: 1 },
   deleteText: { color: '#ff6b6b' },
+  // pendientes de subir
+  pendWrap: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
+  pendBlock: { gap: Spacing.two, marginBottom: Spacing.two },
+  pendBadge: { paddingHorizontal: Spacing.two, paddingVertical: 2, borderRadius: 99 },
 });

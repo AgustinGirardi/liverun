@@ -79,6 +79,28 @@ class RaceUpdate(BaseModel):
     registration_url: Optional[str] = Field(None, max_length=400)
     capacity:         Optional[int] = Field(None, ge=1)
 
+class RaceStartOut(BaseModel):
+    distance_km: float
+    start_ns:    int
+    model_config = {"from_attributes": True}
+
+class StartRaceRequest(BaseModel):
+    # None = largada general; un valor = largada de esa distancia.
+    distance_km:    Optional[float] = Field(None, gt=0)
+    # Cuánto hace que el operador apretó el botón. El instante se toma en el
+    # click y el confirm() viene después: el servidor resta esta demora a su
+    # propia hora (así no importa si el reloj del cliente está corrido).
+    click_delay_ms: int = Field(0, ge=0, le=600_000)
+
+class AdjustStartRequest(BaseModel):
+    distance_km: Optional[float] = Field(None, gt=0)
+    start_ns:    int = Field(..., gt=0)
+
+class CaptureRequest(BaseModel):
+    # Demora entre el cruce (tecla/botón) y el envío: si el WebSocket estaba
+    # caído y la captura se reintenta por HTTP, el tiempo sigue siendo el real.
+    delay_ms: int = Field(0, ge=0, le=86_400_000)
+
 class RaceOut(BaseModel):
     id:            int
     name:          str
@@ -87,6 +109,7 @@ class RaceOut(BaseModel):
     distance_km:   Optional[float] = None
     status:        str
     race_start_ns: Optional[int]   = None
+    starts:        list[RaceStartOut] = []
     registration_url: Optional[str] = None
     capacity:         Optional[int] = None
     created_at:    datetime
@@ -142,6 +165,7 @@ class AssignBibResponse(BaseModel):
     runner:          RunnerOut
     net_time_ns:     Optional[int] = None
     position:        Optional[int] = None
+    distance_km:     Optional[float] = None
     model_config = {"from_attributes": True}
 
 class BibLookupResponse(BaseModel):
@@ -172,8 +196,10 @@ class ResultRow(BaseModel):
     position:       int
     bib_number:     str
     runner:         RunnerOut
-    finish_time_ns: int
-    net_time_ns:    Optional[int]   = None
+    capture_id:     Optional[int]   = None
+    finish_time_ns: int                      # hora de llegada (epoch), NO una duración
+    net_time_ns:    Optional[int]   = None   # desde la largada de su distancia
+    gross_time_ns:  Optional[int]   = None   # desde la largada general
     category:       Optional[str]   = None
     club:           Optional[str]   = None
     distance_km:    Optional[float] = None
@@ -199,6 +225,7 @@ class RaceResults(BaseModel):
 # ── Import ────────────────────────────────────────────────────────────────────
 
 class ImportResult(BaseModel):
-    created: int
-    skipped: int
-    errors:  list[str]
+    created:  int
+    skipped:  int
+    errors:   list[str]
+    warnings: list[str] = []

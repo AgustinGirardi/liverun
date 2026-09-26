@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from backend.models.models import (
     TimestampCapture, Split, Registration, Runner,
-    Race, CaptureStatus, RegistrationStatus,
+    Race, CaptureStatus, RegistrationStatus, RaceStatus,
 )
 from backend.core.schemas import (
     WSEvent, WSEventType,
@@ -43,6 +43,22 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# ── Largadas ──────────────────────────────────────────────────────────────────
+
+def _misma_distancia(a: Optional[float], b: Optional[float]) -> bool:
+    return a is not None and b is not None and round(a, 3) == round(b, 3)
+
+
+def start_ns_para(race: Race, distance_km: Optional[float]) -> Optional[int]:
+    """Largada que corresponde a una distancia: la propia si la tiene
+    (race_starts), si no la general (race.race_start_ns)."""
+    if distance_km is not None:
+        for s in race.starts:
+            if _misma_distancia(s.distance_km, distance_km):
+                return s.start_ns
+    return race.race_start_ns
+
+
 class TimingEngine:
     def __init__(self, race_id: int):
         self.race_id = race_id
@@ -67,9 +83,15 @@ class TimingEngine:
 
     # ── Captura ───────────────────────────────────────────────────────────────
 
-    async def capture(self, db: AsyncSession, device: str = "operator-1") -> TimestampCapture:
+    async def capture(self, db: AsyncSession, device: str = "operator-1", delay_ms: int = 0) -> TimestampCapture:
         # El instante real del cruce de meta se toma antes de cualquier espera.
-        captured_ns = time.time_ns()
+        # delay_ms: la captura se hizo antes y llega tarde (reintento por HTTP).
+        captured_ns = time.time_ns() - min(max(0, int(delay_ms or 0)), 86_400_000) * 1_000_000
+        race = await db.get(Race, self.race_id)
+        if not race:
+            raise ValueError("Carrera no encontrada")
+        if race.status == RaceStatus.FINISHED:
+            raise ValueError("La carrera está finalizada: no se registran más llegadas. Reabrila para corregir.")
         # El candado serializa la asignación de sequence_order para que dos
         # capturas concurrentes no reciban el mismo número.
         async with self._lock:
@@ -116,9 +138,18 @@ class TimingEngine:
         bib_number: str,
         operator: str = "operator-1",
     ) -> AssignBibResponse:
+        # Todo bajo el candado: el chequeo "¿este dorsal ya tiene tiempo?" y el
+        # insert del split están separados por awaits; sin candado, dos
+        # asignaciones simultáneas del mismo dorsal pasaban las dos.
+        async with self._lock:
+            response = await self._assign_bib(db, capture_id, bib_number, operator)
+        await manager.broadcast(WSEvent(event=WSEventType.ASSIGNED, data=response.model_dump(mode="json")))
+        return response
+
+    async def _assign_bib(self, db, capture_id, bib_number, operator) -> AssignBibResponse:
         capture = await db.get(TimestampCapture, capture_id)
-        if not capture:
-            raise ValueError(f"Captura {capture_id} no encontrada")
+        if not capture or capture.race_id != self.race_id:
+            raise ValueError(f"Captura {capture_id} no encontrada en esta carrera")
         if capture.status != CaptureStatus.PENDING:
             raise ValueError(f"Captura {capture_id} ya fue procesada (estado: {capture.status.value})")
 
@@ -140,7 +171,7 @@ class TimingEngine:
                 Split.registration_id == registration.id,
                 TimestampCapture.status == CaptureStatus.ASSIGNED,
             )
-        )).scalar_one_or_none()
+        )).scalars().first()
         if already:
             raise ValueError(f"El dorsal '{bib_number}' ya tiene un tiempo asignado")
 
@@ -155,7 +186,9 @@ class TimingEngine:
         await db.refresh(split)
 
         race = await db.get(Race, self.race_id)
-        net_time_ns = (capture.captured_ns - race.race_start_ns) if race and race.race_start_ns else None
+        dist = registration.distance_km if registration.distance_km is not None else (race.distance_km if race else None)
+        start_ns = start_ns_para(race, dist) if race else None
+        net_time_ns = (capture.captured_ns - start_ns) if start_ns else None
 
         # Posición: cuántos ASSIGNED antes que éste
         pos_count = (await db.execute(
@@ -181,16 +214,22 @@ class TimingEngine:
             runner=self._runner_out(registration.runner),
             net_time_ns=net_time_ns,
             position=position,
+            distance_km=dist,
         )
-        await manager.broadcast(WSEvent(event=WSEventType.ASSIGNED, data=response.model_dump(mode="json")))
         return response
 
     # ── Deshacer asignación ───────────────────────────────────────────────────
 
     async def undo_assign(self, db: AsyncSession, capture_id: int) -> dict:
+        async with self._lock:
+            payload = await self._undo_assign(db, capture_id)
+        await manager.broadcast(WSEvent(event=WSEventType.UNASSIGNED, data=payload))
+        return payload
+
+    async def _undo_assign(self, db: AsyncSession, capture_id: int) -> dict:
         capture = await db.get(TimestampCapture, capture_id)
-        if not capture:
-            raise ValueError(f"Captura {capture_id} no encontrada")
+        if not capture or capture.race_id != self.race_id:
+            raise ValueError(f"Captura {capture_id} no encontrada en esta carrera")
         if capture.status != CaptureStatus.ASSIGNED:
             raise ValueError("Solo se pueden deshacer capturas ya asignadas")
 
@@ -219,17 +258,19 @@ class TimingEngine:
             "previous_bib": prev_bib,
             "previous_runner": prev_runner,
         }
-        await manager.broadcast(WSEvent(event=WSEventType.UNASSIGNED, data=payload))
         return payload
 
     # ── Descartar captura ─────────────────────────────────────────────────────
 
     async def discard_capture(self, db: AsyncSession, capture_id: int):
-        capture = await db.get(TimestampCapture, capture_id)
-        if not capture or capture.status != CaptureStatus.PENDING:
-            raise ValueError("Solo se pueden descartar capturas pendientes")
-        capture.status = CaptureStatus.DISCARDED
-        await db.commit()
+        async with self._lock:
+            capture = await db.get(TimestampCapture, capture_id)
+            if not capture or capture.race_id != self.race_id:
+                raise ValueError(f"Captura {capture_id} no encontrada en esta carrera")
+            if capture.status != CaptureStatus.PENDING:
+                raise ValueError("Solo se pueden descartar capturas pendientes")
+            capture.status = CaptureStatus.DISCARDED
+            await db.commit()
         await manager.broadcast(WSEvent(event=WSEventType.DISCARDED, data={"capture_id": capture_id}))
 
     # ── Buscar dorsal ─────────────────────────────────────────────────────────
@@ -252,7 +293,7 @@ class TimingEngine:
                 Split.registration_id == registration.id,
                 TimestampCapture.status == CaptureStatus.ASSIGNED,
             )
-        )).scalar_one_or_none()
+        )).scalars().first()
 
         return BibLookupResponse(
             found=True,

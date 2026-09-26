@@ -3,6 +3,7 @@
  * logros derivados de las salidas. Testeable con Jest.
  */
 import { type Activity, type Summary } from '@/lib/api';
+import { parseFechaServidor } from '@/lib/format';
 
 export type WeekBucket = { start: Date; km: number; isCurrent: boolean };
 
@@ -25,7 +26,7 @@ export function kmByWeek(acts: Activity[], weeks = 8, now = new Date()): WeekBuc
   }));
   const first = buckets[0].start.getTime();
   for (const a of acts) {
-    const t = new Date(a.started_at).getTime();
+    const t = parseFechaServidor(a.started_at).getTime();
     if (t < first) continue;
     for (let i = weeks - 1; i >= 0; i--) {
       if (t >= buckets[i].start.getTime()) { buckets[i].km += a.distance_m / 1000; break; }

@@ -18,6 +18,10 @@ export type SessionSnapshotV1 = {
   /** tiempo neto corrido (ms, sin pausas) al momento del guardado */
   netElapsedMs: number;
   tracker: TrackerState;
+  /** id de la salida para el backend, fijado al iniciar: si la app muere
+   *  mientras guarda, la recuperación reusa el mismo y el servidor deduplica.
+   *  Opcional porque los snapshots de versiones viejas no lo traen. */
+  clientUuid?: string;
 };
 
 export function buildSnapshot(args: {
@@ -26,8 +30,9 @@ export function buildSnapshot(args: {
   netElapsedMs: number;
   tracker: TrackerState;
   now: number;
+  clientUuid?: string | null;
 }): SessionSnapshotV1 {
-  return {
+  const snap: SessionSnapshotV1 = {
     v: 1,
     phase: args.phase,
     startedAt: args.startedAt.toISOString(),
@@ -35,6 +40,8 @@ export function buildSnapshot(args: {
     netElapsedMs: Math.max(0, Math.round(args.netElapsedMs)),
     tracker: args.tracker,
   };
+  if (args.clientUuid) snap.clientUuid = args.clientUuid;
+  return snap;
 }
 
 export type RestoredFields = {
@@ -45,6 +52,7 @@ export type RestoredFields = {
   pausedAccumMs: 0;
   pauseStartedMs: number;
   tracker: TrackerState;
+  clientUuid: string | null;
 };
 
 /**
@@ -60,6 +68,7 @@ export function restoreFields(snap: SessionSnapshotV1, now: number): RestoredFie
     pausedAccumMs: 0,
     pauseStartedMs: now,
     tracker: rebaseTracker(snap.tracker),
+    clientUuid: typeof snap.clientUuid === 'string' && snap.clientUuid ? snap.clientUuid : null,
   };
 }
 

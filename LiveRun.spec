@@ -23,6 +23,8 @@ a = Analysis(
         (str(BASE / 'backend'), 'backend'),
     ],
     hiddenimports=[
+        # SQLAlchemy async: desde 2.1 greenlet no viene solo
+        'greenlet',
         # uvicorn internals
         'uvicorn',
         'uvicorn.main',

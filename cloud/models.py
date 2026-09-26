@@ -37,8 +37,23 @@ class PortalUser(Base):
     # Epoch y no DateTime: se compara contra el iat del token, sin ambigüedad
     # de zona horaria.
     tokens_valid_from = Column(Integer, nullable=True)
-    claims        = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
+    # Momento (naive UTC) en que se probó que el email es del usuario: link de
+    # verificación, reset de contraseña o login con Google. NULL = sin
+    # verificar: no se autovinculan resultados ni se promueve a admin.
+    email_verified_at = Column(DateTime, nullable=True)
+    # ¿La contraseña guardada la eligió el usuario? 1 = sí (registro, reset,
+    # cambio); 0 = no: la cuenta nació con Google (o Google la tomó) y el hash
+    # es de una contraseña al azar que nadie conoce. NULL = cuenta anterior a
+    # esta columna vinculada a Google: no se sabe, se pide la actual igual.
+    password_set  = Column(Integer, nullable=True)
+    claims     = relationship("Claim", back_populates="user", cascade="all, delete-orphan")
     activities    = relationship("Activity", back_populates="user", cascade="all, delete-orphan")
+    # AUTOINCREMENT real en SQLite: sin esto, borrar el usuario de id más alto
+    # hace que el próximo registro reciba el mismo id. Solo aplica a bases
+    # NUEVAS (create_all); la de producción ya existe y SQLite no permite
+    # agregarlo sin reconstruir la tabla. Ahí protegen tokens_valid_from (se
+    # setea al crear la cuenta) y el mapeo de cobros por preapproval.
+    __table_args__ = {"sqlite_autoincrement": True}
 
 
 class PublishedRace(Base):
@@ -85,6 +100,10 @@ class PublishedResult(Base):
     category_position = Column(Integer, nullable=True)
     status         = Column(String(12), nullable=False, default="FINISHER")  # FINISHER/DNF/DNS/DQ
     email_hash     = Column(String(64), nullable=True, index=True)  # sha256 hex del email (privacy-preserving); ver design doc
+    # Nombre normalizado para buscar: minúsculas, sin acentos y con un solo
+    # espacio entre palabras ("José  Pérez" → "jose perez"). Lo llena el portal
+    # al publicar (ver cloud/main.py, normalizar_nombre).
+    name_norm      = Column(String(200), nullable=True, index=True)
     race           = relationship("PublishedRace", back_populates="results")
     claims         = relationship("Claim", back_populates="result", cascade="all, delete-orphan")
     __table_args__ = (UniqueConstraint("race_id", "bib_number", "distance_km", name="uq_race_bib_dist"),)
@@ -199,6 +218,10 @@ class BillingPayment(Base):
     mp_payment_id = Column(String(64), nullable=False, unique=True, index=True)
     amount        = Column(Numeric(12, 2), nullable=True)   # plata: escala fija, no binario flotante
     status        = Column(String(20), nullable=True)
+    # Segundos de premium que sumó este pago: permite revocar exactamente eso
+    # si MP lo devuelve o hay contracargo. NULL en los pagos anteriores a la
+    # columna (se asume un mes).
+    granted_s     = Column(Integer, nullable=True)
     created_at    = Column(DateTime, server_default=func.now())
 
 

@@ -24,19 +24,71 @@ export function setToken(token: string | null) {
   authToken = token;
 }
 
+/** Cuánto esperar una respuesta antes de darla por perdida. Sin esto, con
+ *  señal mala el fetch podía quedar colgado minutos. */
+export const TIMEOUT_MS = 20_000;
+
+export const MSG_SESION_VENCIDA =
+  'Tu sesión venció, volvé a ingresar; tus salidas pendientes se suben cuando entres.';
+
+/** Callback que registra el AuthProvider para cerrar la sesión ante un 401. */
+let onSesionVencida: (() => void) | null = null;
+
+export function setOnSesionVencida(fn: (() => void) | null) {
+  onSesionVencida = fn;
+}
+
+/** Por qué falló una llamada, para elegir el mensaje correcto. */
+export type MotivoError = 'sin-red' | 'sesion' | 'servidor' | 'rechazada';
+
+export function motivoDeError(e: unknown): MotivoError {
+  if (e instanceof ApiError) {
+    if (e.status === 0) return 'sin-red';
+    if (e.status === 401) return 'sesion';
+    // El servidor la leyó y dijo que no (datos inválidos): reintentar no sirve.
+    if (e.status === 400 || e.status === 422) return 'rechazada';
+  }
+  return 'servidor';
+}
+
+/** fetch con timeout (AbortController); timeout o red caída → ApiError(0). */
+async function fetchConTimeout(url: string, init: RequestInit, ms = TIMEOUT_MS): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } catch {
+    throw new ApiError(
+      0,
+      ctrl.signal.aborted
+        ? 'La conexión tardó demasiado. Revisá tu internet e intentá de nuevo.'
+        : 'Sin conexión. Revisá tu internet e intentá de nuevo.',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** 401 con token enviado = sesión vencida/revocada (no un login fallido).
+ *  Solo cierra la sesión si ese token sigue siendo el vigente: una respuesta
+ *  atrasada de una sesión anterior no debe desloguear a la nueva. */
+function chequearSesion(res: Response, tokenUsado: string | null) {
+  if (res.status === 401 && tokenUsado) {
+    if (tokenUsado === authToken) onSesionVencida?.();
+    throw new ApiError(401, MSG_SESION_VENCIDA);
+  }
+}
+
 async function request<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (authToken) headers.Authorization = `Bearer ${authToken}`;
-  let res: Response;
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      method: init?.method ?? 'GET',
-      headers,
-      body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
-    });
-  } catch {
-    throw new ApiError(0, 'Sin conexión. Revisá tu internet e intentá de nuevo.');
-  }
+  const tokenUsado = authToken;
+  if (tokenUsado) headers.Authorization = `Bearer ${tokenUsado}`;
+  const res = await fetchConTimeout(`${BASE}${path}`, {
+    method: init?.method ?? 'GET',
+    headers,
+    body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  chequearSesion(res, tokenUsado);
   if (!res.ok) {
     let detail = `Error ${res.status}`;
     try {
@@ -167,8 +219,11 @@ export const api = {
     // @ts-expect-error — el objeto file de React Native no matchea el tipo DOM
     form.append('file', { uri, name: 'avatar.jpg', type: 'image/jpeg' });
     const headers: Record<string, string> = {};
-    if (authToken) headers.Authorization = `Bearer ${authToken}`;
-    const res = await fetch(`${BASE}/api/run/profile/avatar`, { method: 'POST', headers, body: form });
+    const tokenUsado = authToken;
+    if (tokenUsado) headers.Authorization = `Bearer ${tokenUsado}`;
+    // La foto puede tardar más que un JSON: timeout más largo.
+    const res = await fetchConTimeout(`${BASE}/api/run/profile/avatar`, { method: 'POST', headers, body: form }, 60_000);
+    chequearSesion(res, tokenUsado);
     if (!res.ok) {
       let detail = `Error ${res.status}`;
       try {

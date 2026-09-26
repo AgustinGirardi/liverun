@@ -6,6 +6,7 @@ import {
   currentPaceSPerKm,
   decodePolyline,
   encodePolyline,
+  esLecturaVieja,
   haversineM,
   newTracker,
   rebaseTracker,
@@ -202,5 +203,44 @@ describe('decodePolyline', () => {
 
   it('string vacío = camino vacío', () => {
     expect(decodePolyline('')).toEqual([]);
+  });
+});
+
+describe('lecturas viejas (ubicación cacheada)', () => {
+  const inicio = 1_750_000_000_000;
+
+  it('el primer punto cacheado de hace 1 h (a ~2 km) no ancla ni suma distancia fantasma', () => {
+    const ref = { inicioMs: inicio, ahoraMs: inicio + 1000 };
+    let st = newTracker();
+    // Lectura cacheada: de hace una hora y a 18 pasos (~2 km) del lugar real.
+    const viejo = addPoint(st, pt(18, inicio - 3600_000), 0, ref);
+    expect(viejo.accepted).toBe(false);
+    expect(viejo.vieja).toBe(true);
+    expect(viejo.state.last).toBeNull();
+    // Primeras lecturas reales: anclan en el lugar correcto.
+    ({ state: st } = addPoint(st, pt(0, inicio + 1000), 1, ref));
+    ({ state: st } = addPoint(st, pt(0.05, inicio + 3000), 3, { ...ref, ahoraMs: inicio + 3000 }));
+    expect(st.distanceM).toBeLessThan(10);
+  });
+
+  it('el ancla con más de 10 s de antigüedad se descarta aunque sea posterior al inicio', () => {
+    expect(esLecturaVieja(inicio + 1000, { inicioMs: inicio, ahoraMs: inicio + 12_000 }, true)).toBe(true);
+    expect(esLecturaVieja(inicio + 5000, { inicioMs: inicio, ahoraMs: inicio + 12_000 }, true)).toBe(false);
+  });
+
+  it('tolera unos segundos de desfasaje con el inicio', () => {
+    expect(esLecturaVieja(inicio - 3000, { inicioMs: inicio, ahoraMs: inicio }, true)).toBe(false);
+    expect(esLecturaVieja(inicio - 6000, { inicioMs: inicio, ahoraMs: inicio }, true)).toBe(true);
+  });
+
+  it('con ancla puesta no se mira la edad (lotes atrasados del background)', () => {
+    expect(esLecturaVieja(inicio + 1000, { inicioMs: inicio, ahoraMs: inicio + 60_000 }, false)).toBe(false);
+    // …pero algo anterior al inicio nunca vale.
+    expect(esLecturaVieja(inicio - 60_000, { inicioMs: inicio, ahoraMs: inicio + 60_000 }, false)).toBe(true);
+  });
+
+  it('sin referencias (llamadas viejas) se comporta como antes', () => {
+    const r = addPoint(newTracker(), pt(0, 0), 0);
+    expect(r.accepted).toBe(true);
   });
 });

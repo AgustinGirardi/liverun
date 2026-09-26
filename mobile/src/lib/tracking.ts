@@ -33,6 +33,34 @@ export const AUTO_PAUSE_AFTER_S = 5;
 export const STATIONARY_FLOOR_MIN_M = 12;
 export const STATIONARY_FLOOR_MAX_M = 25;
 
+/** Tolerancia para lecturas con timestamp apenas anterior al inicio (relojes
+ *  del GPS y del teléfono no están perfectamente sincronizados). */
+export const TOLERANCIA_INICIO_MS = 5_000;
+/** Antigüedad máxima de la lectura que ancla el recorrido. El SO puede
+ *  entregar primero una ubicación cacheada (de hace una hora, a 2 km): si se
+ *  aceptara como ancla, el primer punto real sumaría esa distancia fantasma. */
+export const MAX_EDAD_ANCLA_MS = 10_000;
+
+/** Referencias de tiempo para descartar lecturas viejas (todas opcionales). */
+export type RefTiempo = {
+  /** epoch ms del inicio real de la salida */
+  inicioMs?: number;
+  /** epoch ms del momento en que se procesa la lectura */
+  ahoraMs?: number;
+};
+
+/**
+ * true si la lectura es vieja y no se debe usar: anterior al inicio de la
+ * salida (menos la tolerancia), o —si va a ser el ancla— con más de
+ * MAX_EDAD_ANCLA_MS de antigüedad. Con ancla ya puesta no se mira la edad:
+ * la tarea de background puede entregar lotes con algunos segundos de atraso.
+ */
+export function esLecturaVieja(tMs: number, ref: RefTiempo, esAncla: boolean): boolean {
+  if (ref.inicioMs != null && tMs < ref.inicioMs - TOLERANCIA_INICIO_MS) return true;
+  if (esAncla && ref.ahoraMs != null && ref.ahoraMs - tMs > MAX_EDAD_ANCLA_MS) return true;
+  return false;
+}
+
 /** Piso de ruido en metros según la precisión reportada. */
 export function stationaryFloorM(accuracy?: number | null): number {
   const acc = accuracy ?? 10;
@@ -80,6 +108,8 @@ export type AddResult = {
   accepted: boolean;
   /** número de km recién completado (1, 2, ...) o null */
   completedKm: number | null;
+  /** la lectura se descartó por vieja (no sirve ni para la auto-pausa) */
+  vieja?: boolean;
 };
 
 /**
@@ -94,10 +124,14 @@ export type AddResult = {
  * distancia fantasma ni impide la auto-pausa. Corriendo, cada lectura (o cada
  * dos, según el intervalo) supera el piso y la distancia se acumula igual.
  */
-export function addPoint(state: TrackerState, p: GeoPoint, elapsedS: number): AddResult {
+export function addPoint(state: TrackerState, p: GeoPoint, elapsedS: number, ref: RefTiempo = {}): AddResult {
   // Filtro de precisión: lecturas malas no suman ni mueven el cursor.
   if (p.accuracy != null && p.accuracy > MAX_ACCURACY_M) {
     return { state, accepted: false, completedKm: null };
+  }
+  // Lecturas cacheadas / anteriores a la salida: no anclan ni suman.
+  if (esLecturaVieja(p.t, ref, !state.last)) {
+    return { state, accepted: false, completedKm: null, vieja: true };
   }
   if (!state.last) {
     const st = { ...state, last: p, elapsedS, speedMps: dopplerMps(p) ?? 0, path: [...state.path, { lat: p.lat, lon: p.lon }] };

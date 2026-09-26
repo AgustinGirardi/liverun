@@ -16,13 +16,15 @@ import { useTheme } from '@/hooks/use-theme';
 import { api, ApiError, type FriendLists, type Profile, type Summary } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEntitlement } from '@/lib/entitlement';
+import { parseFechaServidor } from '@/lib/format';
+import { clearPendingQueue } from '@/lib/run-store';
 
 const AMBER = '#f5a524'; // estado "atención" (prueba por terminar / terminada)
 
 /** Días enteros desde hoy hasta `iso` (negativo si ya pasó). */
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
+  const ms = parseFechaServidor(iso).getTime() - Date.now();
   return Math.ceil(ms / 86400000);
 }
 
@@ -158,6 +160,9 @@ export default function PerfilScreen() {
                 onPress: async () => {
                   try {
                     await api.deleteAccount();
+                    // La cuenta ya no existe: sus salidas pendientes no tienen
+                    // dónde subirse. logout() borra además la salida en curso.
+                    await clearPendingQueue();
                     await logout();
                   } catch (e) {
                     Alert.alert('Ups', e instanceof ApiError ? e.message : 'No se pudo eliminar la cuenta.');

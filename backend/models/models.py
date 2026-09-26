@@ -5,6 +5,18 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, DeclarativeBase
 import enum
+import uuid
+
+
+def nuevo_cloud_source_id() -> str:
+    """Id estable con el que la carrera se publica en el portal.
+
+    Antes era f"ct-race-{id}" con el id autoincremental local: una PC nueva o
+    una reinstalación volvía a arrancar en 1 y pisaba en el portal carreras ya
+    publicadas por otra instalación. Las carreras nuevas llevan un uuid; las
+    viejas conservan "ct-race-{id}" (lo pone la migración) para que republicar
+    siga actualizando lo que ya está en producción."""
+    return "ct-" + uuid.uuid4().hex
 
 class Base(DeclarativeBase):
     pass
@@ -52,7 +64,10 @@ class Race(Base):
     race_date      = Column(Date, nullable=True)
     distance_km    = Column(Float, nullable=True)
     status         = Column(Enum(RaceStatus), default=RaceStatus.PLANNED)
+    # Largada general. Si una distancia tiene su propia largada (race_starts),
+    # manda esa; si no, se usa ésta.
     race_start_ns  = Column(BigInteger, nullable=True)
+    cloud_source_id = Column(String(64), nullable=True, default=nuevo_cloud_source_id)
     # Calendario público: si la carrera todavía no se corrió, se publica en el
     # portal como evento con estos dos datos (el cupo y dónde inscribirse).
     registration_url = Column(String(400), nullable=True)
@@ -60,6 +75,25 @@ class Race(Base):
     created_at     = Column(DateTime, server_default=func.now())
     registrations  = relationship("Registration", back_populates="race")
     captures       = relationship("TimestampCapture", back_populates="race")
+    # selectin: RaceOut las serializa, y en async no se puede cargar perezosamente.
+    starts         = relationship(
+        "RaceStart", back_populates="race", lazy="selectin",
+        cascade="all, delete-orphan", passive_deletes=True,
+        order_by="RaceStart.distance_km",
+    )
+
+
+class RaceStart(Base):
+    """Largada propia de una distancia (ej. la de 21K a las 7:30 y la de 10K a las 8:00)."""
+    __tablename__ = "race_starts"
+    id          = Column(Integer, primary_key=True, autoincrement=True)
+    race_id     = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
+    distance_km = Column(Float, nullable=False)
+    start_ns    = Column(BigInteger, nullable=False)
+    race        = relationship("Race", back_populates="starts")
+    __table_args__ = (
+        UniqueConstraint("race_id", "distance_km", name="uq_race_start_dist"),
+    )
 
 class Registration(Base):
     __tablename__ = "registrations"

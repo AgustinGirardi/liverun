@@ -41,3 +41,6 @@ installer/*.exe
 *.log
 .DS_Store
 Thumbs.db
+
+# Capturas y logs de Playwright (pueden incluir sesiones iniciadas)
+.playwright-mcp/

@@ -19,13 +19,15 @@ import urllib.parse
 import urllib.request
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from cloud.db import get_db
+from cloud.deps import admin_emails
 from cloud.models import PortalUser
+from cloud.run import ahora_utc
 from cloud.security import SECRET, hash_password, make_token
 
 GOOGLE_CLIENT_ID = os.environ.get("CT_GOOGLE_CLIENT_ID", "")
@@ -43,6 +45,16 @@ _APP_SCHEMES = ("liverun", "chronotrackrun")
 _EXPO_SCHEMES = ("exp", "exps") if os.environ.get("CT_ALLOW_EXPO_REDIRECT") == "1" else ()
 ALLOWED_SCHEMES = _EXPO_SCHEMES + _APP_SCHEMES
 STATE_TTL_S = 600
+
+# Cookie que ata el login con Google al navegador que lo empezó (flujo web).
+# Sin ella, el state firmado servía en cualquier navegador: un atacante
+# arrancaba el login con SU cuenta de Google, frenaba antes del callback y le
+# mandaba ese link a la víctima, que quedaba logueada en la cuenta del atacante
+# (login CSRF). Path acotado: solo viaja a /start y /callback. SameSite=Lax
+# alcanza porque Google vuelve con una navegación GET de primer nivel.
+NONCE_COOKIE = "lr_google_nonce"
+_COOKIE_PATH = "/api/run/auth/google"
+_COOKIE_SECURE = bool(os.environ.get("RENDER"))
 
 router = APIRouter(prefix="/api/run/auth/google", tags=["Run"])
 
@@ -67,22 +79,45 @@ def valid_app_redirect(url: str) -> bool:
     return scheme == public.scheme and parsed.netloc == public.netloc
 
 
-def make_state(app_redirect: str, now: Optional[float] = None) -> str:
-    """state firmado (HMAC) que viaja a Google y vuelve: anti-CSRF y además
-    transporta el deep link de la app sin guardar estado en el servidor."""
+def is_web_redirect(url: str) -> bool:
+    """True si el retorno es el propio portal web (no la app ni el escritorio)."""
+    parsed = urllib.parse.urlparse(url or "")
+    public = urllib.parse.urlparse(PUBLIC_URL)
+    return parsed.scheme.lower() == public.scheme and parsed.netloc == public.netloc
+
+
+def _hash_nonce(nonce: str) -> str:
+    return hashlib.sha256(nonce.encode()).hexdigest()[:32]
+
+
+def make_state(app_redirect: str, now: Optional[float] = None,
+               browser_nonce: Optional[str] = None) -> str:
+    """state firmado (HMAC) que viaja a Google y vuelve: transporta el deep
+    link de la app sin guardar estado en el servidor.
+
+    `browser_nonce` (flujo web) queda hasheado adentro y el callback exige la
+    cookie con el mismo valor: eso es lo que ata el state al navegador."""
     base = now if now is not None else time.time()
-    payload = json.dumps({
+    datos = {
         "r": app_redirect,
         "exp": int(base + STATE_TTL_S),
         "n": secrets.token_urlsafe(8),
-    })
+    }
+    if browser_nonce:
+        datos["c"] = _hash_nonce(browser_nonce)
+    payload = json.dumps(datos)
     b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
     sig = hmac.new(SECRET.encode(), b64.encode(), hashlib.sha256).hexdigest()[:32]
     return f"{b64}.{sig}"
 
 
-def verify_state(state: str, now: Optional[float] = None) -> Optional[str]:
-    """Devuelve el app_redirect si el state es válido y no venció; si no, None."""
+def verify_state(state: str, now: Optional[float] = None,
+                 browser_nonce: Optional[str] = None) -> Optional[str]:
+    """Devuelve el app_redirect si el state es válido y no venció; si no, None.
+
+    Para el flujo web exige además que `browser_nonce` (la cookie) coincida con
+    el que quedó en el state. Los flujos de app móvil y escritorio no lo
+    exigen todavía (ver google_start)."""
     try:
         b64, sig = state.split(".")
         good = hmac.new(SECRET.encode(), b64.encode(), hashlib.sha256).hexdigest()[:32]
@@ -92,7 +127,14 @@ def verify_state(state: str, now: Optional[float] = None) -> Optional[str]:
         if payload["exp"] < (now if now is not None else time.time()):
             return None
         redirect = payload["r"]
-        return redirect if valid_app_redirect(redirect) else None
+        if not valid_app_redirect(redirect):
+            return None
+        if is_web_redirect(redirect):
+            esperado = payload.get("c")
+            if not esperado or not browser_nonce \
+                    or not hmac.compare_digest(esperado, _hash_nonce(browser_nonce)):
+                return None
+        return redirect
     except Exception:
         return None
 
@@ -105,23 +147,45 @@ def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str],
     if user:
         return user
     email = email.strip().lower()
+    es_admin = email in admin_emails()
     user = db.scalar(select(PortalUser).where(PortalUser.email == email))
     if user:
+        # Toma de cuenta previa: cualquiera puede registrar el email de otro
+        # (sin verificarlo) y, cuando el dueño real entraba con Google, el
+        # atacante seguía teniendo su contraseña. Si la cuenta NO estaba
+        # verificada, Google (que sí verificó el email) decide de quién es: se
+        # anula la contraseña y se cierran todas las sesiones previas (+1 s:
+        # también las del mismo segundo; el callback emite el token nuevo justo
+        # en el corte). Si ya estaba verificada, quien puso esa contraseña
+        # probó ser el dueño del buzón: solo se vincula Google.
         user.google_id = sub
+        if not user.email_verified_at:
+            user.password_hash = hash_password(secrets.token_urlsafe(32))
+            user.password_set = 0
+            user.tokens_valid_from = int(time.time()) + 1
+            user.email_verified_at = ahora_utc()
         if not user.full_name and name:
             user.full_name = name
         if not user.avatar_url and picture:
             user.avatar_url = picture
+        if es_admin:
+            user.is_admin = 1
         db.commit()
         return user
     user = PortalUser(
         email=email,
-        # Sin contraseña utilizable: solo entra con Google (puede setear una
-        # después con un reset, si algún día se implementa).
+        # Sin contraseña utilizable: solo entra con Google (puede elegir una
+        # después con "olvidé mi contraseña").
         password_hash=hash_password(secrets.token_urlsafe(32)),
+        password_set=0,
         full_name=name,
         google_id=sub,
+        email_verified_at=ahora_utc(),
         avatar_url=picture,
+        is_admin=1 if es_admin else 0,
+        # Si SQLite le reasigna el id de una cuenta borrada, los tokens viejos
+        # de aquella no abren esta (ver deps.current_user).
+        tokens_valid_from=int(time.time()),
     )
     db.add(user)
     db.commit()
@@ -160,25 +224,35 @@ def _app_url(app_redirect: str, **params: str) -> str:
 
 @router.get("/start")
 def google_start(app_redirect: str):
+    """Arranca el login. En el flujo web deja una cookie con un nonce que el
+    callback exige. En app móvil y escritorio no se exige todavía: técnicamente
+    también pasan por el mismo navegador (openAuthSessionAsync / navegador del
+    sistema), pero no está probado en dispositivos que la cookie sobreviva en
+    todos; activarlo sin probar podía dejar a esos clientes sin login."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(503, "Login con Google no configurado (faltan CT_GOOGLE_CLIENT_ID/SECRET)")
     if not valid_app_redirect(app_redirect):
         raise HTTPException(400, "app_redirect inválido")
+    nonce = secrets.token_urlsafe(24) if is_web_redirect(app_redirect) else None
     auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": f"{PUBLIC_URL}/api/run/auth/google/callback",
         "response_type": "code",
         "scope": "openid email profile",
-        "state": make_state(app_redirect),
+        "state": make_state(app_redirect, browser_nonce=nonce),
         "prompt": "select_account",
     })
-    return RedirectResponse(auth_url, status_code=302)
+    resp = RedirectResponse(auth_url, status_code=302)
+    if nonce:
+        resp.set_cookie(NONCE_COOKIE, nonce, max_age=STATE_TTL_S, path=_COOKIE_PATH,
+                        httponly=True, samesite="lax", secure=_COOKIE_SECURE)
+    return resp
 
 
 @router.get("/callback")
-def google_callback(state: str, code: Optional[str] = None, error: Optional[str] = None,
-                    db: Session = Depends(get_db)):
-    app_redirect = verify_state(state)
+def google_callback(request: Request, state: str, code: Optional[str] = None,
+                    error: Optional[str] = None, db: Session = Depends(get_db)):
+    app_redirect = verify_state(state, browser_nonce=request.cookies.get(NONCE_COOKIE))
     if not app_redirect:
         raise HTTPException(400, "state inválido o vencido; volvé a intentar el login")
     if error or not code:
@@ -195,7 +269,12 @@ def google_callback(state: str, code: Optional[str] = None, error: Optional[str]
         db, sub=str(claims["sub"]), email=claims["email"],
         name=claims.get("name"), picture=claims.get("picture"),
     )
-    return RedirectResponse(
-        _app_url(app_redirect, token=make_token(user.id), email=user.email),
+    # iat nunca antes del corte de sesiones (al vincular Google se pone en
+    # ahora+1): si no, el token recién emitido nacería inválido.
+    iat = max(int(time.time()), user.tokens_valid_from or 0)
+    resp = RedirectResponse(
+        _app_url(app_redirect, token=make_token(user.id, iat=iat), email=user.email),
         status_code=302,
     )
+    resp.delete_cookie(NONCE_COOKIE, path=_COOKIE_PATH)  # un solo uso
+    return resp

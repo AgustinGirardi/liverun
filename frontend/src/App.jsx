@@ -22,6 +22,20 @@ function formatNs(ns) {
   return `${pad(h)}:${pad(m)}:${pad(s)}.${pad(f, 3)}`
 }
 
+// Hora del día (hh:mm:ss.cc) de un instante epoch en ns. Para capturas sin
+// largada: formatNs(epoch) daría una "duración" absurda (497000:13:45).
+function horaDeCaptura(ns) {
+  if (!ns) return "—"
+  const d = new Date(Math.floor(Number(ns) / 1_000_000))
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(Math.floor(d.getMilliseconds() / 10))}`
+}
+
+// Tiempo neto si hay largada; si no, la hora de llegada; si no, "—".
+function formatTiempo(netNs, capturedNs) {
+  if (netNs != null) return formatNs(netNs)
+  return horaDeCaptura(capturedNs)
+}
+
 // ── Certificado PDF ───────────────────────────────────────────────────────────
 
 function printCertificate({ race, runner, bib_number, position, net_time_ns, category, club, dni, distance_km }) {
@@ -250,7 +264,6 @@ function printHtml(html) {
 // ── Reporte PDF de resultados ─────────────────────────────────────────────────
 
 function printResultsReport({ race, results }) {
-  const fmt = (ns) => (ns ? formatNs(ns) : "—")
   const date = race.race_date
     ? new Date(race.race_date + "T12:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
     : null
@@ -290,7 +303,7 @@ function printResultsReport({ race, results }) {
             <td class="c-name">${escapeHtml(r.runner.full_name)}</td>
             <td>${escapeHtml(r.category || "—")}</td>
             <td>${escapeHtml(r.club || "—")}</td>
-            <td class="c-time">${fmt(r.net_time_ns || r.finish_time_ns)}</td>
+            <td class="c-time">${formatTiempo(r.net_time_ns, r.finish_time_ns)}</td>
           </tr>`).join("")}
       </tbody>
     </table>`
@@ -507,37 +520,156 @@ function RegStatusBadge({ status }) {
 }
 
 // ── useTimingEngine ── WebSocket con reconexión + carga persistente ────────────
+//
+// Si el WebSocket está caído, las acciones van por HTTP. Una captura que
+// tampoco se puede guardar por HTTP queda en una cola local que se reintenta
+// sola (con la demora real, así el tiempo no cambia) y se avisa en pantalla:
+// nunca se pierde una captura en silencio.
 
-function useTimingEngine(raceId) {
-  const [queue, setQueue]         = useState([])
+// Por hora de captura: una captura reintentada por HTTP recibe un
+// sequence_order posterior, pero su hora es la del cruce real.
+const porSecuencia = (a, b) => (a.captured_ns - b.captured_ns) || (a.sequence_order - b.sequence_order)
+
+// Capturas que todavía no llegaron al servidor. Viven fuera de React: si el
+// operador cambia de pestaña, se siguen reintentando igual.
+const capturasSinGuardar = []        // { raceId, t0 } — t0 = performance.now() del cruce
+const oyentesCapturas = new Set()    // pantallas montadas que muestran el estado
+let reintentoCapturas = null
+let guardandoCapturas = false
+
+async function guardarCapturasPendientes() {
+  if (guardandoCapturas) return
+  guardandoCapturas = true
+  try {
+    while (capturasSinGuardar.length) {
+      const p = capturasSinGuardar[0]
+      let r
+      try {
+        r = await fetch(API + "/races/" + p.raceId + "/capture", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          // La demora desde el cruce: el servidor la descuenta de su hora.
+          body: JSON.stringify({ delay_ms: Math.max(0, Math.round(performance.now() - p.t0)) }),
+        })
+      } catch { break }            // sin conexión: se reintenta en 2 s
+      if (r.status >= 500) break
+      const data = await r.json().catch(() => ({}))
+      capturasSinGuardar.shift()
+      // 4xx: el servidor la rechazó (ej. carrera finalizada); reintentar no sirve, se avisa.
+      const res = r.ok ? { captura: data } : { rechazo: data.detail || "Error " + r.status }
+      oyentesCapturas.forEach(fn => fn(p.raceId, res))
+    }
+  } finally {
+    guardandoCapturas = false
+    oyentesCapturas.forEach(fn => fn(null, {}))
+    if (!capturasSinGuardar.length && reintentoCapturas) { clearInterval(reintentoCapturas); reintentoCapturas = null }
+  }
+}
+
+function encolarCaptura(raceId) {
+  capturasSinGuardar.push({ raceId, t0: performance.now() })
+  if (!reintentoCapturas) reintentoCapturas = setInterval(guardarCapturasPendientes, 2000)
+  guardarCapturasPendientes()
+}
+
+const contarSinGuardar = (raceId) => capturasSinGuardar.filter(p => p.raceId === raceId).length
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", (e) => {
+    if (capturasSinGuardar.length) { e.preventDefault(); e.returnValue = "" }
+  })
+}
+
+function useTimingEngine(raceId, { onAssigned, onError } = {}) {
+  const [queue, setQueue]         = useState([])   // de la más vieja a la más nueva
   const [finishers, setFinishers] = useState([])
   const [connected, setConnected] = useState(false)
-  const wsRef     = useRef(null)
-  const timerRef  = useRef(null)
-  const activeRef = useRef(true)
+  const [errores, setErrores]     = useState({})   // capture_id → mensaje del servidor
+  const [aviso, setAviso]         = useState(null) // error sin captura asociada
+  const [sinGuardar, setSinGuardar] = useState(() => contarSinGuardar(raceId))  // capturas que todavía no llegaron al servidor
+  const [version, setVersion]     = useState(0)    // sube con cada largada / corrección
+  const wsRef      = useRef(null)
+  const timerRef   = useRef(null)
+  const activeRef  = useRef(true)
+  const connectRef = useRef(null)
+  const callbacksRef  = useRef({ onAssigned, onError })
+  useEffect(() => { callbacksRef.current = { onAssigned, onError } })
+
+  const cargarFinishers = useCallback(() => {
+    if (!raceId) return
+    fetch(API + "/races/" + raceId + "/results")
+      .then(r => r.json())
+      .then(data => setFinishers(
+        (data.results || []).map(r => ({
+          capture_id: r.capture_id ?? null,
+          bib_number: r.bib_number,
+          runner: r.runner,
+          capture_ns: r.finish_time_ns,
+          net_time_ns: r.net_time_ns,
+          position: r.position,
+          distance_km: r.distance_km ?? null,
+        })).sort((a, b) => a.capture_ns - b.capture_ns)
+      ))
+      .catch(() => {})
+  }, [raceId])
 
   useEffect(() => {
     if (!raceId) return
     fetch(API + "/races/" + raceId + "/captures?status=PENDING")
       .then(r => r.json())
       .then(caps => setQueue(
-        caps.map(c => ({ id: c.id, captured_ns: c.captured_ns, sequence_order: c.sequence_order }))
+        caps.map(c => ({ id: c.id, captured_ns: c.captured_ns, sequence_order: c.sequence_order })).sort(porSecuencia)
       ))
       .catch(() => {})
-    fetch(API + "/races/" + raceId + "/results")
-      .then(r => r.json())
-      .then(data => setFinishers(
-        (data.results || []).map(r => ({
-          capture_id: null,
-          bib_number: r.bib_number,
-          runner: r.runner,
-          capture_ns: r.finish_time_ns,
-          net_time_ns: r.net_time_ns,
-          position: r.position,
-        }))
-      ))
-      .catch(() => {})
-  }, [raceId])
+    cargarFinishers()
+  }, [raceId, cargarFinishers])
+
+  // Mismo efecto para lo que llega por WebSocket y para las respuestas HTTP.
+  const aplicar = useCallback((event, data) => {
+    if (event === "CAPTURE" && data.type === "START") {
+      setVersion(v => v + 1)
+      cargarFinishers()
+    } else if (event === "CAPTURE") {
+      setQueue(prev => {
+        if (prev.some(i => i.id === data.id)) return prev
+        return [...prev, { id: data.id, captured_ns: data.captured_ns, sequence_order: data.sequence_order }].sort(porSecuencia)
+      })
+    } else if (event === "ASSIGNED") {
+      setQueue(prev => prev.filter(i => i.id !== data.capture_id))
+      setErrores(prev => { const n = { ...prev }; delete n[data.capture_id]; return n })
+      setFinishers(prev => {
+        const updated = prev.filter(f => f.capture_id !== data.capture_id)
+        return [...updated, {
+          capture_id: data.capture_id,
+          bib_number: data.bib_number,
+          runner: data.runner,
+          capture_ns: data.capture_ns,
+          net_time_ns: data.net_time_ns,
+          position: data.position,
+          distance_km: data.distance_km ?? null,
+        }].sort((a, b) => a.capture_ns - b.capture_ns)
+      })
+      callbacksRef.current.onAssigned?.(data)
+    } else if (event === "UNASSIGNED") {
+      setFinishers(prev => prev.filter(f => f.capture_id !== data.capture_id))
+      setQueue(prev => {
+        if (prev.some(i => i.id === data.capture_id)) return prev
+        return [...prev, { id: data.capture_id, captured_ns: data.captured_ns, sequence_order: data.sequence_order }].sort(porSecuencia)
+      })
+    } else if (event === "DISCARDED") {
+      setQueue(prev => prev.filter(i => i.id !== data.capture_id))
+    } else if (event === "RESULTS_UPDATE") {
+      // Se corrigió una largada: los netos se recalculan en el servidor.
+      setVersion(v => v + 1)
+      cargarFinishers()
+    } else if (event === "ERROR") {
+      if (data.capture_id != null) {
+        setErrores(prev => ({ ...prev, [data.capture_id]: data.message }))
+        callbacksRef.current.onError?.(data)
+      } else {
+        setAviso(data.message || "Error del servidor")
+      }
+    }
+  }, [cargarFinishers])
 
   const connect = useCallback(() => {
     if (!raceId || !activeRef.current) return
@@ -548,41 +680,16 @@ function useTimingEngine(raceId) {
     ws.onclose = () => {
       if (!activeRef.current) return
       setConnected(false)
-      timerRef.current = setTimeout(connect, 3000)
+      timerRef.current = setTimeout(() => connectRef.current?.(), 3000)
     }
     ws.onmessage = (evt) => {
       const { event, data } = JSON.parse(evt.data)
-      if (event === "CAPTURE" && data.type !== "START") {
-        setQueue(prev => {
-          if (prev.some(i => i.id === data.id)) return prev
-          return [{ id: data.id, captured_ns: data.captured_ns, sequence_order: data.sequence_order }, ...prev]
-        })
-      } else if (event === "ASSIGNED") {
-        setQueue(prev => prev.filter(i => i.id !== data.capture_id))
-        setFinishers(prev => {
-          const updated = prev.filter(f => f.capture_id !== data.capture_id)
-          return [...updated, {
-            capture_id: data.capture_id,
-            bib_number: data.bib_number,
-            runner: data.runner,
-            capture_ns: data.capture_ns,
-            net_time_ns: data.net_time_ns,
-            position: data.position,
-          }].sort((a, b) => a.capture_ns - b.capture_ns)
-        })
-      } else if (event === "UNASSIGNED") {
-        setFinishers(prev => prev.filter(f => f.capture_id !== data.capture_id))
-        setQueue(prev => {
-          if (prev.some(i => i.id === data.capture_id)) return prev
-          return [{ id: data.capture_id, captured_ns: data.captured_ns, sequence_order: data.sequence_order }, ...prev]
-        })
-      } else if (event === "DISCARDED") {
-        setQueue(prev => prev.filter(i => i.id !== data.capture_id))
-      }
+      aplicar(event, data)
     }
-  }, [raceId])
+  }, [raceId, aplicar])
 
   useEffect(() => {
+    connectRef.current = connect
     activeRef.current = true
     connect()
     return () => {
@@ -592,14 +699,59 @@ function useTimingEngine(raceId) {
     }
   }, [connect])
 
-  const send = useCallback((msg) => {
-    if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify(msg))
-  }, [])
+  // HTTP con el mensaje de error del servidor (detail) si falla.
+  const http = useCallback(async (method, path, body) => {
+    const r = await fetch(API + "/races/" + raceId + path, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    const data = r.status === 204 ? {} : await r.json().catch(() => ({}))
+    if (!r.ok) { const e = new Error(data.detail || "Error " + r.status); e.status = r.status; throw e }
+    return data
+  }, [raceId])
 
-  const capture    = useCallback(() => send({ action: "capture" }), [send])
-  const assignBib  = useCallback((id, bib) => send({ action: "assign", capture_id: id, bib }), [send])
-  const undoAssign = useCallback((captureId) => send({ action: "undo_assign", capture_id: captureId }), [send])
-  const discard    = useCallback((id) => send({ action: "discard", capture_id: id }), [send])
+  // Estado de las capturas encoladas (ver guardarCapturasPendientes).
+  useEffect(() => {
+    const fn = (rid, res) => {
+      setSinGuardar(contarSinGuardar(raceId))
+      if (rid !== raceId) return
+      if (res.captura) aplicar("CAPTURE", res.captura)
+      if (res.rechazo) setAviso("Captura rechazada: " + res.rechazo)
+    }
+    oyentesCapturas.add(fn)
+    return () => { oyentesCapturas.delete(fn) }
+  }, [raceId, aplicar])
+
+  const capture = useCallback(() => {
+    if (wsRef.current?.readyState === 1) { wsRef.current.send(JSON.stringify({ action: "capture" })); return }
+    // Sin WebSocket: por HTTP con la hora del cruce; si falla queda en cola y se reintenta.
+    encolarCaptura(raceId)
+    setSinGuardar(contarSinGuardar(raceId))
+  }, [raceId])
+
+  const assignBib = useCallback((id, bib) => {
+    setErrores(prev => { const n = { ...prev }; delete n[id]; return n })
+    if (wsRef.current?.readyState === 1) { wsRef.current.send(JSON.stringify({ action: "assign", capture_id: id, bib })); return }
+    http("POST", "/captures/" + id + "/assign", { bib_number: bib })
+      .then(data => aplicar("ASSIGNED", data))
+      .catch(e => aplicar("ERROR", { capture_id: id, message: e.message }))
+  }, [http, aplicar])
+
+  const undoAssign = useCallback((captureId) => {
+    if (wsRef.current?.readyState === 1) { wsRef.current.send(JSON.stringify({ action: "undo_assign", capture_id: captureId })); return }
+    http("POST", "/captures/" + captureId + "/undo")
+      .then(data => aplicar("UNASSIGNED", data))
+      .catch(e => setAviso("No se pudo deshacer: " + e.message))
+  }, [http, aplicar])
+
+  const discard = useCallback((id) => {
+    if (wsRef.current?.readyState === 1) { wsRef.current.send(JSON.stringify({ action: "discard", capture_id: id })); return }
+    http("DELETE", "/captures/" + id)
+      .then(() => aplicar("DISCARDED", { capture_id: id }))
+      .catch(e => aplicar("ERROR", { capture_id: id, message: e.message }))
+  }, [http, aplicar])
+
   const bibLookup  = useCallback(async (bib) => {
     if (!bib || !raceId) return null
     try {
@@ -608,7 +760,14 @@ function useTimingEngine(raceId) {
     } catch { return null }
   }, [raceId])
 
-  return { queue, finishers, connected, capture, assignBib, undoAssign, discard, bibLookup }
+  const limpiarError = useCallback((id) => {
+    setErrores(prev => { if (!(id in prev)) return prev; const n = { ...prev }; delete n[id]; return n })
+  }, [])
+
+  return {
+    queue, finishers, connected, capture, assignBib, undoAssign, discard, bibLookup,
+    errores, limpiarError, aviso, cerrarAviso: () => setAviso(null), sinGuardar, version,
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -652,7 +811,8 @@ function InscriptosView({ race }) {
 
   // Búsqueda debounced de corredores existentes
   useEffect(() => {
-    if (!runnerQuery || runnerQuery.length < 2) { setRunnerResults([]); return }
+    // Con menos de 2 letras no se busca (y la lista no se muestra, ver abajo)
+    if (!runnerQuery || runnerQuery.length < 2) return
     const t = setTimeout(() => {
       fetch(API + "/runners?search=" + encodeURIComponent(runnerQuery))
         .then(r => r.json()).then(setRunnerResults).catch(() => {})
@@ -760,8 +920,9 @@ function InscriptosView({ race }) {
     fd.append("file", importFile)
     try {
       const r = await fetch(API + "/races/" + raceId + "/import", { method: "POST", body: fd })
-      const data = await r.json()
-      setImportResult(data); load()
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) setImportResult({ created: 0, skipped: 0, errors: [data.detail || "Error al importar"] })
+      else { setImportResult(data); load() }
     } catch { setImportResult({ created: 0, skipped: 0, errors: ["Error al importar"] }) }
     setImporting(false)
   }
@@ -823,7 +984,7 @@ function InscriptosView({ race }) {
             {" "}· Los atletas ya existentes se reutilizan automáticamente.
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={e => { setImportFile(e.target.files[0]); setImportResult(null) }} style={{ flex: 1, ...INPUT }} />
+            <input type="file" accept=".xlsx,.csv" onChange={e => { setImportFile(e.target.files[0]); setImportResult(null) }} style={{ flex: 1, ...INPUT }} />
             <button onClick={doImport} disabled={!importFile || importing} style={{ ...BTN_PRIMARY, opacity: (!importFile || importing) ? 0.6 : 1 }}>{importing ? "Importando..." : "Importar"}</button>
             <button onClick={() => setShowImport(false)} style={BTN_GHOST}>Cerrar</button>
           </div>
@@ -831,7 +992,8 @@ function InscriptosView({ race }) {
             <div style={{ marginTop: 12, padding: "10px 14px", background: "#1c1f21", borderRadius: 6 }}>
               <span style={{ color: "#00e5a0", fontSize: 13, marginRight: 16 }}>✓ {importResult.created} inscriptos</span>
               <span style={{ color: "#525a60", fontSize: 13, marginRight: 16 }}>⊘ {importResult.skipped} ya existían</span>
-              {importResult.errors.map((e, i) => <div key={i} style={{ color: "#ff4d4d", fontSize: 12, marginTop: 4 }}>{e}</div>)}
+              {(importResult.errors || []).map((e, i) => <div key={i} style={{ color: "#ff4d4d", fontSize: 12, marginTop: 4 }}>{e}</div>)}
+              {(importResult.warnings || []).map((e, i) => <div key={"w" + i} style={{ color: "#f5a623", fontSize: 12, marginTop: 4 }}>⚠ {e}</div>)}
             </div>
           )}
         </div>
@@ -862,7 +1024,7 @@ function InscriptosView({ race }) {
                     style={{ ...INPUT, maxWidth: 340 }}
                     autoFocus
                   />
-                  {runnerResults.length > 0 && (
+                  {runnerQuery.length >= 2 && runnerResults.length > 0 && (
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, maxWidth: 340, background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6, boxShadow: "0 4px 20px #00000060", zIndex: 10, maxHeight: 240, overflowY: "auto", marginTop: 4 }}>
                       {runnerResults.map(r => (
                         <div key={r.id}
@@ -1120,67 +1282,185 @@ function InscriptosView({ race }) {
 // PÁGINA: MOTOR DE TIEMPOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Clasificación agrupada por distancia: la posición es dentro de cada
+// distancia (no se mezclan los de 10K con los de 21K).
+function ClasificacionLista({ finishers, onUndo, compacta = false }) {
+  const grupos = new Map()
+  for (const f of finishers) {
+    const k = f.distance_km ?? null
+    if (!grupos.has(k)) grupos.set(k, [])
+    grupos.get(k).push(f)
+  }
+  const claves = [...grupos.keys()].sort((a, b) => (a ?? 0) - (b ?? 0))
+  const varias = claves.length > 1
+  return claves.map(k => (
+    <div key={String(k)}>
+      {varias && (
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#4d9fff", margin: "10px 0 4px", letterSpacing: 0.5 }}>
+          {k != null ? `${k} km` : "Sin distancia"} · {grupos.get(k).length}
+        </div>
+      )}
+      {grupos.get(k).map((f, i) => (
+        <div key={f.capture_id ?? `${f.bib_number}-${f.capture_ns}`} style={{ display: "flex", alignItems: "center", gap: compacta ? 8 : 10, padding: compacta ? "7px 0" : "8px 0", borderBottom: "1px solid #1c1f21" }}>
+          <span style={{ fontFamily: "monospace", fontSize: compacta ? 13 : 14, color: i === 0 ? "#f5a623" : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : "#525a60", minWidth: compacta ? 22 : 24, fontWeight: i < 3 ? 700 : 400 }}>{i + 1}</span>
+          <span style={{ fontFamily: "monospace", fontSize: 11, background: "#1c1f21", padding: "1px 6px", borderRadius: 3, color: "#8a9299" }}>{f.bib_number}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: compacta ? 12 : 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.runner?.full_name || "--"}</div>
+            <div style={{ fontSize: 11, color: "#525a60" }}>{f.runner?.category || ""}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.accent }} title={f.net_time_ns == null ? "Sin largada: hora de llegada" : undefined}>{formatTiempo(f.net_time_ns, f.capture_ns)}</div>
+            {onUndo && f.capture_id && (
+              <button onClick={() => onUndo(f)} title="Deshacer"
+                style={{ padding: "1px 5px", background: "transparent", color: "#f5a62360", border: "none", cursor: "pointer", fontSize: 10 }}>✎</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  ))
+}
+
+// Hora hh:mm:ss.cc escrita por el operador → epoch ns, en el mismo día que `baseNs`.
+function horaANs(texto, baseNs) {
+  const m = /^\s*(\d{1,2}):(\d{2})(?::(\d{2})(?:[.,](\d{1,3}))?)?\s*$/.exec(texto || "")
+  if (!m) return null
+  const [h, mi, s] = [Number(m[1]), Number(m[2]), Number(m[3] || 0)]
+  if (h > 23 || mi > 59 || s > 59) return null
+  const frac = m[4] ? Number(m[4].padEnd(3, "0")) : 0
+  const d = baseNs ? new Date(Math.floor(baseNs / 1_000_000)) : new Date()
+  d.setHours(h, mi, s, frac)
+  return d.getTime() * 1_000_000
+}
+
 function TimingPage({ race }) {
   const raceId = race?.id
-  const { queue, finishers, connected, capture, assignBib, undoAssign, discard, bibLookup } = useTimingEngine(raceId)
+  const finalizada = race?.status === "FINISHED"
+  const moverFocoRef = useRef(false)
+  const {
+    queue, finishers, connected, capture, assignBib, undoAssign, discard, bibLookup,
+    errores, limpiarError, aviso, cerrarAviso, sinGuardar, version,
+  } = useTimingEngine(raceId, {
+    // Tras asignar con Enter, el foco pasa al dorsal de la captura pendiente más vieja.
+    onAssigned: (data) => {
+      if (document.activeElement?.id === "bib-" + data.capture_id || document.activeElement === document.body) {
+        moverFocoRef.current = true
+      }
+    },
+    // Si el servidor rechaza el dorsal, el foco vuelve a esa captura.
+    onError: (data) => {
+      const inp = document.getElementById("bib-" + data.capture_id)
+      if (inp) { inp.focus(); inp.select() }
+    },
+  })
   const [hints, setHints] = useState({})
-  const [raceStartNs, setRaceStartNs] = useState(race?.race_start_ns || null)
-  const [elapsed, setElapsed] = useState("")
+  const [carrera, setCarrera] = useState(null)       // race fresca (largadas)
+  const [distancias, setDistancias] = useState([])   // distancias de los inscriptos
 
   useEffect(() => {
     if (!raceId) return
     fetch(API + "/races/" + raceId)
       .then(r => r.json())
-      .then(d => setRaceStartNs(d.race_start_ns || null))
+      .then(setCarrera)
+      .catch(() => {})
+  }, [raceId, version])
+
+  useEffect(() => {
+    if (!raceId) return
+    fetch(API + "/races/" + raceId + "/registrations")
+      .then(r => r.json())
+      .then(regs => setDistancias(
+        [...new Set((regs || []).map(r => r.distance_km).filter(d => d != null))].sort((a, b) => a - b)
+      ))
       .catch(() => {})
   }, [raceId])
 
-  // Live elapsed timer
-  useEffect(() => {
-    if (!raceStartNs) { setElapsed(""); return }
-    const tick = () => {
-      const nowMs = Date.now()
-      const startMs = Math.floor(raceStartNs / 1_000_000)
-      const diffMs = nowMs - startMs
-      const h = Math.floor(diffMs / 3600000)
-      const m = Math.floor((diffMs % 3600000) / 60000)
-      const s = Math.floor((diffMs % 60000) / 1000)
-      setElapsed(`${pad(h)}:${pad(m)}:${pad(s)}`)
-    }
-    tick()
-    const t = setInterval(tick, 1000)
-    return () => clearInterval(t)
-  }, [raceStartNs])
+  const raceStartNs = carrera ? carrera.race_start_ns : (race?.race_start_ns || null)
+  const largadas = carrera?.starts || race?.starts || []
+  const largadaDe = (d) => largadas.find(s => Math.abs(s.distance_km - d) < 0.0005)?.start_ns || null
 
   useEffect(() => {
+    if (!moverFocoRef.current) return
+    moverFocoRef.current = false
+    if (queue.length) document.getElementById("bib-" + queue[0].id)?.focus()
+  }, [queue])
+
+  useEffect(() => {
+    if (finalizada) return
     const h = (e) => {
-      if (e.code === "Space" && document.activeElement.tagName !== "INPUT") {
-        e.preventDefault(); capture()
-      }
+      if (e.code !== "Space") return
+      const el = document.activeElement
+      const enDorsal = el?.tagName === "INPUT" && el.id?.startsWith("bib-")
+      // Otros campos de texto escriben el espacio normalmente
+      if (!enDorsal && (el?.tagName === "INPUT" || el?.tagName === "TEXTAREA" || el?.tagName === "SELECT" || el?.isContentEditable)) return
+      // Con un modal abierto no se captura
+      if (document.querySelector("[data-modal]")) return
+      e.preventDefault()
+      // Un botón con foco se "clickearía" al soltar el espacio
+      if (el?.tagName === "BUTTON") el.blur()
+      // Mantener apretado no genera capturas fantasma
+      if (e.repeat) return
+      capture()
     }
     window.addEventListener("keydown", h)
     return () => window.removeEventListener("keydown", h)
-  }, [capture])
+  }, [capture, finalizada])
 
   const handleInput = async (id, val) => {
     setHints(p => ({ ...p, [id]: null }))
+    limpiarError(id)
     if (!val) return
     const r = await bibLookup(val)
     setHints(p => ({ ...p, [id]: r }))
   }
 
+  // El input NO se vacía acá: la fila desaparece cuando llega ASSIGNED; si el
+  // servidor lo rechaza, el dorsal queda escrito junto al mensaje de error.
   const handleAssign = (id) => {
     const inp = document.getElementById("bib-" + id)
-    if (inp?.value) { assignBib(id, inp.value); inp.value = "" }
+    const bib = inp?.value.trim()
+    if (bib) assignBib(id, bib)
   }
 
-  const startRace = async () => {
-    if (raceStartNs) { alert("La largada ya fue registrada"); return }
-    if (!confirm("¿Registrar largada AHORA?")) return
-    const r = await fetch(API + "/races/" + raceId + "/start", { method: "POST" })
-    const data = await r.json()
-    if (r.ok) setRaceStartNs(data.race_start_ns)
-    else alert(data.detail || "Error")
+  const handleDiscard = (item) => {
+    const t = raceStartNs && item.captured_ns >= raceStartNs ? formatNs(item.captured_ns - raceStartNs) : horaDeCaptura(item.captured_ns)
+    if (!confirm(`¿Descartar la captura #${item.sequence_order} (${t})?\n\nNo se puede deshacer: ese tiempo se pierde.`)) return
+    discard(item.id)
+  }
+
+  // Deshacer es reversible (la captura vuelve a la cola): sin confirmación, como antes.
+  const handleUndo = (f) => undoAssign(f.capture_id)
+
+  // distance_km null = largada general (todas las distancias sin largada propia).
+  const startRace = async (distance_km = null) => {
+    // El instante es el del click; el confirm() viene después.
+    const t0 = performance.now()
+    const que = distance_km != null ? ` de ${distance_km} km` : (distancias.length > 1 ? " general (todas las distancias sin largada propia)" : "")
+    if (!confirm(`¿Registrar la largada${que}?\n\nSe toma la hora del click, no la de este aviso.`)) return
+    const r = await fetch(API + "/races/" + raceId + "/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ distance_km, click_delay_ms: Math.max(0, Math.round(performance.now() - t0)) }),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) { alert(data.detail || "Error"); return }
+    fetch(API + "/races/" + raceId).then(r => r.json()).then(setCarrera).catch(() => {})
+  }
+
+  const corregirLargada = async (distance_km = null) => {
+    const actual = distance_km != null ? (largadaDe(distance_km) || raceStartNs) : raceStartNs
+    const que = distance_km != null ? `de ${distance_km} km` : "general"
+    const texto = prompt(`Hora real de la largada ${que} (hh:mm:ss o hh:mm:ss.cc):`, horaDeCaptura(actual))
+    if (texto == null) return
+    const nuevo = horaANs(texto, actual)
+    if (!nuevo) { alert("Hora no válida. Usá el formato hh:mm:ss o hh:mm:ss.cc"); return }
+    if (!confirm(`¿Corregir la largada ${que}?\n\nDe ${horaDeCaptura(actual)} a ${horaDeCaptura(nuevo)}.\n\nSe recalculan los tiempos de todos los corredores ya asignados${distance_km != null ? ` en ${distance_km} km` : ""}.`)) return
+    const r = await fetch(API + "/races/" + raceId + "/start/adjust", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ distance_km, start_ns: nuevo }),
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) { alert(data.detail || "No se pudo corregir la largada"); return }
+    setCarrera(data)
   }
 
   if (!race) return (
@@ -1188,7 +1468,7 @@ function TimingPage({ race }) {
   )
 
   // ── Carrera finalizada: solo mostrar clasificación final ──
-  if (race.status === "FINISHED") {
+  if (finalizada) {
     return (
       <div>
         <div style={{ background: "#0f0f0f", border: `1px solid ${C.gold}40`, borderRadius: RADIUS.hero, padding: "20px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
@@ -1205,37 +1485,43 @@ function TimingPage({ race }) {
           </div>
           {finishers.length === 0
             ? <div style={{ textAlign: "center", padding: 32, color: "#525a60" }}>Sin tiempos registrados</div>
-            : finishers.map((f, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #1c1f21" }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14, color: i === 0 ? "#f5a623" : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : "#525a60", minWidth: 24, fontWeight: i < 3 ? 700 : 400 }}>{i + 1}</span>
-                <span style={{ fontFamily: "monospace", fontSize: 11, background: "#1c1f21", padding: "1px 6px", borderRadius: 3, color: "#8a9299" }}>{f.bib_number}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{f.runner?.full_name || "--"}</div>
-                  <div style={{ fontSize: 11, color: "#525a60" }}>{f.runner?.category || ""}</div>
-                </div>
-                <span style={{ fontFamily: "monospace", fontSize: 13, color: "#00e5a0", fontWeight: 600 }}>{formatNs(f.net_time_ns || f.capture_ns)}</span>
-              </div>
-            ))
+            : <ClasificacionLista finishers={finishers} />
           }
         </div>
       </div>
     )
   }
 
+  const BTN_LARGADA = { padding: "6px 14px", background: C.gold, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: "#000", fontWeight: 800, fontSize: 12 }
+  const BTN_CORREGIR = { padding: "4px 10px", background: "transparent", border: "1px solid #363b3f", borderRadius: RADIUS.pill, cursor: "pointer", color: "#8a9299", fontSize: 11 }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 
+      {/* ── Avisos que no se pueden perder de vista ── */}
+      {sinGuardar > 0 && (
+        <div style={{ background: "#2a0d0d", border: "2px solid #ff4d4d", borderRadius: RADIUS.card, padding: "10px 16px", color: "#ff8080", fontWeight: 700, fontSize: 13 }}>
+          ⚠ {sinGuardar} captura{sinGuardar > 1 ? "s" : ""} sin guardar en el servidor — reintentando cada 2 s. No cierres esta ventana.
+        </div>
+      )}
+      {aviso && (
+        <div style={{ background: "#2a0d0d", border: "1px solid #ff4d4d", borderRadius: RADIUS.card, padding: "10px 16px", color: "#ff8080", fontSize: 13, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ flex: 1 }}>⚠ {aviso}</span>
+          <button onClick={cerrarAviso} style={{ background: "transparent", border: "none", color: "#ff8080", cursor: "pointer", fontSize: 14 }}>✕</button>
+        </div>
+      )}
+
       {/* ── Banner de estado de largada ── */}
       {!raceStartNs ? (
-        <div style={{ background: "#1a1200", border: `2px solid ${C.gold}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{ background: "#1a1200", border: `2px solid ${C.gold}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <span style={{ fontSize: 28 }}>⏸</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.gold, marginBottom: 2 }}>Carrera sin largada oficial</div>
-            <div style={{ fontSize: 12, color: "#8a7a50" }}>Los tiempos se cuentan desde que se capture la primera llegada. Registrá la largada para medir tiempos netos reales.</div>
+            <div style={{ fontSize: 12, color: "#8a7a50" }}>Sin largada, las llegadas se muestran con la hora de captura. Registrá la largada para medir tiempos netos reales.</div>
           </div>
-          <button onClick={startRace}
+          <button onClick={() => startRace(null)}
             style={{ padding: "10px 24px", background: C.gold, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: "#000", fontWeight: 800, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.5, flexShrink: 0 }}>
-            🏁 REGISTRAR LARGADA
+            🏁 {distancias.length > 1 ? "LARGADA GENERAL" : "REGISTRAR LARGADA"}
           </button>
         </div>
       ) : (
@@ -1243,12 +1529,36 @@ function TimingPage({ race }) {
           <span style={{ fontSize: 28 }}>🟢</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.accent, marginBottom: 2 }}>CARRERA EN CURSO</div>
-            <div style={{ fontSize: 12, color: "#00a070" }}>Largada registrada — los tiempos se miden desde ese momento</div>
+            <div style={{ fontSize: 12, color: "#00a070", display: "flex", alignItems: "center", gap: 8 }}>
+              Largada {distancias.length > 1 ? "general" : ""} {horaDeCaptura(raceStartNs)}
+              <button onClick={() => corregirLargada(null)} style={BTN_CORREGIR}>Corregir</button>
+            </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 34, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{elapsed}</div>
+            <Transcurrido desdeNs={raceStartNs} />
             <div style={{ fontSize: 10, color: "#00a070", marginTop: 2, letterSpacing: 1, textTransform: "uppercase" }}>Tiempo transcurrido</div>
           </div>
+        </div>
+      )}
+
+      {/* ── Largada por distancia (sólo si hay varias) ── */}
+      {distancias.length > 1 && (
+        <div style={{ ...CARD, padding: "10px 16px", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#8a9299" }}>Largada por distancia</span>
+          {distancias.map(d => {
+            const propia = largadaDe(d)
+            return (
+              <div key={d} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                <strong>{d} km</strong>
+                <span style={{ fontFamily: "monospace", color: propia ? C.accent : "#525a60" }}>
+                  {propia ? horaDeCaptura(propia) : raceStartNs ? `general (${horaDeCaptura(raceStartNs)})` : "sin largada"}
+                </span>
+                {propia
+                  ? <button onClick={() => corregirLargada(d)} style={BTN_CORREGIR}>Corregir</button>
+                  : <button onClick={() => startRace(d)} style={BTN_LARGADA}>🏁 Largar</button>}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -1256,16 +1566,16 @@ function TimingPage({ race }) {
 
       {/* Columna izquierda */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <button onClick={capture}
+        <button onClick={e => { e.currentTarget.blur(); capture() }}
           style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 800, fontFamily: FONT_DISPLAY, background: OP_GRAD, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: C.onAccent, letterSpacing: 1 }}>
           ⏱ CAPTURAR LLEGADA
         </button>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div style={{ fontSize: 11, color: "#525a60" }}>También podés presionar <kbd style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 3, padding: "1px 6px", fontFamily: "monospace", fontSize: 11 }}>ESPACIO</kbd></div>
+          <div style={{ fontSize: 11, color: "#525a60" }}>También podés presionar <kbd style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 3, padding: "1px 6px", fontFamily: "monospace", fontSize: 11 }}>ESPACIO</kbd> (aunque estés escribiendo un dorsal)</div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 8, height: 8, borderRadius: "50%", background: connected ? "#00e5a0" : "#ff4d4d", boxShadow: connected ? "0 0 6px #00e5a0" : "none" }} />
-            <span style={{ fontSize: 11, color: connected ? "#00e5a0" : "#ff4d4d" }}>{connected ? "Conectado" : "Reconectando..."}</span>
+            <span style={{ fontSize: 11, color: connected ? "#00e5a0" : "#ff4d4d" }}>{connected ? "Conectado" : "Reconectando… (capturas por HTTP)"}</span>
           </div>
         </div>
 
@@ -1285,34 +1595,42 @@ function TimingPage({ race }) {
             </div>
           )}
 
-          {queue.map(item => (
-            <div key={item.id} style={{ background: "#1c1f21", border: "1px solid #2a2e31", borderRadius: 6, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          {queue.map(item => {
+            const error = errores[item.id]
+            const hint = hints[item.id]
+            return (
+            <div key={item.id} style={{ background: "#1c1f21", border: `1px solid ${error ? "#ff4d4d" : "#2a2e31"}`, borderRadius: 6, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
               <span style={{ fontFamily: "monospace", fontSize: 11, color: "#525a60", minWidth: 22 }}>#{item.sequence_order}</span>
-              <span style={{ fontFamily: "monospace", fontSize: 14, color: "#00e5a0", minWidth: 100 }}>
-                {raceStartNs ? formatNs(item.captured_ns - raceStartNs) : formatNs(item.captured_ns)}
+              <span style={{ fontFamily: "monospace", fontSize: 14, color: "#00e5a0", minWidth: 100 }} title={raceStartNs ? undefined : "Sin largada: hora de captura"}>
+                {raceStartNs && item.captured_ns >= raceStartNs ? formatNs(item.captured_ns - raceStartNs) : horaDeCaptura(item.captured_ns)}
               </span>
               <input
                 id={"bib-" + item.id}
                 placeholder="Dorsal"
+                inputMode="numeric"
                 onInput={e => handleInput(item.id, e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleAssign(item.id)}
-                style={{ width: 72, background: "#232729", border: "1px solid #363b3f", borderRadius: 4, padding: "4px 8px", fontFamily: "monospace", fontSize: 14, color: "#e8eaeb", textAlign: "center", outline: "none" }}
+                style={{ width: 72, background: "#232729", border: `1px solid ${error ? "#ff4d4d" : "#363b3f"}`, borderRadius: 4, padding: "4px 8px", fontFamily: "monospace", fontSize: 14, color: "#e8eaeb", textAlign: "center", outline: "none" }}
                 autoComplete="off"
               />
               <span style={{ flex: 1, fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: hints[item.id]?.already_finished ? "#f5a623" : hints[item.id]?.found ? "#00e5a0" : hints[item.id] ? "#ff4d4d" : "#525a60" }}>
-                {hints[item.id]?.already_finished
-                  ? `⚠ Ya registrado — ${hints[item.id].runner?.full_name || ""}`
-                  : hints[item.id]?.found
-                    ? hints[item.id].runner.full_name
-                    : hints[item.id] ? "No encontrado" : "--"}
+                color: error ? "#ff4d4d" : hint?.already_finished ? "#f5a623" : hint?.found ? "#00e5a0" : hint ? "#ff4d4d" : "#525a60",
+                fontWeight: error ? 700 : 400 }} title={error || undefined}>
+                {error
+                  ? `✕ ${error}`
+                  : hint?.already_finished
+                    ? `⚠ Ya registrado — ${hint.runner?.full_name || ""}`
+                    : hint?.found
+                      ? hint.runner.full_name
+                      : hint ? "No encontrado" : "--"}
               </span>
               <button onClick={() => handleAssign(item.id)}
                 style={{ padding: "4px 10px", background: "#00e5a020", color: "#00e5a0", border: "1px solid #00e5a040", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>OK</button>
-              <button onClick={() => discard(item.id)}
+              <button onClick={() => handleDiscard(item)} title="Descartar captura"
                 style={{ padding: "4px 8px", background: "transparent", color: "#ff4d4d", border: "1px solid #2a2e31", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>✕</button>
             </div>
-          ))}
+            )
+          })}
 
         </div>
       </div>
@@ -1325,27 +1643,28 @@ function TimingPage({ race }) {
         </div>
         {finishers.length === 0
           ? <div style={{ textAlign: "center", padding: 24, color: "#525a60", fontSize: 13 }}>Sin finishers aún</div>
-          : finishers.map((f, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #1c1f21" }}>
-              <span style={{ fontFamily: "monospace", fontSize: 13, color: i === 0 ? "#f5a623" : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : "#525a60", minWidth: 22 }}>{i + 1}</span>
-              <span style={{ fontFamily: "monospace", fontSize: 11, background: "#1c1f21", padding: "1px 6px", borderRadius: 3, color: "#8a9299" }}>{f.bib_number}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.runner?.full_name || "--"}</div>
-                <div style={{ fontSize: 11, color: "#525a60" }}>{f.runner?.category || ""}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.accent }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
-                {f.capture_id && (
-                  <button onClick={() => undoAssign(f.capture_id)} title="Deshacer"
-                    style={{ padding: "1px 5px", background: "transparent", color: "#f5a62360", border: "none", cursor: "pointer", fontSize: 10 }}>✎</button>
-                )}
-              </div>
-            </div>
-          ))
+          : <ClasificacionLista finishers={finishers} onUndo={handleUndo} compacta />
         }
       </div>
       </div>{/* end grid */}
     </div>
+  )
+}
+
+// Tiempo desde la largada, en su propio componente: el tick de cada segundo
+// no re-renderiza toda la pantalla de cronómetro.
+function Transcurrido({ desdeNs }) {
+  const [ahora, setAhora] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setAhora(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  const diffMs = Math.max(0, ahora - Math.floor(desdeNs / 1_000_000))
+  const h = Math.floor(diffMs / 3600000)
+  const m = Math.floor((diffMs % 3600000) / 60000)
+  const s = Math.floor((diffMs % 60000) / 1000)
+  return (
+    <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 34, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{`${pad(h)}:${pad(m)}:${pad(s)}`}</div>
   )
 }
 
@@ -1364,8 +1683,8 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
   const [sortKey, setSortKey]       = useState("time")
   const [autoRefresh, setAutoRefresh] = useState(false)
 
+  // loading arranca en true; las recargas (auto-refresh) no vuelven a mostrar "cargando".
   const load = useCallback(() => {
-    setLoading(true)
     fetch(API + "/races/" + race.id + "/results")
       .then(r => r.json())
       .then(d => { setResults(d); setLoading(false) })
@@ -1380,9 +1699,12 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
     return () => clearInterval(t)
   }, [autoRefresh, load])
 
-  useEffect(() => {
+  // Al cambiar de carrera se limpian los filtros (ajuste durante el render, sin efecto).
+  const [raceIdPrevia, setRaceIdPrevia] = useState(race.id)
+  if (raceIdPrevia !== race.id) {
+    setRaceIdPrevia(race.id)
     setSearch(""); setCatFilter(""); setGender(""); setDistFilter(null); setSortKey("time"); setView("general")
-  }, [race.id])
+  }
 
   const MEDAL = ["🥇", "🥈", "🥉"]
 
@@ -1582,12 +1904,12 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
                               </td>
                               <td style={{ padding: "9px 14px", fontSize: 13, color: "#8a9299" }}>{r.club || "--"}</td>
                               <td style={{ padding: "9px 14px", fontFamily: "monospace", color: "#00e5a0", fontSize: 14, fontWeight: 600 }}>
-                                {formatNs(r.net_time_ns || r.finish_time_ns)}
+                                {formatTiempo(r.net_time_ns, r.finish_time_ns)}
                               </td>
                               <td style={{ padding: "9px 10px", textAlign: "right" }}>
                                 <button
                                   title="Imprimir certificado"
-                                  onClick={() => printCertificate({ race, runner: r.runner, bib_number: r.bib_number, position: r.position, net_time_ns: r.net_time_ns || r.finish_time_ns, category: r.category, club: r.club, dni: r.runner.dni, distance_km: r.distance_km })}
+                                  onClick={() => printCertificate({ race, runner: r.runner, bib_number: r.bib_number, position: r.position, net_time_ns: r.net_time_ns, category: r.category, club: r.club, dni: r.runner.dni, distance_km: r.distance_km })}
                                   style={{ padding: "3px 8px", background: "transparent", border: "1px solid #363b3f", borderRadius: 4, cursor: "pointer", color: "#8a9299", fontSize: 12 }}>
                                   🖨️
                                 </button>
@@ -1666,7 +1988,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
                             <div style={{ fontSize: 12, fontWeight: i < 3 ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.runner.full_name}</div>
                           </div>
                           <span style={{ fontFamily: "monospace", fontSize: 12, color: accent, fontWeight: i < 3 ? 700 : 400 }}>
-                            {formatNs(r.net_time_ns || r.finish_time_ns)}
+                            {formatTiempo(r.net_time_ns, r.finish_time_ns)}
                           </span>
                         </div>
                       ))}
@@ -1895,7 +2217,10 @@ function RaceDetailPage({ race: initialRace, onBack }) {
             {sending ? "Enviando…" : "📧 Enviar resultados"}
           </button>
           {race.status !== "FINISHED" ? (
-            <button onClick={() => changeStatus("FINISHED")}
+            <button onClick={() => {
+              if (!confirm(`¿Finalizar "${race.name}"?\n\nSe cierra el cronómetro: no se registran más llegadas ni se modifican inscripciones. Podés reabrirla para corregir.`)) return
+              changeStatus("FINISHED")
+            }}
               style={{ padding: "5px 14px", background: "#f5a62315", color: "#f5a623", border: "1px solid #f5a62330", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
               ■ Finalizar carrera
             </button>
@@ -1946,16 +2271,17 @@ function DashboardPage({ onNavigate }) {
     return () => clearInterval(t)
   }, [])
 
-  const load = useCallback(async () => {
-    try {
-      const [r, rn] = await Promise.all([
-        fetch(API + "/races").then(r => r.json()),
-        fetch(API + "/runners").then(r => r.json()),
-      ])
-      setRaces(Array.isArray(r) ? r : [])
-      setRunners(Array.isArray(rn) ? rn : [])
-    } catch {}
-    setLoading(false)
+  const load = useCallback(() => {
+    Promise.all([
+      fetch(API + "/races").then(r => r.json()),
+      fetch(API + "/runners").then(r => r.json()),
+    ])
+      .then(([r, rn]) => {
+        setRaces(Array.isArray(r) ? r : [])
+        setRunners(Array.isArray(rn) ? rn : [])
+      })
+      .catch(() => { /* sin conexión: el tablero queda vacío */ })
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -2565,7 +2891,6 @@ function HistorialPage() {
   const [drillRace, setDrillRace] = useState(null)
 
   const loadRaces = useCallback(() => {
-    setLoading(true)
     fetch(API + "/races")
       .then(r => r.json())
       .then(data => { setRaces(data); setLoading(false) })
@@ -2728,7 +3053,7 @@ function EmailControls() {
         📧 Emails {cfg?.configured ? "✓" : ""}
       </button>
       {open && (
-        <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+        <div onClick={() => setOpen(false)} data-modal style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Envío de emails (Brevo)</div>
             <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 16, lineHeight: 1.5 }}>
@@ -2852,7 +3177,7 @@ function AccountControls() {
 
       {open && (
         <div onClick={() => !waiting && setOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          data-modal style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()}
             style={{ width: 400, background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
@@ -2960,7 +3285,7 @@ function CloudControls() {
 
       {open && (
         <div onClick={() => setOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          data-modal style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()}
             style={{ width: 440, background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Portal en la nube</div>
@@ -3038,12 +3363,10 @@ function BackupControls() {
   )
 }
 
-export default function App() {
-  const [page, setPage]   = useState("home")
+// Reloj maestro con centésimas. En su propio componente: el setState de cada
+// requestAnimationFrame re-renderiza sólo este div, no toda la app.
+function Reloj() {
   const [clock, setClock] = useState("")
-  const [showConfig, setShowConfig] = useState(false)
-
-  // Reloj maestro con centésimas — requestAnimationFrame para un tick fluido.
   useEffect(() => {
     let raf
     const tick = () => {
@@ -3055,6 +3378,12 @@ export default function App() {
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [])
+  return <div style={{ marginLeft: "auto", ...FONT_NUM, fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 800, color: C.accent }}>{clock}</div>
+}
+
+export default function App() {
+  const [page, setPage]   = useState("home")
+  const [showConfig, setShowConfig] = useState(false)
 
   // onNavigate: permite al Dashboard navegar a otras secciones
   const navigate = useCallback((p) => setPage(p), [])
@@ -3136,7 +3465,7 @@ export default function App() {
         {/* Top bar — reloj maestro (dato clave de la pantalla) */}
         <div style={{ height: 52, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", padding: "0 24px", background: C.surface, flexShrink: 0 }}>
           <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>{pageLabel}</span>
-          <div style={{ marginLeft: "auto", ...FONT_NUM, fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 800, color: C.accent }}>{clock}</div>
+          <Reloj />
         </div>
         {/* Página activa */}
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>

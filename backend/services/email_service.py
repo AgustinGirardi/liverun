@@ -127,7 +127,17 @@ def build_result_email(*, runner_name, race_name, race_date, location,
         s, f = divmod(ms, 1_000)
         return f"{h:02d}:{m:02d}:{s:02d}.{f:03d}"
 
-    time_str = fmt_ns(net_time_ns or finish_time_ns)
+    # finish_time_ns es la hora de llegada (epoch), no una duración: sin
+    # largada no hay tiempo neto y se informa la hora de llegada, rotulada como tal.
+    if net_time_ns is not None:
+        time_str, time_label = fmt_ns(net_time_ns), "Tiempo"
+    elif finish_time_ns:
+        from datetime import datetime
+        t = datetime.fromtimestamp(finish_time_ns / 1_000_000_000)
+        time_str = t.strftime("%H:%M:%S.") + f"{t.microsecond // 10_000:02d}"
+        time_label = "Hora de llegada"
+    else:
+        time_str, time_label = "—", "Tiempo"
     dist = f"{distance_km} km" if distance_km else ""
     meta = " · ".join([x for x in [dist, race_date, location] if x])
     pos = f"#{position}" if position else "—"
@@ -159,7 +169,7 @@ def build_result_email(*, runner_name, race_name, race_date, location,
       <tr>
         <td style="background:#1c2023;border:1px solid #262b2e;border-radius:10px;padding:16px;text-align:center;width:50%">
           <div style="color:#00e5a0;font-size:26px;font-weight:800;font-family:monospace">{time_str}</div>
-          <div style="color:#5b646a;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:4px">Tiempo</div>
+          <div style="color:#5b646a;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:4px">{time_label}</div>
         </td>
         <td style="width:10px"></td>
         <td style="background:#1c2023;border:1px solid #262b2e;border-radius:10px;padding:16px;text-align:center;width:50%">

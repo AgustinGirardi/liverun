@@ -75,10 +75,12 @@ def test_subscribe_sin_config_da_503(client, monkeypatch):
 
 # ── Webhook de pago ───────────────────────────────────────────────────────────
 
-def _setup_payment(monkeypatch, user_id, status="approved", amount=1.99):
+def _setup_payment(monkeypatch, user_id, status="approved", amount=2000.0):
+    # Precio fijo: sin esto la validación del monto consultaría el dólar en red.
+    monkeypatch.setattr(billing, "FIXED_PRICE_ARS", "2000")
     def fake(method, path, body=None, **kw):
         if path.startswith("/v1/payments/"):
-            return {"id": path.rsplit("/", 1)[1], "status": status,
+            return {"id": path.rsplit("/", 1)[1], "status": status, "currency_id": "ARS",
                     "external_reference": str(user_id), "transaction_amount": amount}
         return {}
     monkeypatch.setattr(billing, "mp_request", fake)
@@ -225,7 +227,7 @@ def test_descuento_vuelve_al_precio_de_lista_tras_el_primer_cobro(client, db, mo
     puts = []
     def fake(method, path, body=None, **kw):
         if path.startswith("/v1/payments/"):
-            return {"id": "90050", "status": "approved",
+            return {"id": "90050", "status": "approved", "currency_id": "ARS",
                     "external_reference": str(u.id), "transaction_amount": 1000.0}
         puts.append((method, path, body))
         return {}
