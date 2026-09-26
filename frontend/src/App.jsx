@@ -40,7 +40,7 @@ function printCertificate({ race, runner, bib_number, position, net_time_ns, cat
 <style>
   @page { size: A4 portrait; margin: 0; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 210mm; height: 297mm; background: #fff; font-family: Arial, Helvetica, sans-serif; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { width: 210mm; height: 297mm; background: #fff; font-family: "Segoe UI", system-ui, sans-serif; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .page { width: 210mm; min-height: 297mm; display: flex; flex-direction: column; }
 
@@ -66,7 +66,7 @@ function printCertificate({ race, runner, bib_number, position, net_time_ns, cat
   .divider-accent { height: 2px; background: linear-gradient(90deg, #00e5a0, transparent); margin: 0; }
 
   /* ── Race card ── */
-  .race-card { background: #f9fafb; border: 1px solid #e5e7eb; border-left: 4px solid #00e5a0; border-radius: 6px; padding: 16px 20px; margin: 20px 0; }
+  .race-card { background: #f9fafb; border: 1px solid #e5e7eb; border-top: 2px solid #00e5a0; border-radius: 6px; padding: 16px 20px; margin: 20px 0; }
   .race-name { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; }
   .race-meta { display: flex; gap: 20px; flex-wrap: wrap; }
   .race-meta-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #6b7280; }
@@ -331,7 +331,7 @@ function printResultsReport({ race, results }) {
 <style>
   @page { size: A4 portrait; margin: 14mm 12mm; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", system-ui, sans-serif; color: #111; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   .header { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 3px solid #0d0f10; padding-bottom: 12px; margin-bottom: 4px; }
   .logo-text { font-size: 22px; font-weight: 900; letter-spacing: -1px; color: #0d0f10; }
@@ -435,7 +435,7 @@ function autoCategory(birthDate, gender) {
 const C = {
   bg: "#0d0f10", surface: "#141618", surface2: "#1c1f21",
   line: "#262b2e", lineStrong: "#363b3f",
-  fg: "#e8eaeb", muted: "#8a9299", faint: "#525a60",
+  fg: "#e8eaeb", muted: "#8a9299", faint: "#7a8288",
   accent: "#00e5a0", accent2: "#00bf85", onAccent: "#06281d",
   blue: "#4d9fff", gold: "#f5a623", danger: "#ff4d4d",
 }
@@ -473,18 +473,64 @@ function OpGrad({ children }) {
   return <span style={{ background: OP_GRAD, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{children}</span>
 }
 
+// ── Íconos ────────────────────────────────────────────────────────────────────
+// Trazo único de 2px en grilla de 24, heredan el color del texto. Reemplazan a
+// los emojis, que cambiaban de estilo según el sistema y no seguían el color.
+const ICONS = {
+  home:     <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9.5V21h14V9.5" /></>,
+  flag:     <><path d="M5 22V4" /><path d="M5 4h13l-2.5 4.5L18 13H5" /></>,
+  user:     <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+  list:     <><path d="M9 6h12M9 12h12M9 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>,
+  settings: <><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" /><circle cx="15" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="18" r="2" /></>,
+  calendar: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
+  pin:      <><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z" /><circle cx="12" cy="10" r="2.5" /></>,
+  timer:    <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" /></>,
+  pause:    <><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></>,
+  stop:     <rect x="6" y="6" width="12" height="12" rx="2" />,
+  trophy:   <><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" /><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" /></>,
+  cloud:    <><path d="M7 18a5 5 0 1 1 .9-9.9A6 6 0 0 1 19 10a4 4 0 0 1-1 8" /><path d="M12 12v8M9 15l3-3 3 3" /></>,
+  mail:     <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
+  copy:     <><rect x="8" y="8" width="13" height="13" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></>,
+  undo:     <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>,
+  x:        <path d="M18 6 6 18M6 6l12 12" />,
+  download: <path d="M12 4v12M7 11l5 5 5-5M5 20h14" />,
+  upload:   <path d="M12 20V8M7 13l5-5 5 5M5 4h14" />,
+  file:     <><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M8 13h8M8 17h5" /></>,
+  refresh:  <><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16" /><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8" /><path d="M21 3v5h-5M3 21v-5h5" /></>,
+  pencil:   <path d="M4 20h4L19 9l-4-4L4 16z" />,
+  lock:     <><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
+  trash:    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
+  logout:   <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
+  alert:    <><path d="M12 3 2 21h20z" /><path d="M12 10v5M12 18h.01" /></>,
+  check:    <path d="m5 12 5 5 9-10" />,
+  chevronR: <path d="m9 6 6 6-6 6" />,
+  chevronD: <path d="m6 9 6 6 6-6" />,
+  printer:  <><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M7 14h10v7H7z" /></>,
+}
+function Icon({ name, size = 16, style }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+      style={{ flexShrink: 0, verticalAlign: "-0.15em", ...style }}>
+      {ICONS[name]}
+    </svg>
+  )
+}
+// Botón con ícono + texto alineados.
+const WITH_ICON = { display: "inline-flex", alignItems: "center", gap: 6 }
+
 // ── StatusBadge ───────────────────────────────────────────────────────────────
 
 const RACE_STATUS = {
-  PLANNED:  { bg: "#4d9fff15", color: "#4d9fff", border: "#4d9fff30", label: "En preparación" },
-  ACTIVE:   { bg: "#00e5a015", color: "#00e5a0", border: "#00e5a030", label: "En curso" },
-  FINISHED: { bg: "#f5a62315", color: "#f5a623", border: "#f5a62330", label: "Finalizada" },
+  PLANNED:  { bg: `${C.blue}15`, color: C.blue, border: `${C.blue}30`, label: "En preparación" },
+  ACTIVE:   { bg: `${C.accent}15`, color: C.accent, border: `${C.accent}30`, label: "En curso" },
+  FINISHED: { bg: `${C.gold}15`, color: C.gold, border: `${C.gold}30`, label: "Finalizada" },
 }
 const REG_STATUS = {
-  OK:  { color: "#525a60",  label: "OK" },
-  DNS: { color: "#8a9299",  label: "DNS" },
-  DNF: { color: "#f5a623",  label: "DNF" },
-  DQ:  { color: "#ff4d4d",  label: "DQ" },
+  OK:  { color: C.faint,  label: "OK" },
+  DNS: { color: C.muted,  label: "DNS" },
+  DNF: { color: C.gold,  label: "DNF" },
+  DQ:  { color: C.danger,  label: "DQ" },
 }
 
 function RaceStatusBadge({ status }) {
@@ -512,11 +558,14 @@ function useTimingEngine(raceId) {
   const [queue, setQueue]         = useState([])
   const [finishers, setFinishers] = useState([])
   const [connected, setConnected] = useState(false)
+  const [error, setError]         = useState("")
   const wsRef     = useRef(null)
   const timerRef  = useRef(null)
   const activeRef = useRef(true)
 
-  useEffect(() => {
+  // Estado persistido: al abrir y en cada reconexión, para no perder lo que
+  // pasó mientras el socket estuvo caído.
+  const reload = useCallback(() => {
     if (!raceId) return
     fetch(API + "/races/" + raceId + "/captures?status=PENDING")
       .then(r => r.json())
@@ -539,11 +588,13 @@ function useTimingEngine(raceId) {
       .catch(() => {})
   }, [raceId])
 
+  useEffect(() => { reload() }, [reload])
+
   const connect = useCallback(() => {
     if (!raceId || !activeRef.current) return
     const ws = new WebSocket(getWsBase() + "/ws/races/" + raceId + "/timing")
     wsRef.current = ws
-    ws.onopen  = () => { if (activeRef.current) setConnected(true) }
+    ws.onopen  = () => { if (activeRef.current) { setConnected(true); reload() } }
     ws.onerror = () => ws.close()
     ws.onclose = () => {
       if (!activeRef.current) return
@@ -578,9 +629,11 @@ function useTimingEngine(raceId) {
         })
       } else if (event === "DISCARDED") {
         setQueue(prev => prev.filter(i => i.id !== data.capture_id))
+      } else if (event === "ERROR") {
+        setError(data.message || "Error del motor de tiempos")
       }
     }
-  }, [raceId])
+  }, [raceId, reload])
 
   useEffect(() => {
     activeRef.current = true
@@ -592,11 +645,31 @@ function useTimingEngine(raceId) {
     }
   }, [connect])
 
+  // Devuelve false si el mensaje no salió, para que la UI no dé por hecho algo
+  // que nunca llegó al servidor.
   const send = useCallback((msg) => {
-    if (wsRef.current?.readyState === 1) wsRef.current.send(JSON.stringify(msg))
+    if (wsRef.current?.readyState !== 1) {
+      setError("Sin conexión con el servidor: la acción no se registró. Reintentá en unos segundos.")
+      return false
+    }
+    wsRef.current.send(JSON.stringify(msg))
+    return true
   }, [])
 
-  const capture    = useCallback(() => send({ action: "capture" }), [send])
+  // La llegada es el dato que no se puede recuperar: si el socket está caído
+  // se captura por HTTP y se agrega a la cola directamente.
+  const capture = useCallback(async () => {
+    if (wsRef.current?.readyState === 1) { send({ action: "capture" }); return }
+    try {
+      const r = await fetch(API + "/races/" + raceId + "/capture", { method: "POST" })
+      if (!r.ok) throw new Error()
+      const c = await r.json()
+      setQueue(prev => prev.some(i => i.id === c.id) ? prev
+        : [{ id: c.id, captured_ns: c.captured_ns, sequence_order: c.sequence_order }, ...prev])
+    } catch {
+      setError("No se pudo registrar la llegada: el servidor no responde.")
+    }
+  }, [raceId, send])
   const assignBib  = useCallback((id, bib) => send({ action: "assign", capture_id: id, bib }), [send])
   const undoAssign = useCallback((captureId) => send({ action: "undo_assign", capture_id: captureId }), [send])
   const discard    = useCallback((id) => send({ action: "discard", capture_id: id }), [send])
@@ -608,7 +681,7 @@ function useTimingEngine(raceId) {
     } catch { return null }
   }, [raceId])
 
-  return { queue, finishers, connected, capture, assignBib, undoAssign, discard, bibLookup }
+  return { queue, finishers, connected, error, clearError: () => setError(""), capture, assignBib, undoAssign, discard, bibLookup }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -777,9 +850,9 @@ function InscriptosView({ race }) {
 
   const TAB_BTN = (active) => ({
     padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer", border: "1px solid",
-    background: active ? "#4d9fff20" : "transparent",
-    color: active ? "#4d9fff" : "#8a9299",
-    borderColor: active ? "#4d9fff40" : "#363b3f",
+    background: active ? `${C.blue}20` : "transparent",
+    color: active ? C.blue : C.muted,
+    borderColor: active ? `${C.blue}40` : C.lineStrong,
     fontWeight: active ? 700 : 400,
   })
 
@@ -787,11 +860,11 @@ function InscriptosView({ race }) {
     <div>
       {/* Banner de carrera finalizada */}
       {locked && (
-        <div style={{ background: "#0f0f0f", border: "1px solid #f5a62340", borderRadius: 8, padding: "12px 18px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 20 }}>🔒</span>
+        <div style={{ background: "#0f0f0f", border: `1px solid ${C.gold}40`, borderRadius: 8, padding: "12px 18px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+          <Icon name="lock" size={20} style={{ color: C.muted }} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#f5a623" }}>Carrera finalizada — solo lectura</div>
-            <div style={{ fontSize: 12, color: "#525a60", marginTop: 2 }}>No se pueden agregar, modificar ni eliminar inscripciones.</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.gold }}>Carrera finalizada — solo lectura</div>
+            <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>No se pueden agregar, modificar ni eliminar inscripciones.</div>
           </div>
         </div>
       )}
@@ -800,14 +873,14 @@ function InscriptosView({ race }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontWeight: 700, fontSize: 15 }}>Inscriptos</span>
-          <span style={{ background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{registrations.length}</span>
-          {statusCounts.DNS > 0 && <span style={{ background: "#8a929915", color: "#8a9299", border: "1px solid #8a929930", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>DNS: {statusCounts.DNS}</span>}
-          {statusCounts.DNF > 0 && <span style={{ background: "#f5a62315", color: "#f5a623", border: "1px solid #f5a62330", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>DNF: {statusCounts.DNF}</span>}
-          {statusCounts.DQ  > 0 && <span style={{ background: "#ff4d4d15", color: "#ff4d4d", border: "1px solid #ff4d4d30", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>DQ: {statusCounts.DQ}</span>}
+          <span style={{ background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{registrations.length}</span>
+          {statusCounts.DNS > 0 && <span style={{ background: `${C.muted}15`, color: C.muted, border: `1px solid ${C.muted}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>DNS: {statusCounts.DNS}</span>}
+          {statusCounts.DNF > 0 && <span style={{ background: `${C.gold}15`, color: C.gold, border: `1px solid ${C.gold}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>DNF: {statusCounts.DNF}</span>}
+          {statusCounts.DQ  > 0 && <span style={{ background: `${C.danger}15`, color: C.danger, border: `1px solid ${C.danger}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>DQ: {statusCounts.DQ}</span>}
         </div>
         {!locked && (
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { setShowImport(!showImport); setImportResult(null) }} style={BTN_GHOST}>↑ Importar</button>
+            <button onClick={() => { setShowImport(!showImport); setImportResult(null) }} style={{ ...BTN_GHOST, ...WITH_ICON }}><Icon name="upload" size={13} />Importar</button>
             <button onClick={() => { setShowAdd(!showAdd); resetAdd() }} style={BTN_PRIMARY}>+ Inscribir</button>
           </div>
         )}
@@ -815,11 +888,11 @@ function InscriptosView({ race }) {
 
       {/* Panel importación */}
       {!locked && showImport && (
-        <div style={{ ...CARD, border: "1px solid #4d9fff30", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#4d9fff", marginBottom: 8 }}>Importar desde Excel / CSV</div>
-          <div style={{ fontSize: 12, color: "#525a60", marginBottom: 12 }}>
-            Columnas requeridas: <code style={{ background: "#1c1f21", padding: "2px 6px", borderRadius: 3, color: "#e8eaeb" }}>dorsal, nombre, apellido</code>
-            {" "}· Opcionales: <code style={{ background: "#1c1f21", padding: "2px 6px", borderRadius: 3, color: "#e8eaeb" }}>distancia, categoria, club, genero, dni, email</code>
+        <div style={{ ...CARD, border: `1px solid ${C.blue}30`, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.blue, marginBottom: 8 }}>Importar desde Excel / CSV</div>
+          <div style={{ fontSize: 12, color: C.faint, marginBottom: 12 }}>
+            Columnas requeridas: <code style={{ background: C.surface2, padding: "2px 6px", borderRadius: 3, color: C.fg }}>dorsal, nombre, apellido</code>
+            {" "}· Opcionales: <code style={{ background: C.surface2, padding: "2px 6px", borderRadius: 3, color: C.fg }}>distancia, categoria, club, genero, dni, email</code>
             {" "}· Los atletas ya existentes se reutilizan automáticamente.
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -828,10 +901,10 @@ function InscriptosView({ race }) {
             <button onClick={() => setShowImport(false)} style={BTN_GHOST}>Cerrar</button>
           </div>
           {importResult && (
-            <div style={{ marginTop: 12, padding: "10px 14px", background: "#1c1f21", borderRadius: 6 }}>
-              <span style={{ color: "#00e5a0", fontSize: 13, marginRight: 16 }}>✓ {importResult.created} inscriptos</span>
-              <span style={{ color: "#525a60", fontSize: 13, marginRight: 16 }}>⊘ {importResult.skipped} ya existían</span>
-              {importResult.errors.map((e, i) => <div key={i} style={{ color: "#ff4d4d", fontSize: 12, marginTop: 4 }}>{e}</div>)}
+            <div style={{ marginTop: 12, padding: "10px 14px", background: C.surface2, borderRadius: 6 }}>
+              <span style={{ color: C.accent, fontSize: 13, marginRight: 16 }}>✓ {importResult.created} inscriptos</span>
+              <span style={{ color: C.faint, fontSize: 13, marginRight: 16 }}>⊘ {importResult.skipped} ya existían</span>
+              {importResult.errors.map((e, i) => <div key={i} style={{ color: C.danger, fontSize: 12, marginTop: 4 }}>{e}</div>)}
             </div>
           )}
         </div>
@@ -839,7 +912,7 @@ function InscriptosView({ race }) {
 
       {/* Panel inscribir */}
       {!locked && showAdd && (
-        <div style={{ ...CARD, border: "1px solid #00e5a040", marginBottom: 16 }}>
+        <div style={{ ...CARD, border: `1px solid ${C.accent}40`, marginBottom: 16 }}>
           {/* Tabs: Buscar existente / Nuevo */}
           <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             <button onClick={() => { setAddMode("search"); setAddError("") }} style={TAB_BTN(addMode === "search")}>Buscar atleta existente</button>
@@ -848,13 +921,13 @@ function InscriptosView({ race }) {
 
           {addMode === "search" && (
             <div>
-              <div style={{ fontSize: 12, color: "#525a60", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: C.faint, marginBottom: 12 }}>
                 Buscá al atleta por nombre. Si ya corrió en otra carrera, sus datos personales estarán guardados.
               </div>
 
               {!selectedRunner ? (
                 <div style={{ position: "relative" }}>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Buscar por nombre</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Buscar por nombre</div>
                   <input
                     value={runnerQuery}
                     onChange={e => setRunnerQuery(e.target.value)}
@@ -863,16 +936,16 @@ function InscriptosView({ race }) {
                     autoFocus
                   />
                   {runnerResults.length > 0 && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, maxWidth: 340, background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6, boxShadow: "0 4px 20px #00000060", zIndex: 10, maxHeight: 240, overflowY: "auto", marginTop: 4 }}>
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, maxWidth: 340, background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 6, boxShadow: "0 4px 20px #00000060", zIndex: 10, maxHeight: 240, overflowY: "auto", marginTop: 4 }}>
                       {runnerResults.map(r => (
                         <div key={r.id}
                           onClick={() => { setSelectedRunner(r); setRunnerQuery(""); setRunnerResults([]) }}
-                          style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #2a2e31", display: "flex", alignItems: "center", gap: 10 }}
-                          onMouseEnter={e => e.currentTarget.style.background = "#2a2e31"}
+                          style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}
+                          onMouseEnter={e => e.currentTarget.style.background = C.line}
                           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                           <div>
                             <div style={{ fontWeight: 600, fontSize: 13 }}>{r.full_name}</div>
-                            <div style={{ fontSize: 11, color: "#525a60" }}>
+                            <div style={{ fontSize: 11, color: C.faint }}>
                               {[r.category, r.club, r.gender].filter(Boolean).join(" · ")}
                             </div>
                           </div>
@@ -881,34 +954,34 @@ function InscriptosView({ race }) {
                     </div>
                   )}
                   {runnerQuery.length >= 2 && runnerResults.length === 0 && (
-                    <div style={{ marginTop: 8, fontSize: 12, color: "#525a60" }}>
+                    <div style={{ marginTop: 8, fontSize: 12, color: C.faint }}>
                       Sin resultados. Podés{" "}
-                      <span onClick={() => setAddMode("new")} style={{ color: "#00e5a0", cursor: "pointer", textDecoration: "underline" }}>crear un nuevo atleta</span>.
+                      <span onClick={() => setAddMode("new")} style={{ color: C.accent, cursor: "pointer", textDecoration: "underline" }}>crear un nuevo atleta</span>.
                     </div>
                   )}
                 </div>
               ) : (
                 <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <div style={{ background: "#1c1f21", border: "1px solid #00e5a030", borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 200 }}>
+                  <div style={{ background: C.surface2, border: `1px solid ${C.accent}30`, borderRadius: 8, padding: "12px 16px", flex: 1, minWidth: 200 }}>
                     <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>{selectedRunner.full_name}</div>
-                    <div style={{ fontSize: 12, color: "#8a9299" }}>
+                    <div style={{ fontSize: 12, color: C.muted }}>
                       {[selectedRunner.category, selectedRunner.club, selectedRunner.gender].filter(Boolean).join(" · ")}
                     </div>
                     <button onClick={() => setSelectedRunner(null)} style={{ ...BTN_GHOST, fontSize: 11, marginTop: 8, padding: "3px 10px" }}>Cambiar</button>
                   </div>
                   <div style={{ minWidth: 120 }}>
-                    <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Dorsal *</div>
+                    <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Dorsal *</div>
                     <input
                       value={bibForExisting}
                       onChange={e => setBibForExisting(e.target.value)}
                       placeholder="ej. 101"
-                      style={{ ...INPUT, fontFamily: "monospace", fontWeight: 700, fontSize: 16, color: "#00e5a0", textAlign: "center" }}
+                      style={{ ...INPUT, fontFamily: "monospace", fontWeight: 700, fontSize: 16, color: C.accent, textAlign: "center" }}
                       onKeyDown={e => e.key === "Enter" && addExisting()}
                       autoFocus
                     />
                   </div>
                   <div style={{ minWidth: 100 }}>
-                    <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Distancia (km)</div>
+                    <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Distancia (km)</div>
                     <input
                       value={distForExisting}
                       onChange={e => setDistForExisting(e.target.value)}
@@ -924,34 +997,34 @@ function InscriptosView({ race }) {
 
           {addMode === "new" && (
             <div>
-              <div style={{ fontSize: 12, color: "#525a60", marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: C.faint, marginBottom: 12 }}>
                 El atleta se guardará en la base de datos global. El dorsal solo aplica a esta carrera.
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "80px 80px 1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Dorsal *</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Dorsal *</div>
                   <input value={newForm.bib_number} onChange={e => setNewForm(p => ({ ...p, bib_number: e.target.value }))}
-                    placeholder="101" style={{ ...INPUT, fontFamily: "monospace", fontWeight: 700, color: "#00e5a0", textAlign: "center" }} />
+                    placeholder="101" style={{ ...INPUT, fontFamily: "monospace", fontWeight: 700, color: C.accent, textAlign: "center" }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Dist. km</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Dist. km</div>
                   <input value={newForm.distance_km} onChange={e => setNewForm(p => ({ ...p, distance_km: e.target.value }))}
                     placeholder="10" style={{ ...INPUT, textAlign: "center" }} type="number" step="0.5" />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
                   <input value={newForm.first_name} onChange={e => setNewForm(p => ({ ...p, first_name: e.target.value }))} placeholder="Carlos" style={INPUT} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Apellido *</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Apellido *</div>
                   <input value={newForm.last_name} onChange={e => setNewForm(p => ({ ...p, last_name: e.target.value }))} placeholder="Méndez" style={INPUT} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>DNI</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>DNI</div>
                   <input value={newForm.dni} onChange={e => setNewForm(p => ({ ...p, dni: e.target.value }))} placeholder="12345678" style={INPUT} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Género</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Género</div>
                   <select value={newForm.gender} onChange={e => {
                     const gender = e.target.value
                     setNewForm(p => ({ ...p, gender, category: autoCategory(p.birth_date, gender) }))
@@ -964,35 +1037,35 @@ function InscriptosView({ race }) {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Fecha de nacimiento</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Fecha de nacimiento</div>
                   <input value={newForm.birth_date} onChange={e => {
                     const birth_date = e.target.value
                     setNewForm(p => ({ ...p, birth_date, category: autoCategory(birth_date, p.gender) }))
                   }} style={INPUT} type="date" />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>
-                    Categoría {newForm.birth_date && <span style={{ color: "#00e5a060" }}>(auto)</span>}
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>
+                    Categoría {newForm.birth_date && <span style={{ color: `${C.accent}60` }}>(auto)</span>}
                   </div>
                   <input
                     value={newForm.category}
                     onChange={e => setNewForm(p => ({ ...p, category: e.target.value }))}
                     placeholder={newForm.birth_date ? autoCategory(newForm.birth_date, newForm.gender) || "—" : "ej. M30-34"}
-                    style={{ ...INPUT, color: newForm.birth_date && autoCategory(newForm.birth_date, newForm.gender) ? "#00e5a0" : "#e8eaeb" }}
+                    style={{ ...INPUT, color: newForm.birth_date && autoCategory(newForm.birth_date, newForm.gender) ? C.accent : C.fg }}
                   />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Club</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Club</div>
                   <input value={newForm.club} onChange={e => setNewForm(p => ({ ...p, club: e.target.value }))} placeholder="RC Runners" style={INPUT} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Email</div>
+                  <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Email</div>
                   <input value={newForm.email} onChange={e => setNewForm(p => ({ ...p, email: e.target.value }))} placeholder="corredor@email.com" style={INPUT} type="email" />
                 </div>
                 {newForm.birth_date && calcAge(newForm.birth_date) !== null && (
                   <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
-                    <div style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6, padding: "7px 10px", color: "#8a9299", fontSize: 13, width: "100%", textAlign: "center" }}>
-                      <span style={{ color: "#e8eaeb", fontWeight: 700 }}>{calcAge(newForm.birth_date)}</span> años
+                    <div style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 6, padding: "7px 10px", color: C.muted, fontSize: 13, width: "100%", textAlign: "center" }}>
+                      <span style={{ color: C.fg, fontWeight: 700 }}>{calcAge(newForm.birth_date)}</span> años
                     </div>
                   </div>
                 )}
@@ -1000,7 +1073,7 @@ function InscriptosView({ race }) {
             </div>
           )}
 
-          {addError && <div style={{ color: "#ff4d4d", fontSize: 12, marginBottom: 10, padding: "6px 10px", background: "#ff4d4d15", borderRadius: 4 }}>{addError}</div>}
+          {addError && <div style={{ color: C.danger, fontSize: 12, marginBottom: 10, padding: "6px 10px", background: `${C.danger}15`, borderRadius: 4 }}>{addError}</div>}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
             <button onClick={() => { setShowAdd(false); resetAdd() }} style={BTN_GHOST}>Cancelar</button>
@@ -1020,15 +1093,15 @@ function InscriptosView({ race }) {
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o dorsal…" style={{ ...INPUT, maxWidth: 280 }} />
         )}
         {!locked && selected.size > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 14px", background: "#ff4d4d15", border: "1px solid #ff4d4d30", borderRadius: 8, marginLeft: "auto" }}>
-            <span style={{ fontSize: 13, color: "#ff4d4d", fontWeight: 600 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 14px", background: `${C.danger}15`, border: `1px solid ${C.danger}30`, borderRadius: 8, marginLeft: "auto" }}>
+            <span style={{ fontSize: 13, color: C.danger, fontWeight: 600 }}>
               {selected.size} seleccionado{selected.size > 1 ? "s" : ""}
             </span>
             <button
               onClick={bulkDelete}
               disabled={bulkDeleting}
-              style={{ padding: "4px 14px", background: "#ff4d4d", border: "none", borderRadius: 5, cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, opacity: bulkDeleting ? 0.6 : 1 }}>
-              {bulkDeleting ? "Eliminando..." : "🗑 Eliminar seleccionados"}
+              style={{ padding: "4px 14px", background: C.danger, border: "none", borderRadius: 5, cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, opacity: bulkDeleting ? 0.6 : 1 }}>
+              {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
             </button>
             <button onClick={() => setSelected(new Set())} style={{ ...BTN_GHOST, padding: "4px 10px", fontSize: 12 }}>Cancelar</button>
           </div>
@@ -1039,7 +1112,7 @@ function InscriptosView({ race }) {
       <div style={{ ...CARD, overflow: "hidden", padding: 0 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ borderBottom: "1px solid #2a2e31" }}>
+            <tr style={{ borderBottom: `1px solid ${C.line}` }}>
               {!locked && (
                 <th style={{ padding: "8px 14px", width: 36 }}>
                   <input
@@ -1047,53 +1120,53 @@ function InscriptosView({ race }) {
                     checked={filtered.length > 0 && selected.size === filtered.length}
                     ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length }}
                     onChange={toggleAll}
-                    style={{ cursor: "pointer", accentColor: "#00e5a0" }}
+                    style={{ cursor: "pointer", accentColor: C.accent }}
                   />
                 </th>
               )}
               {["Dorsal", "Dist.", "Nombre", "Categoría", "Club", "Estado"].map(h => (
-                <th key={h} style={{ textAlign: "left", padding: "8px 14px", fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#525a60" }}>{h}</th>
+                <th key={h} style={{ textAlign: "left", padding: "8px 14px", fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.faint }}>{h}</th>
               ))}
               {!locked && <th />}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={locked ? 6 : 8} style={{ textAlign: "center", padding: 32, color: "#525a60" }}>{search ? "Sin resultados" : "No hay inscriptos aún"}</td></tr>
+              <tr><td colSpan={locked ? 6 : 8} style={{ textAlign: "center", padding: 32, color: C.faint }}>{search ? "Sin resultados" : "No hay inscriptos aún"}</td></tr>
             ) : filtered.map(r => {
               const isSelected = selected.has(r.id)
               const dist = r.distance_km
               const statusInfo = REG_STATUS[r.status] || REG_STATUS.OK
               return (
-                <tr key={r.id} style={{ borderBottom: "1px solid #1c1f21", opacity: r.status !== "OK" ? 0.65 : 1, background: isSelected ? "#ff4d4d08" : "transparent" }}>
+                <tr key={r.id} style={{ borderBottom: `1px solid ${C.surface2}`, opacity: r.status !== "OK" ? 0.65 : 1, background: isSelected ? `${C.danger}08` : "transparent" }}>
                   {!locked && (
                     <td style={{ padding: "9px 14px" }}>
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => toggleSelect(r.id)}
-                        style={{ cursor: "pointer", accentColor: "#00e5a0" }}
+                        style={{ cursor: "pointer", accentColor: C.accent }}
                       />
                     </td>
                   )}
                   <td style={{ padding: "9px 14px" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, background: "#1c1f21", padding: "2px 10px", borderRadius: 4, color: "#00e5a0" }}>{r.bib_number}</span>
+                    <span style={{ fontFamily: "monospace", fontSize: 13, fontWeight: 700, background: C.surface2, padding: "2px 10px", borderRadius: 4, color: C.accent }}>{r.bib_number}</span>
                   </td>
                   <td style={{ padding: "9px 14px" }}>
-                    {dist ? <span style={{ background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{dist} km</span> : <span style={{ color: "#363b3f", fontSize: 12 }}>--</span>}
+                    {dist ? <span style={{ background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{dist} km</span> : <span style={{ color: C.faint, fontSize: 12 }}>--</span>}
                   </td>
                   <td style={{ padding: "9px 14px", fontSize: 13, fontWeight: 500 }}>{r.runner.full_name}</td>
                   <td style={{ padding: "9px 14px" }}>
-                    <span style={{ background: r.runner.category?.startsWith("F") ? "#4d9fff15" : "#00e5a015", color: r.runner.category?.startsWith("F") ? "#4d9fff" : "#00e5a0", border: "1px solid " + (r.runner.category?.startsWith("F") ? "#4d9fff30" : "#00e5a030"), borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
+                    <span style={{ background: r.runner.category?.startsWith("F") ? `${C.blue}15` : `${C.accent}15`, color: r.runner.category?.startsWith("F") ? C.blue : C.accent, border: "1px solid " + (r.runner.category?.startsWith("F") ? `${C.blue}30` : `${C.accent}30`), borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
                       {r.runner.category || "--"}
                     </span>
                   </td>
-                  <td style={{ padding: "9px 14px", fontSize: 13, color: "#8a9299" }}>{r.runner.club || "--"}</td>
+                  <td style={{ padding: "9px 14px", fontSize: 13, color: C.muted }}>{r.runner.club || "--"}</td>
                   <td style={{ padding: "9px 14px" }}>
                     {locked
                       ? <span style={{ background: statusInfo.color + "20", color: statusInfo.color, border: `1px solid ${statusInfo.color}40`, borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{statusInfo.label}</span>
                       : <select value={r.status} onChange={e => setStatus(r, e.target.value)}
-                          style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 4, padding: "3px 6px", color: REG_STATUS[r.status]?.color || "#e8eaeb", fontSize: 12, outline: "none", cursor: "pointer" }}>
+                          style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 4, padding: "3px 6px", color: REG_STATUS[r.status]?.color || C.fg, fontSize: 12, outline: "none", cursor: "pointer" }}>
                           <option value="OK">OK</option>
                           <option value="DNS">DNS — No largó</option>
                           <option value="DNF">DNF — No terminó</option>
@@ -1103,7 +1176,7 @@ function InscriptosView({ race }) {
                   </td>
                   {!locked && (
                     <td style={{ padding: "9px 14px", textAlign: "right" }}>
-                      <button onClick={() => deleteReg(r)} style={BTN_DANGER}>✕</button>
+                      <button onClick={() => deleteReg(r)} style={BTN_DANGER} aria-label="Eliminar"><Icon name="x" size={12} /></button>
                     </td>
                   )}
                 </tr>
@@ -1120,9 +1193,11 @@ function InscriptosView({ race }) {
 // PÁGINA: MOTOR DE TIEMPOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function TimingPage({ race }) {
+function TimingPage({ race, onRaceChange, onFinish }) {
   const raceId = race?.id
-  const { queue, finishers, connected, capture, assignBib, undoAssign, discard, bibLookup } = useTimingEngine(raceId)
+  const { queue: rawQueue, finishers, connected, error, clearError, capture, assignBib, undoAssign, discard, bibLookup } = useTimingEngine(raceId)
+  // La más vieja arriba: es la próxima que hay que asignar, en el orden en que cruzaron.
+  const queue = [...rawQueue].sort((a, b) => a.sequence_order - b.sequence_order)
   const [hints, setHints] = useState({})
   const [raceStartNs, setRaceStartNs] = useState(race?.race_start_ns || null)
   const [elapsed, setElapsed] = useState("")
@@ -1152,15 +1227,37 @@ function TimingPage({ race }) {
     return () => clearInterval(t)
   }, [raceStartNs])
 
+  // ESPACIO captura siempre, también mientras se tipea un dorsal: los dorsales
+  // no llevan espacios y el operador no puede soltar el teclado cuando llega
+  // otro corredor. Sólo se respeta en campos de texto que no son de dorsal.
   useEffect(() => {
     const h = (e) => {
-      if (e.code === "Space" && document.activeElement.tagName !== "INPUT") {
-        e.preventDefault(); capture()
-      }
+      if (e.code !== "Space") return
+      const el = document.activeElement
+      const isBib = el?.classList?.contains("bib-input")
+      if (!isBib && ["INPUT", "TEXTAREA", "SELECT"].includes(el?.tagName)) return
+      e.preventDefault()
+      if (e.repeat) return // mantener apretado no genera ráfagas de capturas
+      if (el?.tagName === "BUTTON") el.blur()
+      capture()
     }
     window.addEventListener("keydown", h)
     return () => window.removeEventListener("keydown", h)
   }, [capture])
+
+  // Si el foco no está en un dorsal, llevarlo a la captura pendiente más vieja
+  // para poder tipear el número apenas se captura.
+  const queueKey = queue.map(i => i.id).join(",")
+  useEffect(() => {
+    if (document.activeElement?.tagName === "INPUT") return
+    document.querySelector(".bib-input")?.focus()
+  }, [queueKey])
+
+  useEffect(() => {
+    if (!error) return
+    const t = setTimeout(clearError, 6000)
+    return () => clearTimeout(t)
+  }, [error, clearError])
 
   const handleInput = async (id, val) => {
     setHints(p => ({ ...p, [id]: null }))
@@ -1169,9 +1266,12 @@ function TimingPage({ race }) {
     setHints(p => ({ ...p, [id]: r }))
   }
 
+  // No se limpia el campo: si el servidor acepta, la fila desaparece sola; si
+  // rechaza el dorsal, queda escrito para corregirlo.
   const handleAssign = (id) => {
     const inp = document.getElementById("bib-" + id)
-    if (inp?.value) { assignBib(id, inp.value); inp.value = "" }
+    const bib = inp?.value.trim()
+    if (bib) assignBib(id, bib)
   }
 
   const startRace = async () => {
@@ -1179,12 +1279,12 @@ function TimingPage({ race }) {
     if (!confirm("¿Registrar largada AHORA?")) return
     const r = await fetch(API + "/races/" + raceId + "/start", { method: "POST" })
     const data = await r.json()
-    if (r.ok) setRaceStartNs(data.race_start_ns)
+    if (r.ok) { setRaceStartNs(data.race_start_ns); onRaceChange?.() }
     else alert(data.detail || "Error")
   }
 
   if (!race) return (
-    <div style={{ textAlign: "center", padding: 60, color: "#525a60" }}>Seleccioná una carrera</div>
+    <div style={{ textAlign: "center", padding: 60, color: C.faint }}>Seleccioná una carrera</div>
   )
 
   // ── Carrera finalizada: solo mostrar clasificación final ──
@@ -1192,28 +1292,28 @@ function TimingPage({ race }) {
     return (
       <div>
         <div style={{ background: "#0f0f0f", border: `1px solid ${C.gold}40`, borderRadius: RADIUS.hero, padding: "20px 24px", marginBottom: 20, display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 36 }}>🏆</span>
+          <Icon name="trophy" size={32} style={{ color: C.gold }} />
           <div>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, color: C.gold, marginBottom: 4 }}>Carrera finalizada</div>
-            <div style={{ fontSize: 13, color: "#525a60" }}>El cronómetro está cerrado. Consultá los resultados en la pestaña <strong style={{ color: "#8a9299" }}>Resultados</strong>.</div>
+            <div style={{ fontSize: 13, color: C.faint }}>El cronómetro está cerrado. Consultá los resultados en la pestaña <strong style={{ color: C.muted }}>Resultados</strong>.</div>
           </div>
         </div>
         <div style={{ ...CARD }}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#8a9299", marginBottom: 12, display: "flex", alignItems: "center" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, marginBottom: 12, display: "flex", alignItems: "center" }}>
             Clasificación <span style={{ marginLeft: 4 }}><OpGrad>final</OpGrad></span>
-            <span style={{ marginLeft: "auto", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length} finishers</span>
+            <span style={{ marginLeft: "auto", background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length} finishers</span>
           </div>
           {finishers.length === 0
-            ? <div style={{ textAlign: "center", padding: 32, color: "#525a60" }}>Sin tiempos registrados</div>
+            ? <div style={{ textAlign: "center", padding: 32, color: C.faint }}>Sin tiempos registrados</div>
             : finishers.map((f, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: "1px solid #1c1f21" }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14, color: i === 0 ? "#f5a623" : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : "#525a60", minWidth: 24, fontWeight: i < 3 ? 700 : 400 }}>{i + 1}</span>
-                <span style={{ fontFamily: "monospace", fontSize: 11, background: "#1c1f21", padding: "1px 6px", borderRadius: 3, color: "#8a9299" }}>{f.bib_number}</span>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.surface2}` }}>
+                <span style={{ fontFamily: "monospace", fontSize: 14, color: i === 0 ? C.gold : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : C.faint, minWidth: 24, fontWeight: i < 3 ? 700 : 400 }}>{i + 1}</span>
+                <span style={{ fontFamily: "monospace", fontSize: 11, background: C.surface2, padding: "1px 6px", borderRadius: 3, color: C.muted }}>{f.bib_number}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{f.runner?.full_name || "--"}</div>
-                  <div style={{ fontSize: 11, color: "#525a60" }}>{f.runner?.category || ""}</div>
+                  <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
                 </div>
-                <span style={{ fontFamily: "monospace", fontSize: 13, color: "#00e5a0", fontWeight: 600 }}>{formatNs(f.net_time_ns || f.capture_ns)}</span>
+                <span style={{ fontFamily: "monospace", fontSize: 13, color: C.accent, fontWeight: 600 }}>{formatNs(f.net_time_ns || f.capture_ns)}</span>
               </div>
             ))
           }
@@ -1228,19 +1328,19 @@ function TimingPage({ race }) {
       {/* ── Banner de estado de largada ── */}
       {!raceStartNs ? (
         <div style={{ background: "#1a1200", border: `2px solid ${C.gold}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 28 }}>⏸</span>
+          <Icon name="pause" size={26} style={{ color: C.gold }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.gold, marginBottom: 2 }}>Carrera sin largada oficial</div>
-            <div style={{ fontSize: 12, color: "#8a7a50" }}>Los tiempos se cuentan desde que se capture la primera llegada. Registrá la largada para medir tiempos netos reales.</div>
+            <div style={{ fontSize: 12, color: "#b8a878" }}>Los tiempos se cuentan desde que se capture la primera llegada. Registrá la largada para medir tiempos netos reales.</div>
           </div>
           <button onClick={startRace}
             style={{ padding: "10px 24px", background: C.gold, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: "#000", fontWeight: 800, fontFamily: FONT_DISPLAY, fontSize: 14, letterSpacing: 0.5, flexShrink: 0 }}>
-            🏁 REGISTRAR LARGADA
+            <span style={WITH_ICON}><Icon name="flag" size={16} />Registrar largada</span>
           </button>
         </div>
       ) : (
         <div style={{ background: "#001a0f", border: `2px solid ${C.accent}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 28 }}>🟢</span>
+          <span aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 14, background: C.accent, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.accent, marginBottom: 2 }}>CARRERA EN CURSO</div>
             <div style={{ fontSize: 12, color: "#00a070" }}>Largada registrada — los tiempos se miden desde ese momento</div>
@@ -1249,6 +1349,21 @@ function TimingPage({ race }) {
             <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 34, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{elapsed}</div>
             <div style={{ fontSize: 10, color: "#00a070", marginTop: 2, letterSpacing: 1, textTransform: "uppercase" }}>Tiempo transcurrido</div>
           </div>
+          {/* Cerrar la carrera vive donde está el operador el día de la
+              carrera, no escondido en la cabecera. */}
+          <button onClick={onFinish}
+            title="Cerrar el cronómetro y pasar la carrera a Finalizadas"
+            style={{ padding: "10px 18px", background: "transparent", border: `1px solid ${C.gold}`, borderRadius: RADIUS.pill, cursor: "pointer", color: C.gold, fontWeight: 800, fontFamily: FONT_DISPLAY, fontSize: 13, flexShrink: 0 }}>
+            <span style={WITH_ICON}><Icon name="stop" size={14} />Finalizar carrera</span>
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <div role="alert" style={{ background: `${C.danger}15`, border: `1px solid ${C.danger}60`, borderRadius: RADIUS.sm, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, color: C.danger, fontSize: 13 }}>
+          <span style={{ flex: 1 }}>{error}</span>
+          <button onClick={clearError} aria-label="Cerrar aviso"
+            style={{ background: "transparent", border: "none", color: C.danger, cursor: "pointer", fontSize: 14 }}>✕</button>
         </div>
       )}
 
@@ -1258,59 +1373,65 @@ function TimingPage({ race }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <button onClick={capture}
           style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 800, fontFamily: FONT_DISPLAY, background: OP_GRAD, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: C.onAccent, letterSpacing: 1 }}>
-          ⏱ CAPTURAR LLEGADA
+          <span style={{ ...WITH_ICON, gap: 10 }}><Icon name="timer" size={22} />Capturar llegada</span>
         </button>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div style={{ fontSize: 11, color: "#525a60" }}>También podés presionar <kbd style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 3, padding: "1px 6px", fontFamily: "monospace", fontSize: 11 }}>ESPACIO</kbd></div>
+          <div style={{ fontSize: 12, color: C.muted }}>
+            <kbd style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 3, padding: "1px 6px", fontFamily: "monospace", fontSize: 11 }}>ESPACIO</kbd> captura (también mientras escribís un dorsal) ·{" "}
+            <kbd style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 3, padding: "1px 6px", fontFamily: "monospace", fontSize: 11 }}>ENTER</kbd> asigna y pasa a la siguiente
+          </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: connected ? "#00e5a0" : "#ff4d4d", boxShadow: connected ? "0 0 6px #00e5a0" : "none" }} />
-            <span style={{ fontSize: 11, color: connected ? "#00e5a0" : "#ff4d4d" }}>{connected ? "Conectado" : "Reconectando..."}</span>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: connected ? C.accent : C.danger, boxShadow: connected ? `0 0 6px ${C.accent}` : "none" }} />
+            <span style={{ fontSize: 11, color: connected ? C.accent : C.danger }}>{connected ? "Conectado" : "Reconectando..."}</span>
           </div>
         </div>
 
         <div style={{ ...CARD, flex: 1, overflow: "auto" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#8a9299", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
             Cola de capturas
             {queue.length > 0 && (
-              <span style={{ marginLeft: "auto", background: "#f5a62315", color: "#f5a623", border: "1px solid #f5a62330", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
+              <span style={{ marginLeft: "auto", background: `${C.gold}15`, color: C.gold, border: `1px solid ${C.gold}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
                 {queue.length} pendiente{queue.length > 1 ? "s" : ""}
               </span>
             )}
           </div>
 
           {queue.length === 0 && (
-            <div style={{ textAlign: "center", padding: 32, color: "#525a60" }}>
+            <div style={{ textAlign: "center", padding: 32, color: C.faint }}>
               {connected ? "Presioná ESPACIO para capturar llegadas" : "Sin conexión — reconectando..."}
             </div>
           )}
 
           {queue.map(item => (
-            <div key={item.id} style={{ background: "#1c1f21", border: "1px solid #2a2e31", borderRadius: 6, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <span style={{ fontFamily: "monospace", fontSize: 11, color: "#525a60", minWidth: 22 }}>#{item.sequence_order}</span>
-              <span style={{ fontFamily: "monospace", fontSize: 14, color: "#00e5a0", minWidth: 100 }}>
+            <div key={item.id} style={{ background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 6, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <span style={{ fontFamily: "monospace", fontSize: 11, color: C.faint, minWidth: 22 }}>#{item.sequence_order}</span>
+              <span style={{ fontFamily: "monospace", fontSize: 14, color: C.accent, minWidth: 100 }}>
                 {raceStartNs ? formatNs(item.captured_ns - raceStartNs) : formatNs(item.captured_ns)}
               </span>
               <input
                 id={"bib-" + item.id}
+                className="bib-input"
                 placeholder="Dorsal"
+                aria-label={`Dorsal de la llegada #${item.sequence_order}`}
                 onInput={e => handleInput(item.id, e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleAssign(item.id)}
-                style={{ width: 72, background: "#232729", border: "1px solid #363b3f", borderRadius: 4, padding: "4px 8px", fontFamily: "monospace", fontSize: 14, color: "#e8eaeb", textAlign: "center", outline: "none" }}
+                style={{ width: 88, background: "#232729", border: `1px solid ${C.lineStrong}`, borderRadius: 4, padding: "6px 8px", fontFamily: "monospace", fontSize: 16, color: C.fg, textAlign: "center", outline: "none" }}
                 autoComplete="off"
               />
               <span style={{ flex: 1, fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                color: hints[item.id]?.already_finished ? "#f5a623" : hints[item.id]?.found ? "#00e5a0" : hints[item.id] ? "#ff4d4d" : "#525a60" }}>
+                color: hints[item.id]?.already_finished ? C.gold : hints[item.id]?.found ? C.accent : hints[item.id] ? C.danger : C.faint }}>
                 {hints[item.id]?.already_finished
-                  ? `⚠ Ya registrado — ${hints[item.id].runner?.full_name || ""}`
+                  ? `Ya registrado — ${hints[item.id].runner?.full_name || ""}`
                   : hints[item.id]?.found
                     ? hints[item.id].runner.full_name
                     : hints[item.id] ? "No encontrado" : "--"}
               </span>
               <button onClick={() => handleAssign(item.id)}
-                style={{ padding: "4px 10px", background: "#00e5a020", color: "#00e5a0", border: "1px solid #00e5a040", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>OK</button>
-              <button onClick={() => discard(item.id)}
-                style={{ padding: "4px 8px", background: "transparent", color: "#ff4d4d", border: "1px solid #2a2e31", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>✕</button>
+                style={{ padding: "4px 10px", background: `${C.accent}20`, color: C.accent, border: `1px solid ${C.accent}40`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>Asignar</button>
+              <button onClick={() => { if (confirm(`¿Descartar la llegada #${item.sequence_order}? Usalo sólo para capturas por error.`)) discard(item.id) }}
+                title="Descartar captura (fue un error)" aria-label={`Descartar llegada #${item.sequence_order}`}
+                style={{ padding: "4px 8px", background: "transparent", color: C.danger, border: `1px solid ${C.line}`, borderRadius: 4, cursor: "pointer", fontSize: 12 }}>✕</button>
             </div>
           ))}
 
@@ -1319,25 +1440,25 @@ function TimingPage({ race }) {
 
       {/* Columna derecha: Clasificación en vivo */}
       <div style={{ ...CARD, overflow: "auto" }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#8a9299", marginBottom: 12, display: "flex", alignItems: "center" }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, marginBottom: 12, display: "flex", alignItems: "center" }}>
           Clasificación <span style={{ marginLeft: 4 }}><OpGrad>en vivo</OpGrad></span>
-          <span style={{ marginLeft: "auto", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length}</span>
+          <span style={{ marginLeft: "auto", background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length}</span>
         </div>
         {finishers.length === 0
-          ? <div style={{ textAlign: "center", padding: 24, color: "#525a60", fontSize: 13 }}>Sin finishers aún</div>
+          ? <div style={{ textAlign: "center", padding: 24, color: C.faint, fontSize: 13 }}>Sin finishers aún</div>
           : finishers.map((f, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #1c1f21" }}>
-              <span style={{ fontFamily: "monospace", fontSize: 13, color: i === 0 ? "#f5a623" : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : "#525a60", minWidth: 22 }}>{i + 1}</span>
-              <span style={{ fontFamily: "monospace", fontSize: 11, background: "#1c1f21", padding: "1px 6px", borderRadius: 3, color: "#8a9299" }}>{f.bib_number}</span>
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${C.surface2}` }}>
+              <span style={{ fontFamily: "monospace", fontSize: 13, color: i === 0 ? C.gold : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : C.faint, minWidth: 22 }}>{i + 1}</span>
+              <span style={{ fontFamily: "monospace", fontSize: 11, background: C.surface2, padding: "1px 6px", borderRadius: 3, color: C.muted }}>{f.bib_number}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.runner?.full_name || "--"}</div>
-                <div style={{ fontSize: 11, color: "#525a60" }}>{f.runner?.category || ""}</div>
+                <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.accent }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
                 {f.capture_id && (
-                  <button onClick={() => undoAssign(f.capture_id)} title="Deshacer"
-                    style={{ padding: "1px 5px", background: "transparent", color: "#f5a62360", border: "none", cursor: "pointer", fontSize: 10 }}>✎</button>
+                  <button onClick={() => undoAssign(f.capture_id)} title="Quitar el dorsal y devolver la llegada a la cola para reasignarla"
+                    style={{ padding: "1px 0", background: "transparent", color: C.gold, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, ...WITH_ICON, gap: 4 }}><Icon name="pencil" size={11} />Corregir</button>
                 )}
               </div>
             </div>
@@ -1384,7 +1505,8 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
     setSearch(""); setCatFilter(""); setGender(""); setDistFilter(null); setSortKey("time"); setView("general")
   }, [race.id])
 
-  const MEDAL = ["🥇", "🥈", "🥉"]
+  // Oro / plata / bronce: el puesto en color, con el mismo peso que el resto de la tabla.
+  const MEDAL_COLOR = [C.gold, "#aabbcc", "#cd7c4a"]
 
   const categories = results
     ? [...new Set(results.results.map(r => r.category).filter(Boolean))].sort()
@@ -1435,9 +1557,9 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
 
   const SEL = (active) => ({
     padding: "5px 12px", fontSize: 12, borderRadius: 6, cursor: "pointer", border: "1px solid",
-    background: active ? "#00e5a020" : "transparent",
-    color: active ? "#00e5a0" : "#8a9299",
-    borderColor: active ? "#00e5a040" : "#363b3f",
+    background: active ? `${C.accent}20` : "transparent",
+    color: active ? C.accent : C.muted,
+    borderColor: active ? `${C.accent}40` : C.lineStrong,
     fontWeight: active ? 700 : 400,
   })
 
@@ -1449,7 +1571,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           <button onClick={onBack} style={{ ...BTN_GHOST, flexShrink: 0, marginTop: 2 }}>← Carreras</button>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 18 }}><OpGrad>{race.name}</OpGrad></div>
-            <div style={{ fontSize: 12, color: "#525a60", marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
               {[race.race_date, race.location].filter(Boolean).join(" · ")}
             </div>
           </div>
@@ -1457,27 +1579,27 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
       )}
 
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginBottom: 12 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#525a60", cursor: "pointer" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint, cursor: "pointer" }}>
           <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
           Auto-actualizar
         </label>
-        <button onClick={load} style={BTN_GHOST}>↻ Actualizar</button>
-        <button onClick={() => window.open(API + "/races/" + race.id + "/export/csv", "_blank")} style={BTN_GHOST}>⬇ CSV</button>
-        <button onClick={() => results && printResultsReport({ race, results })} disabled={!results} style={BTN_GHOST}>📄 Reporte PDF</button>
+        <button onClick={load} style={{ ...BTN_GHOST, ...WITH_ICON }}><Icon name="refresh" size={13} />Actualizar</button>
+        <button onClick={() => window.open(API + "/races/" + race.id + "/export/csv", "_blank")} style={{ ...BTN_GHOST, ...WITH_ICON }}><Icon name="download" size={13} />CSV</button>
+        <button onClick={() => results && printResultsReport({ race, results })} disabled={!results} style={{ ...BTN_GHOST, ...WITH_ICON }}><Icon name="file" size={13} />Reporte PDF</button>
       </div>
 
       {/* Stats */}
       {results && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 16 }}>
           {[
-            ["Finishers",  results.total_finishers,  "#00e5a0"],
+            ["Finishers",  results.total_finishers,  C.accent],
             ["Inscritos",  results.total_registered, null],
             ["Pendientes", Math.max(0, results.total_registered - results.total_finishers - results.dnf_list.length), null],
-            ["DNS/DNF/DQ", results.dnf_list.length,  results.dnf_list.length > 0 ? "#f5a623" : null],
+            ["DNS/DNF/DQ", results.dnf_list.length,  results.dnf_list.length > 0 ? C.gold : null],
           ].map(([label, val, color]) => (
             <div key={label} style={{ ...CARD }}>
-              <div style={{ fontSize: 26, fontWeight: 700, color: color || "#e8eaeb" }}>{val}</div>
-              <div style={{ fontSize: 11, color: "#525a60", marginTop: 3, textTransform: "uppercase" }}>{label}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: color || C.fg }}>{val}</div>
+              <div style={{ fontSize: 11, color: C.faint, marginTop: 3, textTransform: "uppercase" }}>{label}</div>
             </div>
           ))}
         </div>
@@ -1486,15 +1608,15 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
       {/* ── Selector de distancia (solo si hay múltiples) ── */}
       {hasMultiDist && (
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#525a60", fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Distancia</div>
+          <div style={{ fontSize: 11, color: C.faint, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Distancia</div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <button onClick={() => { setDistFilter(null); setCatFilter("") }}
-              style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === null ? 800 : 500, borderRadius: RADIUS.pill, cursor: "pointer", border: "2px solid", background: distFilter === null ? "#00e5a020" : "transparent", color: distFilter === null ? "#00e5a0" : "#8a9299", borderColor: distFilter === null ? "#00e5a0" : "#363b3f" }}>
+              style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === null ? 800 : 500, borderRadius: RADIUS.pill, cursor: "pointer", border: "2px solid", background: distFilter === null ? `${C.accent}20` : "transparent", color: distFilter === null ? C.accent : C.muted, borderColor: distFilter === null ? C.accent : C.lineStrong }}>
               Todas
             </button>
             {availDistances.map(d => (
               <button key={d} onClick={() => { setDistFilter(d); setCatFilter("") }}
-                style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === d ? 800 : 500, borderRadius: RADIUS.pill, cursor: "pointer", border: "2px solid", background: distFilter === d ? "#4d9fff20" : "transparent", color: distFilter === d ? "#4d9fff" : "#8a9299", borderColor: distFilter === d ? "#4d9fff" : "#363b3f" }}>
+                style={{ padding: "7px 18px", fontSize: 13, fontWeight: distFilter === d ? 800 : 500, borderRadius: RADIUS.pill, cursor: "pointer", border: "2px solid", background: distFilter === d ? `${C.blue}20` : "transparent", color: distFilter === d ? C.blue : C.muted, borderColor: distFilter === d ? C.blue : C.lineStrong }}>
                 {d} km
               </button>
             ))}
@@ -1508,7 +1630,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           style={{ ...INPUT, width: 200, flex: "0 0 auto" }} />
         {categories.length > 0 && (
           <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-            style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6, padding: "7px 10px", color: catFilter ? "#e8eaeb" : "#525a60", fontSize: 12, outline: "none" }}>
+            style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 6, padding: "7px 10px", color: catFilter ? C.fg : C.faint, fontSize: 12, outline: "none" }}>
             <option value="">Todas las categorías</option>
             {categories.map(c => <option key={c}>{c}</option>)}
           </select>
@@ -1519,7 +1641,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           ))}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 4, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, color: "#525a60", alignSelf: "center" }}>Ordenar:</span>
+          <span style={{ fontSize: 11, color: C.faint, alignSelf: "center" }}>Ordenar:</span>
           {[["time", "Tiempo ↑"], ["time_desc", "Tiempo ↓"], ["name", "Nombre"], ["bib", "Dorsal"]].map(([val, label]) => (
             <button key={val} onClick={() => setSortKey(val)} style={SEL(sortKey === val)}>{label}</button>
           ))}
@@ -1532,11 +1654,11 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           <button key={id} onClick={() => setView(id)} style={SEL(view === id)}>{label}</button>
         ))}
         {(search || catFilter || genderFilter) && (
-          <span style={{ alignSelf: "center", fontSize: 12, color: "#f5a623", marginLeft: 8 }}>
+          <span style={{ alignSelf: "center", fontSize: 12, color: C.gold, marginLeft: 8 }}>
             {filtered.length} resultado{filtered.length !== 1 ? "s" : ""}
             {" "}
             <span onClick={() => { setSearch(""); setCatFilter(""); setGender("") }}
-              style={{ color: "#525a60", cursor: "pointer", textDecoration: "underline", fontSize: 11 }}>limpiar</span>
+              style={{ color: C.faint, cursor: "pointer", textDecoration: "underline", fontSize: 11 }}>limpiar</span>
           </span>
         )}
       </div>
@@ -1545,51 +1667,51 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
       {view === "general" && (
         <>
           {loading
-            ? <div style={{ textAlign: "center", padding: 48, color: "#525a60" }}>Cargando…</div>
+            ? <div style={{ textAlign: "center", padding: 48, color: C.faint }}>Cargando…</div>
             : (
               <div style={{ ...CARD, overflow: "hidden", padding: 0 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
-                    <tr style={{ borderBottom: "1px solid #2a2e31" }}>
+                    <tr style={{ borderBottom: `1px solid ${C.line}` }}>
                       {["Pos.", "Dorsal", hasMultiDist ? "Dist." : null, "Nombre", "Categoría", "Club", "Tiempo Neto", ""].filter(Boolean).map(h => (
-                        <th key={h} style={{ textAlign: "left", padding: "8px 14px", fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#525a60" }}>{h}</th>
+                        <th key={h} style={{ textAlign: "left", padding: "8px 14px", fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.faint }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0
-                      ? <tr><td colSpan={8} style={{ textAlign: "center", padding: 48, color: "#525a60" }}>Sin resultados para los filtros aplicados</td></tr>
+                      ? <tr><td colSpan={8} style={{ textAlign: "center", padding: 48, color: C.faint }}>Sin resultados para los filtros aplicados</td></tr>
                       : filtered.map((r, i) => {
                           const isTop3 = sortKey === "time" && i < 3 && !catFilter && !genderFilter && !search
                           return (
-                            <tr key={r.bib_number + (r.distance_km || "")} style={{ borderBottom: "1px solid #1c1f21" }}>
-                              <td style={{ padding: "9px 14px", fontFamily: "monospace", color: isTop3 ? (i === 0 ? "#f5a623" : i === 1 ? "#aabbcc" : "#cd7c4a") : "#525a60", fontWeight: isTop3 ? 700 : 400 }}>
-                                {isTop3 ? MEDAL[i] : r.position}
+                            <tr key={r.bib_number + (r.distance_km || "")} style={{ borderBottom: `1px solid ${C.surface2}` }}>
+                              <td style={{ padding: "9px 14px", fontFamily: "monospace", color: isTop3 ? (i === 0 ? C.gold : i === 1 ? "#aabbcc" : "#cd7c4a") : C.faint, fontWeight: isTop3 ? 700 : 400 }}>
+                                {r.position}
                               </td>
                               <td style={{ padding: "9px 14px" }}>
-                                <span style={{ fontFamily: "monospace", fontSize: 12, background: "#1c1f21", padding: "2px 8px", borderRadius: 3, color: "#8a9299" }}>{r.bib_number}</span>
+                                <span style={{ fontFamily: "monospace", fontSize: 12, background: C.surface2, padding: "2px 8px", borderRadius: 3, color: C.muted }}>{r.bib_number}</span>
                               </td>
                               {hasMultiDist && (
                                 <td style={{ padding: "9px 14px" }}>
-                                  {r.distance_km ? <span style={{ background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{r.distance_km} km</span> : "--"}
+                                  {r.distance_km ? <span style={{ background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 600 }}>{r.distance_km} km</span> : "--"}
                                 </td>
                               )}
                               <td style={{ padding: "9px 14px", fontWeight: 500, fontSize: 13 }}>{r.runner.full_name}</td>
                               <td style={{ padding: "9px 14px" }}>
-                                <span style={{ background: r.category?.startsWith("F") ? "#4d9fff15" : "#00e5a015", color: r.category?.startsWith("F") ? "#4d9fff" : "#00e5a0", border: "1px solid " + (r.category?.startsWith("F") ? "#4d9fff30" : "#00e5a030"), borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
+                                <span style={{ background: r.category?.startsWith("F") ? `${C.blue}15` : `${C.accent}15`, color: r.category?.startsWith("F") ? C.blue : C.accent, border: "1px solid " + (r.category?.startsWith("F") ? `${C.blue}30` : `${C.accent}30`), borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
                                   {r.category || "--"}
                                 </span>
                               </td>
-                              <td style={{ padding: "9px 14px", fontSize: 13, color: "#8a9299" }}>{r.club || "--"}</td>
-                              <td style={{ padding: "9px 14px", fontFamily: "monospace", color: "#00e5a0", fontSize: 14, fontWeight: 600 }}>
+                              <td style={{ padding: "9px 14px", fontSize: 13, color: C.muted }}>{r.club || "--"}</td>
+                              <td style={{ padding: "9px 14px", fontFamily: "monospace", color: C.accent, fontSize: 14, fontWeight: 600 }}>
                                 {formatNs(r.net_time_ns || r.finish_time_ns)}
                               </td>
                               <td style={{ padding: "9px 10px", textAlign: "right" }}>
                                 <button
                                   title="Imprimir certificado"
                                   onClick={() => printCertificate({ race, runner: r.runner, bib_number: r.bib_number, position: r.position, net_time_ns: r.net_time_ns || r.finish_time_ns, category: r.category, club: r.club, dni: r.runner.dni, distance_km: r.distance_km })}
-                                  style={{ padding: "3px 8px", background: "transparent", border: "1px solid #363b3f", borderRadius: 4, cursor: "pointer", color: "#8a9299", fontSize: 12 }}>
-                                  🖨️
+                                  style={{ padding: "3px 8px", background: "transparent", border: `1px solid ${C.lineStrong}`, borderRadius: 4, cursor: "pointer", color: C.muted, fontSize: 12, ...WITH_ICON, gap: 5 }}>
+                                  <Icon name="printer" size={13} />Certificado
                                 </button>
                               </td>
                             </tr>
@@ -1605,7 +1727,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           {/* DNS / DNF / DQ */}
           {results?.dnf_list?.length > 0 && (
             <div style={{ marginTop: 20 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#525a60", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.faint, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
                 DNS / DNF / DQ — {results.dnf_list.length} corredor{results.dnf_list.length !== 1 ? "es" : ""}
               </div>
               <div style={{ ...CARD, overflow: "hidden", padding: 0, opacity: 0.65 }}>
@@ -1622,12 +1744,12 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
                         return true
                       })
                       .map(r => (
-                        <tr key={r.bib_number} style={{ borderBottom: "1px solid #1c1f21" }}>
+                        <tr key={r.bib_number} style={{ borderBottom: `1px solid ${C.surface2}` }}>
                           <td style={{ padding: "8px 14px", width: 64 }}>
-                            <span style={{ fontFamily: "monospace", fontSize: 12, background: "#1c1f21", padding: "2px 8px", borderRadius: 3, color: "#525a60" }}>{r.bib_number}</span>
+                            <span style={{ fontFamily: "monospace", fontSize: 12, background: C.surface2, padding: "2px 8px", borderRadius: 3, color: C.faint }}>{r.bib_number}</span>
                           </td>
                           <td style={{ padding: "8px 14px", fontSize: 13 }}>{r.runner.full_name}</td>
-                          <td style={{ padding: "8px 14px", fontSize: 12, color: "#525a60" }}>{r.category || "--"}</td>
+                          <td style={{ padding: "8px 14px", fontSize: 12, color: C.faint }}>{r.category || "--"}</td>
                           <td style={{ padding: "8px 14px" }}><RegStatusBadge status={r.status} /></td>
                         </tr>
                       ))}
@@ -1643,25 +1765,25 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
       {view === "categories" && (
         <div>
           {sortedCats.length === 0
-            ? <div style={{ textAlign: "center", padding: 48, color: "#525a60" }}>Sin resultados para los filtros aplicados</div>
+            ? <div style={{ textAlign: "center", padding: 48, color: C.faint }}>Sin resultados para los filtros aplicados</div>
             : (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 12 }}>
                 {sortedCats.map(cat => {
                   const runners = byCat[cat]
                   const isFem   = cat.startsWith("F")
-                  const accent  = isFem ? "#4d9fff" : "#00e5a0"
+                  const accent  = isFem ? C.blue : C.accent
                   return (
                     <div key={cat} style={{ ...CARD }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                         <span style={{ background: accent + "20", color: accent, border: `1px solid ${accent}40`, borderRadius: 20, padding: "3px 12px", fontSize: 13, fontWeight: 700 }}>{cat}</span>
-                        <span style={{ color: "#525a60", fontSize: 12 }}>{runners.length} finisher{runners.length !== 1 ? "s" : ""}</span>
+                        <span style={{ color: C.faint, fontSize: 12 }}>{runners.length} finisher{runners.length !== 1 ? "s" : ""}</span>
                       </div>
                       {runners.map((r, i) => (
-                        <div key={r.bib_number} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < runners.length - 1 ? "1px solid #1c1f21" : "none" }}>
-                          <span style={{ fontSize: i < 3 ? 16 : 13, minWidth: 24, fontFamily: i >= 3 ? "monospace" : "inherit", color: i >= 3 ? "#525a60" : "inherit" }}>
-                            {i < 3 ? MEDAL[i] : `${i + 1}.`}
+                        <div key={r.bib_number} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < runners.length - 1 ? `1px solid ${C.surface2}` : "none" }}>
+                          <span style={{ fontSize: 13, minWidth: 24, fontFamily: "monospace", fontWeight: i < 3 ? 700 : 400, color: i < 3 ? MEDAL_COLOR[i] : C.faint }}>
+                            {i + 1}
                           </span>
-                          <span style={{ fontFamily: "monospace", fontSize: 11, background: "#1c1f21", padding: "1px 6px", borderRadius: 3, color: "#525a60" }}>{r.bib_number}</span>
+                          <span style={{ fontFamily: "monospace", fontSize: 11, background: C.surface2, padding: "1px 6px", borderRadius: 3, color: C.faint }}>{r.bib_number}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 12, fontWeight: i < 3 ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.runner.full_name}</div>
                           </div>
@@ -1719,23 +1841,23 @@ function InscripcionPanel({ race, onSaved }) {
   }
 
   return (
-    <div style={{ ...CARD, marginTop: 16, border: "1px solid #4d9fff30" }}>
+    <div style={{ ...CARD, marginTop: 16, border: `1px solid ${C.blue}30` }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: "#4d9fff" }}>📅 Inscripción · calendario del portal</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.blue }}>📅 Inscripción · calendario del portal</span>
       </div>
-      <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>
         Los corredores ven esto en el Calendario del portal. El link es adónde los mandás a inscribirse
         (tu formulario, tu pasarela de pago o la web de la carrera). La cantidad de inscriptos se toma sola
-        de esta carrera: hoy son <b style={{ color: "#e8eaeb" }}>{inscriptos ?? "…"}</b>.
+        de esta carrera: hoy son <b style={{ color: C.fg }}>{inscriptos ?? "…"}</b>.
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "160px 1fr auto", gap: 10, alignItems: "end" }}>
         <div>
-          <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Cupo</div>
+          <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Cupo</div>
           <input value={cupo} onChange={e => setCupo(e.target.value.replace(/\D/g, ""))}
                  placeholder="sin límite" inputMode="numeric" style={INPUT} />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Link de inscripción</div>
+          <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Link de inscripción</div>
           <input value={url} onChange={e => setUrl(e.target.value)}
                  placeholder="https://tu-formulario-de-inscripcion.com" style={INPUT}
                  onKeyDown={e => e.key === "Enter" && sucio && guardar()} />
@@ -1745,8 +1867,8 @@ function InscripcionPanel({ race, onSaved }) {
           {saving ? "Guardando…" : "Guardar"}
         </button>
       </div>
-      {msg && <div style={{ fontSize: 12, marginTop: 10, color: msg.includes("✓") ? "#00e5a0" : "#ff4d4d" }}>{msg}</div>}
-      {!url && <div style={{ fontSize: 12, marginTop: 10, color: "#f5a623" }}>
+      {msg && <div style={{ fontSize: 12, marginTop: 10, color: msg.includes("✓") ? C.accent : C.danger }}>{msg}</div>}
+      {!url && <div style={{ fontSize: 12, marginTop: 10, color: C.gold }}>
         Sin link, el evento se anuncia igual pero el portal muestra “Inscripción a cargo del organizador” en lugar del botón.
       </div>}
     </div>
@@ -1759,7 +1881,11 @@ function InscripcionPanel({ race, onSaved }) {
 
 function RaceDetailPage({ race: initialRace, onBack }) {
   const [race, setRace]     = useState(initialRace)
-  const [subPage, setSubPage] = useState("inscriptos")
+  // Abrir en la pestaña que corresponde al momento de la carrera: el día de la
+  // carrera se entra a cronometrar, después a ver resultados.
+  const [subPage, setSubPage] = useState(
+    initialRace.status === "ACTIVE" ? "cronometro" : initialRace.status === "FINISHED" ? "resultados" : "inscriptos"
+  )
   const [publishing, setPublishing] = useState(false)
   const [sending, setSending] = useState(false)
 
@@ -1778,14 +1904,26 @@ function RaceDetailPage({ race: initialRace, onBack }) {
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
       alert(err.detail || "No se puede cambiar el estado")
-      return
+      return false
     }
     refreshRace()
+    return true
+  }
+
+  const finishRace = async () => {
+    const pend = await fetch(API + "/races/" + race.id + "/captures?status=PENDING")
+      .then(r => r.json()).catch(() => [])
+    const n = Array.isArray(pend) ? pend.length : 0
+    const aviso = n > 0
+      ? `Quedan ${n} llegada${n > 1 ? "s" : ""} sin dorsal asignado en la cola.\n\nSi finalizás ahora, esos tiempos no entran en los resultados (podés reabrir la carrera para corregir).\n\n¿Finalizar "${race.name}" igual?`
+      : `¿Finalizar "${race.name}"?\n\nSe cierra el cronómetro y la carrera pasa a Finalizadas. Después vas a poder publicar y enviar los resultados.`
+    if (!confirm(aviso)) return
+    if (await changeStatus("FINISHED")) setSubPage("resultados")
   }
 
   const reopenForCorrection = async () => {
     if (!confirm(`¿Reabrir "${race.name}" para corregir?\n\nLa carrera vuelve al estado "En curso" para que puedas ajustar dorsales, tiempos o estados de los corredores. Cuando termines, finalizala de nuevo.\n\nNo puede haber otra carrera en curso al mismo tiempo.`)) return
-    await changeStatus("ACTIVE")
+    if (await changeStatus("ACTIVE")) setSubPage("cronometro")
   }
 
   const duplicate = async () => {
@@ -1873,37 +2011,56 @@ function RaceDetailPage({ race: initialRace, onBack }) {
         <button onClick={onBack} style={{ ...BTN_GHOST, marginTop: 4, flexShrink: 0 }}>← Carreras</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 20 }}><OpGrad>{race.name}</OpGrad></div>
-          <div style={{ fontSize: 12, color: "#525a60", marginTop: 3 }}>
+          <div style={{ fontSize: 12, color: C.faint, marginTop: 3 }}>
             {[race.race_date, race.location].filter(Boolean).join(" · ")}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, marginTop: 2 }}>
+          {/* Acciones ordenadas por etapa: secundarias a la izquierda, y a la
+              derecha la única acción principal de este momento de la carrera. */}
           <RaceStatusBadge status={race.status} />
           <button onClick={duplicate}
             title="Crear una copia de esta carrera con los mismos inscriptos"
-            style={{ padding: "5px 12px", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-            ⧉ Duplicar
+            style={BTN_GHOST}>
+            <span style={WITH_ICON}><Icon name="copy" size={13} />Duplicar</span>
           </button>
-          <button onClick={publish} disabled={publishing}
-            title="Publicar los resultados en el portal público (sin DNI ni fecha de nacimiento)"
-            style={{ padding: "5px 12px", background: OP_GRAD, color: "#000", border: "none", borderRadius: 6, cursor: publishing ? "default" : "pointer", fontSize: 12, fontWeight: 700, opacity: publishing ? 0.6 : 1 }}>
-            {publishing ? "Publicando…" : "☁ Publicar"}
-          </button>
-          <button onClick={sendResults} disabled={sending}
-            title="Enviar a cada finisher su resultado por email"
-            style={{ padding: "5px 12px", background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 6, cursor: sending ? "default" : "pointer", fontSize: 12, fontWeight: 600, opacity: sending ? 0.6 : 1 }}>
-            {sending ? "Enviando…" : "📧 Enviar resultados"}
-          </button>
-          {race.status !== "FINISHED" ? (
-            <button onClick={() => changeStatus("FINISHED")}
-              style={{ padding: "5px 14px", background: "#f5a62315", color: "#f5a623", border: "1px solid #f5a62330", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-              ■ Finalizar carrera
-            </button>
-          ) : (
+          {race.status === "FINISHED" && (
             <button onClick={reopenForCorrection}
               title="Reabrir la carrera para corregir resultados"
-              style={{ padding: "5px 14px", background: "#00e5a015", color: "#00e5a0", border: "1px solid #00e5a030", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-              ↺ Reabrir para corregir
+              style={BTN_GHOST}>
+              <span style={WITH_ICON}><Icon name="undo" size={13} />Reabrir para corregir</span>
+            </button>
+          )}
+          {race.status === "FINISHED" && (
+            <button onClick={sendResults} disabled={sending}
+              title="Enviar a cada finisher su resultado por email"
+              style={{ ...BTN_GHOST, cursor: sending ? "default" : "pointer", opacity: sending ? 0.6 : 1 }}>
+              {sending ? "Enviando…" : <span style={WITH_ICON}><Icon name="mail" size={13} />Enviar resultados</span>}
+            </button>
+          )}
+          {race.status === "ACTIVE" ? (
+            <>
+              {/* En la pestaña Cronómetro el botón ya está en el banner de carrera en curso. */}
+              <button onClick={publish} disabled={publishing}
+                title="Publicar los resultados parciales en el portal público (sin DNI ni fecha de nacimiento)"
+                style={{ ...BTN_GHOST, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
+                {publishing ? "Publicando…" : <span style={WITH_ICON}><Icon name="cloud" size={13} />Publicar parciales</span>}
+              </button>
+              {subPage !== "cronometro" && (
+                <button onClick={finishRace}
+                  title="Cerrar el cronómetro y pasar la carrera a Finalizadas"
+                  style={{ ...BTN_PRIMARY, background: C.gold, color: "#000" }}>
+                  <span style={WITH_ICON}><Icon name="stop" size={12} />Finalizar carrera</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <button onClick={publish} disabled={publishing}
+              title={race.status === "PLANNED"
+                ? "Anunciar la carrera en el calendario del portal"
+                : "Publicar los resultados en el portal público (sin DNI ni fecha de nacimiento)"}
+              style={{ ...BTN_PRIMARY, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
+              {publishing ? "Publicando…" : <span style={WITH_ICON}><Icon name="cloud" size={13} />{race.status === "PLANNED" ? "Publicar en calendario" : "Publicar resultados"}</span>}
             </button>
           )}
         </div>
@@ -1914,18 +2071,21 @@ function RaceDetailPage({ race: initialRace, onBack }) {
       {race.status === "PLANNED" && <InscripcionPanel race={race} onSaved={refreshRace} />}
 
       {/* Sub-tabs */}
-      <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #2a2e31", marginTop: 16, marginBottom: 20 }}>
+      <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${C.line}`, marginTop: 16, marginBottom: 20 }}>
         {SUB.map(s => (
           <button key={s.id} onClick={() => setSubPage(s.id)}
-            style={{ padding: "10px 20px", background: "transparent", border: "none", borderBottom: subPage === s.id ? "2px solid #00e5a0" : "2px solid transparent", cursor: "pointer", color: subPage === s.id ? "#00e5a0" : "#8a9299", fontWeight: subPage === s.id ? 700 : 400, fontSize: 13, marginBottom: -1, transition: "color 0.15s" }}>
+            style={{ padding: "10px 20px", background: "transparent", border: "none", borderBottom: subPage === s.id ? `2px solid ${C.accent}` : "2px solid transparent", cursor: "pointer", color: subPage === s.id ? C.accent : C.muted, fontWeight: subPage === s.id ? 700 : 400, fontSize: 13, marginBottom: -1, transition: "color 0.15s" }}>
             {s.label}
+            {s.id === "cronometro" && race.status === "ACTIVE" && (
+              <span title="Carrera en curso" style={{ display: "inline-block", width: 7, height: 7, borderRadius: 7, background: C.accent, marginLeft: 6, verticalAlign: "middle" }} />
+            )}
           </button>
         ))}
       </div>
 
       {/* Contenido del sub-tab */}
       {subPage === "inscriptos" && <InscriptosView race={race} />}
-      {subPage === "cronometro" && <TimingPage race={race} />}
+      {subPage === "cronometro" && <TimingPage race={race} onRaceChange={refreshRace} onFinish={finishRace} />}
       {subPage === "resultados" && <ResultsDetail race={race} hideBackButton />}
     </div>
   )
@@ -1941,8 +2101,9 @@ function DashboardPage({ onNavigate }) {
   const [loading, setLoading] = useState(true)
   const [now, setNow]         = useState(new Date())
 
+  // Sólo para la fecha del encabezado; la hora vive en el reloj maestro de la barra superior.
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
+    const t = setInterval(() => setNow(new Date()), 60000)
     return () => clearInterval(t)
   }, [])
 
@@ -1963,87 +2124,84 @@ function DashboardPage({ onNavigate }) {
   const active   = races.filter(r => r.status === "ACTIVE")
   const finished = races.filter(r => r.status === "FINISHED")
   const planned  = races.filter(r => r.status === "PLANNED")
+  const live     = active[0]
 
-  const dayName = now.toLocaleDateString("es-AR", { weekday: "long" })
-  const dateStr = now.toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" })
-  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+  const dateStr = now.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
 
   const QUICK = [
-    { label: "Nueva Carrera", icon: "🏁", page: "races", desc: "Crear y gestionar carreras" },
-    { label: "Atletas",       icon: "👤", page: "athletes", desc: "Base de corredores" },
-    { label: "Historial",     icon: "📋", page: "history",  desc: "Resultados y estadísticas" },
+    { label: "Nueva Carrera", icon: "flag", page: "races", desc: "Crear y gestionar carreras" },
+    { label: "Atletas",       icon: "user", page: "athletes", desc: "Base de corredores" },
+    { label: "Historial",     icon: "list", page: "history",  desc: "Resultados y estadísticas" },
   ]
+  const SECTION = { fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }
 
   return (
     <div>
-      {/* ── Bienvenida ── */}
-      <div style={{ ...CARD, borderRadius: RADIUS.hero, background: `linear-gradient(135deg, #0d1a14 0%, ${C.surface} 60%, #0d1a14 100%)`, border: `1px solid ${C.accent}30`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <div style={{ fontSize: 11, color: `${C.accent}60`, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>
-            {dayName}, {dateStr}
-          </div>
-          <div style={{ fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 800, letterSpacing: -0.3, color: C.fg }}>
-            Panel de <OpGrad>Control</OpGrad>
-          </div>
-          <div style={{ fontSize: 13, color: C.faint, marginTop: 4 }}>
-            Sistema de cronometraje de carreras · LiveRun v{APP_VERSION}
-          </div>
+      {/* ── Encabezado ── */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: FONT_DISPLAY, fontSize: 24, fontWeight: 800, letterSpacing: -0.3, color: C.fg }}>
+          Panel de <OpGrad>control</OpGrad>
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 36, fontWeight: 800, color: C.accent, lineHeight: 1 }}>
-            {timeStr}
-          </div>
-          <div style={{ fontSize: 10, color: C.faint, marginTop: 4, letterSpacing: 1, textTransform: "uppercase" }}>Hora actual</div>
-        </div>
+        <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</div>
       </div>
 
-      {/* ── Stats ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+      {/* ── Carrera en curso: lo único urgente, arriba y a un clic del cronómetro ── */}
+      {live && (
+        <button onClick={() => onNavigate("races", live)}
+          style={{ width: "100%", textAlign: "left", marginBottom: 20, padding: "18px 22px", borderRadius: RADIUS.hero, cursor: "pointer",
+            background: `linear-gradient(135deg, #0d1a14 0%, ${C.surface} 70%)`, border: `1px solid ${C.accent}60`, color: C.fg,
+            display: "flex", alignItems: "center", gap: 16 }}>
+          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 12, background: C.accent, boxShadow: `0 0 0 5px ${C.accent}25`, flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.accent }}>Carrera en curso</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontSize: 19, fontWeight: 800, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{live.name}</div>
+          </div>
+          <span style={{ ...BTN_PRIMARY, ...WITH_ICON, padding: "10px 18px", fontSize: 13 }}>
+            <Icon name="timer" size={15} />Ir al cronómetro
+          </span>
+        </button>
+      )}
+
+      {/* ── Resumen ── */}
+      <div style={{ ...CARD, display: "grid", gridTemplateColumns: "repeat(4, 1fr)", padding: 0, marginBottom: 20 }}>
         {[
-          { label: "Carreras totales", value: races.length,   color: C.fg, icon: "🏁" },
-          { label: "Activas ahora",    value: active.length,  color: active.length > 0 ? C.accent : C.fg, icon: "▶" },
-          { label: "Finalizadas",      value: finished.length, color: C.gold, icon: "✓" },
-          { label: "Atletas en DB",    value: runners.length,  color: C.blue, icon: "👤" },
-        ].map(s => (
-          <div key={s.label} style={{ ...CARD, textAlign: "center" }}>
-            <div style={{ fontSize: 26, marginBottom: 6 }}>{s.icon}</div>
-            <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 32, fontWeight: 800, color: s.color, lineHeight: 1 }}>{loading ? "—" : s.value}</div>
-            <div style={{ fontSize: 11, color: C.faint, marginTop: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+          { label: "Carreras",    value: races.length,    color: C.fg },
+          { label: "En curso",    value: active.length,   color: active.length > 0 ? C.accent : C.fg },
+          { label: "Finalizadas", value: finished.length, color: C.gold },
+          { label: "Atletas",     value: runners.length,  color: C.blue },
+        ].map((s, i) => (
+          <div key={s.label} style={{ padding: "14px 18px", borderLeft: i ? `1px solid ${C.line}` : "none" }}>
+            <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 26, fontWeight: 800, color: s.color, lineHeight: 1 }}>{loading ? "—" : s.value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{s.label}</div>
           </div>
         ))}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
 
-        {/* ── Carreras activas ── */}
+        {/* ── Próximas carreras ── */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#525a60", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>
-            {active.length > 0 ? "🟢 Carreras en curso" : "Próximas carreras"}
-          </div>
+          <div style={SECTION}>Próximas carreras</div>
           {loading ? (
-            <div style={{ ...CARD, textAlign: "center", padding: 32, color: "#525a60" }}>Cargando…</div>
-          ) : (active.length > 0 ? active : planned).length === 0 ? (
-            <div style={{ ...CARD, textAlign: "center", padding: 32, color: "#525a60" }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>🏁</div>
-              <div>No hay carreras {active.length > 0 ? "activas" : "planificadas"}</div>
+            <div style={{ ...CARD, textAlign: "center", padding: 32, color: C.muted }}>Cargando…</div>
+          ) : planned.length === 0 ? (
+            <div style={{ ...CARD, textAlign: "center", padding: 32, color: C.muted }}>
+              <Icon name="flag" size={24} style={{ marginBottom: 8 }} />
+              <div>No hay carreras en preparación</div>
               <button onClick={() => onNavigate("races")} style={{ ...BTN_PRIMARY, marginTop: 12 }}>Crear carrera</button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {(active.length > 0 ? active : planned).slice(0, 4).map(race => (
-                <div key={race.id} style={{ ...CARD, padding: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
-                  onClick={() => onNavigate("races", race)}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = "#00e5a040"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2e31"}>
+              {planned.slice(0, 4).map(race => (
+                <button key={race.id} onClick={() => onNavigate("races", race)} className="row-link"
+                  style={{ ...CARD, padding: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left", color: C.fg, width: "100%" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{race.name}</div>
-                    <div style={{ fontSize: 11, color: "#525a60" }}>
-                      {race.race_date || ""}
-                    </div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{race.race_date || "Sin fecha"}</div>
                   </div>
                   <RaceStatusBadge status={race.status} />
-                  <span style={{ color: "#00e5a060", fontSize: 12 }}>→</span>
-                </div>
+                  <Icon name="chevronR" size={14} style={{ color: C.faint }} />
+                </button>
               ))}
             </div>
           )}
@@ -2052,45 +2210,37 @@ function DashboardPage({ onNavigate }) {
         {/* ── Accesos rápidos + últimas finalizadas ── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Accesos rápidos */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#525a60", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Accesos rápidos</div>
+            <div style={SECTION}>Accesos rápidos</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {QUICK.map(q => (
-                <div key={q.page}
-                  onClick={() => onNavigate(q.page)}
-                  style={{ ...CARD, padding: "12px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, transition: "border-color 0.15s" }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = "#00e5a040"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2e31"}>
-                  <span style={{ fontSize: 20 }}>{q.icon}</span>
+                <button key={q.page} onClick={() => onNavigate(q.page)} className="row-link"
+                  style={{ ...CARD, padding: "12px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, textAlign: "left", color: C.fg, width: "100%" }}>
+                  <Icon name={q.icon} size={18} style={{ color: C.accent }} />
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{q.label}</div>
-                    <div style={{ fontSize: 11, color: "#525a60" }}>{q.desc}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{q.desc}</div>
                   </div>
-                  <span style={{ marginLeft: "auto", color: "#363b3f", fontSize: 14 }}>›</span>
-                </div>
+                  <Icon name="chevronR" size={14} style={{ marginLeft: "auto", color: C.faint }} />
+                </button>
               ))}
             </div>
           </div>
 
-          {/* Últimas finalizadas */}
           {finished.length > 0 && (
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#525a60", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Últimas finalizadas</div>
+              <div style={SECTION}>Últimas finalizadas</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {finished.slice(0, 3).map(race => (
-                  <div key={race.id}
-                    onClick={() => onNavigate("history")}
-                    style={{ ...CARD, padding: "10px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
-                    onMouseEnter={e => e.currentTarget.style.borderColor = "#f5a62340"}
-                    onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2e31"}>
-                    <span style={{ fontSize: 14 }}>🏆</span>
+                  <button key={race.id} onClick={() => onNavigate("races", race)} className="row-link"
+                    style={{ ...CARD, padding: "10px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, textAlign: "left", color: C.fg, width: "100%" }}>
+                    <Icon name="trophy" size={15} style={{ color: C.gold }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{race.name}</div>
-                      <div style={{ fontSize: 11, color: "#525a60" }}>{race.race_date || "Sin fecha"}</div>
+                      <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{race.name}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{race.race_date || "Sin fecha"}</div>
                     </div>
-                    <span style={{ color: "#f5a62360", fontSize: 11 }}>Ver →</span>
-                  </div>
+                    <span style={{ color: C.gold, fontSize: 12, fontWeight: 600 }}>Ver resultados</span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -2099,11 +2249,8 @@ function DashboardPage({ onNavigate }) {
       </div>
 
       {/* ── Nota del sistema ── */}
-      <div style={{ marginTop: 20, padding: "12px 16px", background: C.surface2, borderRadius: RADIUS.card, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 16 }}>💡</span>
-        <div style={{ fontSize: 12, color: "#525a60" }}>
-          <strong style={{ color: "#8a9299" }}>Tip:</strong> En cada carrera encontrás los tabs de <strong style={{ color: "#8a9299" }}>Inscriptos</strong>, <strong style={{ color: "#8a9299" }}>Cronómetro</strong> y <strong style={{ color: "#8a9299" }}>Resultados</strong>. La categoría se calcula automáticamente al ingresar fecha de nacimiento. Desde Resultados podés imprimir el certificado de cada corredor 🖨️.
-        </div>
+      <div style={{ marginTop: 20, padding: "12px 16px", background: C.surface2, borderRadius: RADIUS.card, border: `1px solid ${C.line}`, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+        Cada carrera se abre en la pestaña de su momento: <strong style={{ color: C.fg }}>Inscriptos</strong> mientras se prepara, <strong style={{ color: C.fg }}>Cronómetro</strong> el día de la carrera y <strong style={{ color: C.fg }}>Resultados</strong> cuando termina. La categoría se calcula sola con la fecha de nacimiento, y desde Resultados podés imprimir el certificado de cada corredor.
       </div>
     </div>
   )
@@ -2129,9 +2276,9 @@ const GRUPOS_CARRERA = [
 ]
 const VISIBLES_FINALIZADAS = 6
 
-function RacesPage() {
+function RacesPage({ openRace }) {
   const [races, setRaces]       = useState([])
-  const [drillRace, setDrillRace] = useState(null)
+  const [drillRace, setDrillRace] = useState(openRace || null)
   const [verTodas, setVerTodas] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: "", location: "", race_date: "", capacity: "", registration_url: "" })
@@ -2188,25 +2335,25 @@ function RacesPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
           <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Carreras</OpGrad></span>
-          <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{races.length}</span>
+          <span style={{ marginLeft: 10, background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{races.length}</span>
         </div>
         <button onClick={() => { setShowForm(!showForm); setError("") }} style={BTN_PRIMARY}>+ Nueva Carrera</button>
       </div>
 
       {showForm && (
-        <div style={{ ...CARD, border: "1px solid #00e5a040", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#00e5a0", marginBottom: 12 }}>Nueva Carrera</div>
+        <div style={{ ...CARD, border: `1px solid ${C.accent}40`, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.accent, marginBottom: 12 }}>Nueva Carrera</div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
               <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="ej. Media Maratón Río Cuarto" style={INPUT} onKeyDown={e => e.key === "Enter" && create()} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Lugar</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Lugar</div>
               <input value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Río Cuarto" style={INPUT} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Fecha</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Fecha</div>
               <input value={form.race_date} onChange={e => setForm(p => ({ ...p, race_date: e.target.value }))} style={INPUT} type="date" />
             </div>
           </div>
@@ -2214,15 +2361,15 @@ function RacesPage() {
               la web" la publica como evento con estos dos datos. */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 10, marginBottom: 10 }}>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Cupo</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Cupo</div>
               <input value={form.capacity} onChange={e => setForm(p => ({ ...p, capacity: e.target.value.replace(/\D/g, "") }))} placeholder="sin límite" style={INPUT} inputMode="numeric" />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Link de inscripción</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Link de inscripción</div>
               <input value={form.registration_url} onChange={e => setForm(p => ({ ...p, registration_url: e.target.value }))} placeholder="https://… (se muestra en el calendario del portal)" style={INPUT} />
             </div>
           </div>
-          {error && <div style={{ color: "#ff4d4d", fontSize: 12, marginBottom: 10, padding: "6px 10px", background: "#ff4d4d15", borderRadius: 4 }}>{error}</div>}
+          {error && <div style={{ color: C.danger, fontSize: 12, marginBottom: 10, padding: "6px 10px", background: `${C.danger}15`, borderRadius: 4 }}>{error}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button onClick={() => setShowForm(false)} style={BTN_GHOST}>Cancelar</button>
             <button onClick={create} disabled={saving} style={{ ...BTN_PRIMARY, opacity: saving ? 0.6 : 1 }}>{saving ? "Creando..." : "Crear"}</button>
@@ -2231,8 +2378,8 @@ function RacesPage() {
       )}
 
       {races.length === 0 && !showForm && (
-        <div style={{ textAlign: "center", padding: 60, color: "#525a60" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>🏁</div>
+        <div style={{ textAlign: "center", padding: 60, color: C.faint }}>
+          <Icon name="flag" size={30} style={{ marginBottom: 12, color: C.muted }} />
           <div style={{ fontSize: 14 }}>No hay carreras. Creá una para comenzar.</div>
         </div>
       )}
@@ -2249,45 +2396,45 @@ function RacesPage() {
           <div key={g.status} style={{ marginBottom: 26 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
               <span style={{ width: 8, height: 8, borderRadius: 8, background: s.color, flexShrink: 0 }} />
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#e8eaeb" }}>{g.titulo}</span>
-              <span style={{ fontSize: 12, color: "#525a60" }}>{delGrupo.length}</span>
-              <div style={{ flex: 1, height: 1, background: "#2a2e31" }} />
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.fg }}>{g.titulo}</span>
+              <span style={{ fontSize: 12, color: C.faint }}>{delGrupo.length}</span>
+              <div style={{ flex: 1, height: 1, background: C.line }} />
               {g.colapsable && delGrupo.length > VISIBLES_FINALIZADAS && (
                 <button onClick={() => setVerTodas(v => !v)}
-                  style={{ background: "transparent", border: "none", color: "#8a9299", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                  style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                   {colapsado ? `Ver todas (${delGrupo.length}) →` : "Ver menos ←"}
                 </button>
               )}
             </div>
-            <div style={{ fontSize: 12, color: "#525a60", marginTop: -6, marginBottom: 12 }}>{g.ayuda}</div>
+            <div style={{ fontSize: 12, color: C.faint, marginTop: -6, marginBottom: 12 }}>{g.ayuda}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
               {visibles.map(race => (
                 <div key={race.id}
                   onClick={() => setDrillRace(race)}
                   style={{ ...CARD, cursor: "pointer", transition: "border-color 0.15s, transform 0.1s", position: "relative" }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = "#00e5a050"; e.currentTarget.style.transform = "translateY(-1px)" }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = "#2a2e31"; e.currentTarget.style.transform = "translateY(0)" }}>
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.accent}50`; e.currentTarget.style.transform = "translateY(-1px)" }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.line; e.currentTarget.style.transform = "translateY(0)" }}>
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                     <div style={{ fontWeight: 700, fontSize: 15, flex: 1, paddingRight: 8 }}>{race.name}</div>
                     <button onClick={(e) => deleteRace(race, e)}
-                      style={{ background: "transparent", border: "none", color: "#363b3f", cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1 }}
-                      onMouseEnter={e => e.currentTarget.style.color = "#ff4d4d"}
-                      onMouseLeave={e => e.currentTarget.style.color = "#363b3f"}>✕</button>
+                      style={{ background: "transparent", border: "none", color: C.faint, cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1 }}
+                      onMouseEnter={e => e.currentTarget.style.color = C.danger}
+                      onMouseLeave={e => e.currentTarget.style.color = C.faint} aria-label={`Eliminar ${race.name}`} title="Eliminar carrera"><Icon name="x" size={14} /></button>
                   </div>
 
                   {/* Sin píldora de estado: la sección ya lo dice, repetirlo en
                       cada tarjeta era ruido y tapaba fecha y lugar. */}
                   <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                    {race.race_date && <span style={{ color: "#8a9299", fontSize: 12 }}>📅 {race.race_date}</span>}
-                    {race.location && <span style={{ color: "#8a9299", fontSize: 12 }}>📍 {race.location}</span>}
+                    {race.race_date && <span style={{ color: C.muted, fontSize: 12, ...WITH_ICON, gap: 5 }}><Icon name="calendar" size={13} />{race.race_date}</span>}
+                    {race.location && <span style={{ color: C.muted, fontSize: 12, ...WITH_ICON, gap: 5 }}><Icon name="pin" size={13} />{race.location}</span>}
                   </div>
 
                   {race.race_start_ns && (
-                    <div style={{ fontSize: 11, color: "#00e5a060", marginBottom: 8 }}>✓ Largada registrada</div>
+                    <div style={{ fontSize: 12, color: C.accent2, marginBottom: 8, ...WITH_ICON, gap: 4 }}><Icon name="check" size={12} />Largada registrada</div>
                   )}
 
-                  <div style={{ marginTop: 8, fontSize: 12, color: "#00e5a070", fontWeight: 600 }}>
+                  <div style={{ marginTop: 8, fontSize: 12, color: `${C.accent}70`, fontWeight: 600 }}>
                     Entrar →
                   </div>
                 </div>
@@ -2395,35 +2542,35 @@ function AthletesPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
           <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Atletas</OpGrad></span>
-          <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{runners.length}</span>
-          <span style={{ marginLeft: 8, fontSize: 12, color: "#525a60" }}>— base global de corredores</span>
+          <span style={{ marginLeft: 10, background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{runners.length}</span>
+          <span style={{ marginLeft: 8, fontSize: 12, color: C.faint }}>— base global de corredores</span>
         </div>
         <button onClick={() => { setShowForm(!showForm); resetForm() }} style={BTN_PRIMARY}>+ Nuevo atleta</button>
       </div>
 
       {showForm && (
-        <div style={{ ...CARD, border: "1px solid #00e5a040", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#00e5a0", marginBottom: 12 }}>
+        <div style={{ ...CARD, border: `1px solid ${C.accent}40`, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.accent, marginBottom: 12 }}>
             {editRunner ? `Editar: ${editRunner.full_name}` : "Nuevo atleta"}
           </div>
-          <div style={{ fontSize: 12, color: "#525a60", marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: C.faint, marginBottom: 12 }}>
             El dorsal se asigna al inscribirlo en cada carrera — aquí solo se guarda la información personal.
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Nombre *</div>
               <input value={form.first_name} onChange={e => setForm(p => ({ ...p, first_name: e.target.value }))} placeholder="Carlos" style={INPUT} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Apellido *</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Apellido *</div>
               <input value={form.last_name} onChange={e => setForm(p => ({ ...p, last_name: e.target.value }))} placeholder="Méndez" style={INPUT} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>DNI</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>DNI</div>
               <input value={form.dni} onChange={e => setForm(p => ({ ...p, dni: e.target.value }))} placeholder="12345678" style={INPUT} />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Género</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Género</div>
               <select value={form.gender} onChange={e => {
                 const gender = e.target.value
                 setForm(p => ({ ...p, gender, category: autoCategory(p.birth_date, gender) || p.category }))
@@ -2434,42 +2581,42 @@ function AthletesPage() {
               </select>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Club</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Club</div>
               <input value={form.club} onChange={e => setForm(p => ({ ...p, club: e.target.value }))} placeholder="RC Runners" style={INPUT} />
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Email <span style={{ color: "#363b3f" }}>(para enviar resultados)</span></div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Email <span style={{ color: C.faint }}>(para enviar resultados)</span></div>
               <input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="corredor@email.com" style={INPUT} type="email" />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>Fecha de nacimiento</div>
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>Fecha de nacimiento</div>
               <input value={form.birth_date} onChange={e => {
                 const birth_date = e.target.value
                 setForm(p => ({ ...p, birth_date, category: autoCategory(birth_date, p.gender) || p.category }))
               }} style={INPUT} type="date" />
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#525a60", marginBottom: 4, textTransform: "uppercase" }}>
-                Categoría {form.birth_date && <span style={{ color: "#00e5a060" }}>(auto)</span>}
+              <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>
+                Categoría {form.birth_date && <span style={{ color: `${C.accent}60` }}>(auto)</span>}
               </div>
               <input
                 value={form.category}
                 onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
                 placeholder={form.birth_date ? autoCategory(form.birth_date, form.gender) || "—" : "ej. M30-34"}
-                style={{ ...INPUT, color: form.birth_date && autoCategory(form.birth_date, form.gender) ? "#00e5a0" : "#e8eaeb" }}
+                style={{ ...INPUT, color: form.birth_date && autoCategory(form.birth_date, form.gender) ? C.accent : C.fg }}
               />
             </div>
             {form.birth_date && calcAge(form.birth_date) !== null && (
               <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: 2 }}>
-                <div style={{ background: "#1c1f21", border: "1px solid #363b3f", borderRadius: 6, padding: "7px 10px", color: "#8a9299", fontSize: 13, width: "100%", textAlign: "center" }}>
-                  <span style={{ color: "#e8eaeb", fontWeight: 700 }}>{calcAge(form.birth_date)}</span> años
+                <div style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 6, padding: "7px 10px", color: C.muted, fontSize: 13, width: "100%", textAlign: "center" }}>
+                  <span style={{ color: C.fg, fontWeight: 700 }}>{calcAge(form.birth_date)}</span> años
                 </div>
               </div>
             )}
           </div>
-          {error && <div style={{ color: "#ff4d4d", fontSize: 12, marginBottom: 10, padding: "6px 10px", background: "#ff4d4d15", borderRadius: 4 }}>{error}</div>}
+          {error && <div style={{ color: C.danger, fontSize: 12, marginBottom: 10, padding: "6px 10px", background: `${C.danger}15`, borderRadius: 4 }}>{error}</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button onClick={() => { setShowForm(false); resetForm() }} style={BTN_GHOST}>Cancelar</button>
             <button onClick={save} disabled={saving} style={{ ...BTN_PRIMARY, opacity: saving ? 0.6 : 1 }}>{saving ? "Guardando..." : editRunner ? "Actualizar" : "Crear"}</button>
@@ -2480,15 +2627,15 @@ function AthletesPage() {
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o DNI…" style={{ ...INPUT, maxWidth: 280 }} />
         {selected.size > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 14px", background: "#ff4d4d15", border: "1px solid #ff4d4d30", borderRadius: 8, marginLeft: "auto" }}>
-            <span style={{ fontSize: 13, color: "#ff4d4d", fontWeight: 600 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 14px", background: `${C.danger}15`, border: `1px solid ${C.danger}30`, borderRadius: 8, marginLeft: "auto" }}>
+            <span style={{ fontSize: 13, color: C.danger, fontWeight: 600 }}>
               {selected.size} seleccionado{selected.size > 1 ? "s" : ""}
             </span>
             <button
               onClick={bulkDelete}
               disabled={bulkDeleting}
-              style={{ padding: "4px 14px", background: "#ff4d4d", border: "none", borderRadius: 5, cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, opacity: bulkDeleting ? 0.6 : 1 }}>
-              {bulkDeleting ? "Eliminando..." : "🗑 Eliminar seleccionados"}
+              style={{ padding: "4px 14px", background: C.danger, border: "none", borderRadius: 5, cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, opacity: bulkDeleting ? 0.6 : 1 }}>
+              {bulkDeleting ? "Eliminando..." : "Eliminar seleccionados"}
             </button>
             <button onClick={() => setSelected(new Set())} style={{ ...BTN_GHOST, padding: "4px 10px", fontSize: 12 }}>Cancelar</button>
           </div>
@@ -2498,51 +2645,51 @@ function AthletesPage() {
       <div style={{ ...CARD, overflow: "hidden", padding: 0 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ borderBottom: "1px solid #2a2e31" }}>
+            <tr style={{ borderBottom: `1px solid ${C.line}` }}>
               <th style={{ padding: "8px 14px", width: 36 }}>
                 <input
                   type="checkbox"
                   checked={runners.length > 0 && selected.size === runners.length}
                   ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < runners.length }}
                   onChange={toggleAll}
-                  style={{ cursor: "pointer", accentColor: "#00e5a0" }}
+                  style={{ cursor: "pointer", accentColor: C.accent }}
                 />
               </th>
               {["Nombre", "DNI", "Edad", "Género", "Categoría", "Club", ""].map(h => (
-                <th key={h} style={{ textAlign: "left", padding: "8px 14px", fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#525a60" }}>{h}</th>
+                <th key={h} style={{ textAlign: "left", padding: "8px 14px", fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.faint }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {runners.length === 0 ? (
-              <tr><td colSpan={8} style={{ textAlign: "center", padding: 32, color: "#525a60" }}>{search ? "Sin resultados" : "No hay atletas registrados"}</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: "center", padding: 32, color: C.faint }}>{search ? "Sin resultados" : "No hay atletas registrados"}</td></tr>
             ) : runners.map(r => {
               const isSelected = selected.has(r.id)
               const age = calcAge(r.birth_date)
               return (
-                <tr key={r.id} style={{ borderBottom: "1px solid #1c1f21", background: isSelected ? "#ff4d4d08" : "transparent" }}>
+                <tr key={r.id} style={{ borderBottom: `1px solid ${C.surface2}`, background: isSelected ? `${C.danger}08` : "transparent" }}>
                   <td style={{ padding: "9px 14px" }}>
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelect(r.id)}
-                      style={{ cursor: "pointer", accentColor: "#00e5a0" }}
+                      style={{ cursor: "pointer", accentColor: C.accent }}
                     />
                   </td>
                   <td style={{ padding: "9px 14px", fontSize: 13, fontWeight: 500 }}>{r.full_name}</td>
-                  <td style={{ padding: "9px 14px", fontSize: 12, color: "#8a9299", fontFamily: "monospace" }}>{r.dni || "--"}</td>
-                  <td style={{ padding: "9px 14px", fontSize: 12, color: "#8a9299" }}>{age !== null ? `${age} a` : "--"}</td>
-                  <td style={{ padding: "9px 14px", color: r.gender === "F" ? "#4d9fff" : "#525a60", fontSize: 12 }}>{r.gender || "--"}</td>
+                  <td style={{ padding: "9px 14px", fontSize: 12, color: C.muted, fontFamily: "monospace" }}>{r.dni || "--"}</td>
+                  <td style={{ padding: "9px 14px", fontSize: 12, color: C.muted }}>{age !== null ? `${age} a` : "--"}</td>
+                  <td style={{ padding: "9px 14px", color: r.gender === "F" ? C.blue : C.faint, fontSize: 12 }}>{r.gender || "--"}</td>
                   <td style={{ padding: "9px 14px" }}>
-                    <span style={{ background: r.category?.startsWith("F") ? "#4d9fff15" : "#00e5a015", color: r.category?.startsWith("F") ? "#4d9fff" : "#00e5a0", border: "1px solid " + (r.category?.startsWith("F") ? "#4d9fff30" : "#00e5a030"), borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
+                    <span style={{ background: r.category?.startsWith("F") ? `${C.blue}15` : `${C.accent}15`, color: r.category?.startsWith("F") ? C.blue : C.accent, border: "1px solid " + (r.category?.startsWith("F") ? `${C.blue}30` : `${C.accent}30`), borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
                       {r.category || "--"}
                     </span>
                   </td>
-                  <td style={{ padding: "9px 14px", fontSize: 13, color: "#8a9299" }}>{r.club || "--"}</td>
+                  <td style={{ padding: "9px 14px", fontSize: 13, color: C.muted }}>{r.club || "--"}</td>
                   <td style={{ padding: "9px 14px", textAlign: "right" }}>
                     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       <button onClick={() => startEdit(r)} style={{ ...BTN_GHOST, fontSize: 11, padding: "3px 10px" }}>Editar</button>
-                      <button onClick={() => deleteRunner(r)} style={BTN_DANGER}>✕</button>
+                      <button onClick={() => deleteRunner(r)} style={BTN_DANGER} aria-label="Eliminar"><Icon name="x" size={12} /></button>
                     </div>
                   </td>
                 </tr>
@@ -2584,17 +2731,17 @@ function HistorialPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
           <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Historial</OpGrad> de Carreras</span>
-          <span style={{ marginLeft: 10, background: "#4d9fff15", color: "#4d9fff", border: "1px solid #4d9fff30", borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
+          <span style={{ marginLeft: 10, background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
             {races.length} carrera{races.length !== 1 ? "s" : ""}
           </span>
         </div>
-        <button onClick={loadRaces} style={BTN_GHOST}>↻ Actualizar</button>
+        <button onClick={loadRaces} style={{ ...BTN_GHOST, ...WITH_ICON }}><Icon name="refresh" size={13} />Actualizar</button>
       </div>
 
-      {loading && <div style={{ textAlign: "center", padding: 48, color: "#525a60" }}>Cargando…</div>}
+      {loading && <div style={{ textAlign: "center", padding: 48, color: C.faint }}>Cargando…</div>}
 
       {!loading && races.length === 0 && (
-        <div style={{ textAlign: "center", padding: 60, color: "#525a60" }}>
+        <div style={{ textAlign: "center", padding: 60, color: C.faint }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
           <div style={{ fontSize: 14 }}>No hay carreras. Creá una en la sección Carreras.</div>
         </div>
@@ -2626,42 +2773,42 @@ function RaceResultCard({ race, onOpen }) {
   return (
     <div style={{ ...CARD, cursor: "pointer", transition: "border-color 0.15s" }}
       onClick={onOpen}
-      onMouseEnter={e => e.currentTarget.style.borderColor = "#00e5a060"}
-      onMouseLeave={e => e.currentTarget.style.borderColor = "#2a2e31"}>
+      onMouseEnter={e => e.currentTarget.style.borderColor = `${C.accent}60`}
+      onMouseLeave={e => e.currentTarget.style.borderColor = C.line}>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         <div style={{ fontWeight: 700, fontSize: 15, flex: 1, paddingRight: 8 }}>{race.name}</div>
         <RaceStatusBadge status={race.status} />
       </div>
 
-      <div style={{ fontSize: 12, color: "#525a60", marginBottom: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {race.race_date && <span>📅 {race.race_date}</span>}
-        {race.location && <span>📍 {race.location}</span>}
+      <div style={{ fontSize: 12, color: C.faint, marginBottom: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {race.race_date && <span style={{ ...WITH_ICON, gap: 5 }}><Icon name="calendar" size={13} />{race.race_date}</span>}
+        {race.location && <span style={{ ...WITH_ICON, gap: 5 }}><Icon name="pin" size={13} />{race.location}</span>}
       </div>
 
       {stats ? (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
             {[
-              ["Finishers", stats.finishers, "#00e5a0"],
+              ["Finishers", stats.finishers, C.accent],
               ["Inscritos", stats.registered, null],
-              ["DNS/DNF",   stats.dnf,        stats.dnf > 0 ? "#f5a623" : null],
+              ["DNS/DNF",   stats.dnf,        stats.dnf > 0 ? C.gold : null],
             ].map(([label, val, color]) => (
-              <div key={label} style={{ background: "#1c1f21", borderRadius: RADIUS.sm, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 20, fontWeight: 800, color: color || "#e8eaeb" }}>{val}</div>
-                <div style={{ fontSize: 10, color: "#525a60", textTransform: "uppercase" }}>{label}</div>
+              <div key={label} style={{ background: C.surface2, borderRadius: RADIUS.sm, padding: "8px 10px", textAlign: "center" }}>
+                <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 20, fontWeight: 800, color: color || C.fg }}>{val}</div>
+                <div style={{ fontSize: 11, color: C.muted }}>{label}</div>
               </div>
             ))}
           </div>
-          <div style={{ background: "#1c1f21", borderRadius: 4, height: 6, marginBottom: 12, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${pct}%`, background: "#00e5a0", borderRadius: 4, transition: "width 0.4s" }} />
+          <div style={{ background: C.surface2, borderRadius: 4, height: 6, marginBottom: 12, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: "100%", background: C.accent, borderRadius: 4, transform: `scaleX(${pct / 100})`, transformOrigin: "left", transition: "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)" }} />
           </div>
-          <div style={{ fontSize: 11, color: "#525a60", marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: C.faint, marginBottom: 12 }}>
             {pct}% completado {stats.finishers > 0 && `· ${stats.finishers} finisher${stats.finishers !== 1 ? "s" : ""}`}
           </div>
         </>
       ) : (
-        <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", color: "#363b3f", fontSize: 12 }}>
+        <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", color: C.faint, fontSize: 12 }}>
           Cargando estadísticas…
         </div>
       )}
@@ -2718,9 +2865,9 @@ function EmailControls() {
     } catch (e) { alert("No se pudo enviar la prueba: " + e.message) } finally { setBusy(false) }
   }
 
-  const btn = { width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: "1px solid #2a2e31", background: "#1c1f21", color: "#8a9299", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
-  const inp = { width: "100%", padding: "8px 10px", marginTop: 4, marginBottom: 12, fontSize: 13, borderRadius: 6, border: "1px solid #2a2e31", background: "#0d0f10", color: "#e8eaeb", boxSizing: "border-box" }
-  const lbl = { fontSize: 11, color: "#8a9299", fontWeight: 600 }
+  const btn = { width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${C.line}`, background: C.surface2, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
+  const inp = { width: "100%", padding: "8px 10px", marginTop: 4, marginBottom: 12, fontSize: 13, borderRadius: 6, border: `1px solid ${C.line}`, background: C.bg, color: C.fg, boxSizing: "border-box" }
+  const lbl = { fontSize: 11, color: C.muted, fontWeight: 600 }
 
   return (
     <>
@@ -2729,10 +2876,10 @@ function EmailControls() {
       </button>
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Envío de emails (Brevo)</div>
-            <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 16, lineHeight: 1.5 }}>
-              Creá una cuenta gratis en <span style={{ color: "#4d9fff" }}>brevo.com</span>, verificá tu email remitente y pegá tu API key (Settings → SMTP &amp; API → API Keys). 300 emails/día gratis.
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+              Creá una cuenta gratis en <span style={{ color: C.blue }}>brevo.com</span>, verificá tu email remitente y pegá tu API key (Settings → SMTP &amp; API → API Keys). 300 emails/día gratis.
             </div>
             <div style={lbl}>Nombre del remitente</div>
             <input value={fromName} onChange={e => setFromName(e.target.value)} placeholder="Mi Club / Organización" style={inp} />
@@ -2742,9 +2889,9 @@ function EmailControls() {
             <input value={key} onChange={e => setKey(e.target.value)} type="password" placeholder={cfg?.configured ? `Guardada (${cfg.api_key_masked}) — dejá vacío para mantener` : "xkeysib-..."} style={inp} />
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setOpen(false)} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0 }}>Cerrar</button>
-              <button onClick={save} disabled={busy} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0, background: "#00e5a020", color: "#00e5a0", border: "1px solid #00e5a040" }}>{busy ? "Guardando…" : "Guardar"}</button>
+              <button onClick={save} disabled={busy} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0, background: `${C.accent}20`, color: C.accent, border: `1px solid ${C.accent}40` }}>{busy ? "Guardando…" : "Guardar"}</button>
             </div>
-            <div style={{ borderTop: "1px solid #2a2e31", margin: "16px 0 12px" }} />
+            <div style={{ borderTop: `1px solid ${C.line}`, margin: "16px 0 12px" }} />
             <div style={lbl}>Probar envío</div>
             <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
               <input value={testTo} onChange={e => setTestTo(e.target.value)} placeholder="tu@email.com" style={{ ...inp, marginBottom: 0, flex: 1 }} type="email" />
@@ -2822,12 +2969,12 @@ function AccountControls() {
 
   const btn = {
     width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600,
-    borderRadius: 6, cursor: "pointer", border: "1px solid #2a2e31",
-    background: "#1c1f21", color: "#8a9299", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    borderRadius: 6, cursor: "pointer", border: `1px solid ${C.line}`,
+    background: C.surface2, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
   }
   const inp = {
     width: "100%", padding: "8px 10px", marginTop: 4, marginBottom: 12, fontSize: 13,
-    borderRadius: 6, border: "1px solid #2a2e31", background: "#0d0f10", color: "#e8eaeb", boxSizing: "border-box",
+    borderRadius: 6, border: `1px solid ${C.line}`, background: C.bg, color: C.fg, boxSizing: "border-box",
   }
 
   if (me && me.email) {
@@ -2836,36 +2983,36 @@ function AccountControls() {
     return (
       <div style={{ ...btn, justifyContent: "space-between", cursor: "default", marginBottom: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, overflow: "hidden" }}>
-          <div style={{ width: 22, height: 22, borderRadius: 11, background: "#00e5a0", color: "#000", fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initial}</div>
-          <span style={{ color: "#e8eaeb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+          <div style={{ width: 22, height: 22, borderRadius: 11, background: C.accent, color: "#000", fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{initial}</div>
+          <span style={{ color: C.fg, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
         </div>
-        <span onClick={logout} title="Cerrar sesión" style={{ cursor: "pointer", color: "#8a9299", fontSize: 14 }}>⎋</span>
+        <span onClick={logout} title="Cerrar sesión" style={{ cursor: "pointer", color: C.muted, display: "inline-flex" }}><Icon name="logout" size={14} /></span>
       </div>
     )
   }
 
   return (
     <>
-      <button onClick={() => { setOpen(true); setErr("") }} style={{ ...btn, background: "#00e5a020", color: "#00e5a0", border: "1px solid #00e5a040", marginBottom: 8 }}>
-        👤 Iniciar sesión
+      <button onClick={() => { setOpen(true); setErr("") }} style={{ ...btn, background: `${C.accent}20`, color: C.accent, border: `1px solid ${C.accent}40`, marginBottom: 8 }}>
+        <span style={WITH_ICON}><Icon name="user" size={13} />Iniciar sesión</span>
       </button>
 
       {open && (
         <div onClick={() => !waiting && setOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ width: 400, background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
+            style={{ width: 400, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
               {mode === "register" ? "Crear cuenta" : "Iniciar sesión"}
             </div>
-            <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 18 }}>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
               Tu cuenta LiveRun: la misma del portal y la app móvil.
             </div>
 
             {waiting ? (
               <div style={{ textAlign: "center", padding: "10px 0 4px" }}>
-                <div style={{ fontSize: 13, color: "#e8eaeb", marginBottom: 8 }}>Abrimos el navegador para que entres con Google…</div>
-                <div style={{ fontSize: 12, color: "#8a9299" }}>Cuando termines, esta ventana se cierra sola.</div>
+                <div style={{ fontSize: 13, color: C.fg, marginBottom: 8 }}>Abrimos el navegador para que entres con Google…</div>
+                <div style={{ fontSize: 12, color: C.muted }}>Cuando termines, esta ventana se cierra sola.</div>
               </div>
             ) : (
               <>
@@ -2879,22 +3026,22 @@ function AccountControls() {
                   onKeyDown={e => e.key === "Enter" && submit()} style={inp} />
 
                 <button onClick={submit} disabled={busy}
-                  style={{ ...btn, width: "100%", padding: "10px", margin: "0 0 10px", background: "#00e5a0", color: "#000", border: "none", fontSize: 13 }}>
+                  style={{ ...btn, width: "100%", padding: "10px", margin: "0 0 10px", background: C.accent, color: "#000", border: "none", fontSize: 13 }}>
                   {busy ? "Entrando…" : (mode === "register" ? "Crear cuenta" : "Entrar")}
                 </button>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#8a9299", fontSize: 12, margin: "6px 0" }}>
-                  <div style={{ flex: 1, height: 1, background: "#2a2e31" }} /> o <div style={{ flex: 1, height: 1, background: "#2a2e31" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 10, color: C.muted, fontSize: 12, margin: "6px 0" }}>
+                  <div style={{ flex: 1, height: 1, background: C.line }} /> o <div style={{ flex: 1, height: 1, background: C.line }} />
                 </div>
 
-                <button onClick={googleLogin} style={{ ...btn, width: "100%", padding: "10px", margin: "0 0 10px", background: "#0d0f10", color: "#e8eaeb", fontSize: 13 }}>
+                <button onClick={googleLogin} style={{ ...btn, width: "100%", padding: "10px", margin: "0 0 10px", background: C.bg, color: C.fg, fontSize: 13 }}>
                   Continuar con Google
                 </button>
 
-                <div style={{ textAlign: "center", fontSize: 12, color: "#8a9299" }}>
+                <div style={{ textAlign: "center", fontSize: 12, color: C.muted }}>
                   {mode === "register"
-                    ? <>¿Ya tenés cuenta? <a onClick={() => { setMode("login"); setErr("") }} style={{ color: "#00e5a0", cursor: "pointer" }}>Iniciá sesión</a></>
-                    : <>¿Sos nuevo? <a onClick={() => { setMode("register"); setErr("") }} style={{ color: "#00e5a0", cursor: "pointer" }}>Creá tu cuenta</a></>}
+                    ? <>¿Ya tenés cuenta? <a onClick={() => { setMode("login"); setErr("") }} style={{ color: C.accent, cursor: "pointer" }}>Iniciá sesión</a></>
+                    : <>¿Sos nuevo? <a onClick={() => { setMode("register"); setErr("") }} style={{ color: C.accent, cursor: "pointer" }}>Creá tu cuenta</a></>}
                 </div>
               </>
             )}
@@ -2943,14 +3090,14 @@ function CloudControls() {
 
   const btn = {
     width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600,
-    borderRadius: 6, cursor: "pointer", border: "1px solid #2a2e31",
-    background: "#1c1f21", color: "#8a9299", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    borderRadius: 6, cursor: "pointer", border: `1px solid ${C.line}`,
+    background: C.surface2, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
   }
   const inp = {
     width: "100%", padding: "8px 10px", marginTop: 4, marginBottom: 12, fontSize: 13,
-    borderRadius: 6, border: "1px solid #2a2e31", background: "#0d0f10", color: "#e8eaeb", boxSizing: "border-box",
+    borderRadius: 6, border: `1px solid ${C.line}`, background: C.bg, color: C.fg, boxSizing: "border-box",
   }
-  const lbl = { fontSize: 11, color: "#8a9299", fontWeight: 600 }
+  const lbl = { fontSize: 11, color: C.muted, fontWeight: 600 }
 
   return (
     <>
@@ -2962,9 +3109,9 @@ function CloudControls() {
         <div onClick={() => setOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ width: 440, background: "#141618", border: "1px solid #2a2e31", borderRadius: 16, padding: 24, color: "#e8eaeb" }}>
+            style={{ width: 440, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Portal en la nube</div>
-            <div style={{ fontSize: 12, color: "#8a9299", marginBottom: 18 }}>
+            <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
               Configurá dónde se publican los resultados. La API key se guarda sólo en este equipo.
             </div>
 
@@ -2979,7 +3126,7 @@ function CloudControls() {
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
               <button onClick={() => setOpen(false)} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0 }}>Cancelar</button>
               <button onClick={save} disabled={busy}
-                style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0, background: "#00e5a020", color: "#00e5a0", border: "1px solid #00e5a040" }}>
+                style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0, background: `${C.accent}20`, color: C.accent, border: `1px solid ${C.accent}40` }}>
                 {busy ? "Guardando…" : "Guardar"}
               </button>
             </div>
@@ -3021,8 +3168,8 @@ function BackupControls() {
 
   const btn = {
     width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600,
-    borderRadius: 6, cursor: busy ? "wait" : "pointer", border: "1px solid #2a2e31",
-    background: "#1c1f21", color: "#8a9299", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    borderRadius: 6, cursor: busy ? "wait" : "pointer", border: `1px solid ${C.line}`,
+    background: C.surface2, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
   }
 
   return (
@@ -3056,13 +3203,15 @@ export default function App() {
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // onNavigate: permite al Dashboard navegar a otras secciones
-  const navigate = useCallback((p) => setPage(p), [])
+  // onNavigate: permite al Dashboard navegar a otras secciones; con `race`,
+  // entra directo a esa carrera en vez de dejar al operador buscándola.
+  const [openRace, setOpenRace] = useState(null)
+  const navigate = useCallback((p, race = null) => { setOpenRace(race); setPage(p) }, [])
 
   const PAGES = [
-    { id: "races",    label: "Carreras",  icon: "🏁" },
-    { id: "athletes", label: "Atletas",   icon: "👤" },
-    { id: "history",  label: "Historial", icon: "📋" },
+    { id: "races",    label: "Carreras",  icon: "flag" },
+    { id: "athletes", label: "Atletas",   icon: "user" },
+    { id: "history",  label: "Historial", icon: "list" },
   ]
 
   const pageLabel = page === "home" ? "Inicio" : (PAGES.find(p => p.id === page)?.label || "")
@@ -3075,7 +3224,7 @@ export default function App() {
 
         {/* Logo — clickeable → Inicio */}
         <div
-          onClick={() => setPage("home")}
+          onClick={() => navigate("home")}
           style={{ padding: "18px 16px 14px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", userSelect: "none" }}
           onMouseEnter={e => e.currentTarget.style.background = C.surface2}
           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -3088,37 +3237,37 @@ export default function App() {
 
         <nav style={{ flex: 1, padding: "12px 8px" }}>
           {/* Inicio */}
-          <div onClick={() => setPage("home")}
-            style={{ padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === "home" ? "#00e5a020" : "transparent", color: page === "home" ? "#00e5a0" : "#8a9299", border: `1px solid ${page === "home" ? "#00e5a040" : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
-            <span>🏠</span><span>Inicio</span>
-          </div>
+          <button onClick={() => navigate("home")} aria-current={page === "home" ? "page" : undefined}
+            style={{ width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === "home" ? `${C.accent}20` : "transparent", color: page === "home" ? C.accent : C.muted, border: `1px solid ${page === "home" ? `${C.accent}40` : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
+            <Icon name="home" /><span>Inicio</span>
+          </button>
 
-          <div style={{ height: 1, background: "#2a2e31", margin: "8px 4px" }} />
+          <div style={{ height: 1, background: C.line, margin: "8px 4px" }} />
 
           {PAGES.map(p => (
-            <div key={p.id} onClick={() => setPage(p.id)}
-              style={{ padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === p.id ? "#00e5a020" : "transparent", color: page === p.id ? "#00e5a0" : "#8a9299", border: `1px solid ${page === p.id ? "#00e5a040" : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
-              <span>{p.icon}</span>
+            <button key={p.id} onClick={() => navigate(p.id)} aria-current={page === p.id ? "page" : undefined}
+              style={{ width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === p.id ? `${C.accent}20` : "transparent", color: page === p.id ? C.accent : C.muted, border: `1px solid ${page === p.id ? `${C.accent}40` : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
+              <Icon name={p.icon} />
               <span>{p.label}</span>
-            </div>
+            </button>
           ))}
         </nav>
 
-        <div style={{ padding: "12px 12px", borderTop: "1px solid #2a2e31" }}>
+        <div style={{ padding: "12px 12px", borderTop: `1px solid ${C.line}` }}>
           <AccountControls />
           <button
             onClick={() => setShowConfig(v => !v)}
             style={{
               width: "100%", padding: "8px 10px", marginBottom: showConfig ? 8 : 0,
               fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer",
-              border: `1px solid ${showConfig ? "#00e5a040" : "#2a2e31"}`,
-              background: showConfig ? "#00e5a020" : "#1c1f21",
-              color: showConfig ? "#00e5a0" : "#8a9299",
+              border: `1px solid ${showConfig ? `${C.accent}40` : C.line}`,
+              background: showConfig ? `${C.accent}20` : C.surface2,
+              color: showConfig ? C.accent : C.muted,
               display: "flex", alignItems: "center", gap: 8,
             }}
             title="Nube, email y respaldos">
-            <span>⚙️</span><span>Configuración</span>
-            <span style={{ marginLeft: "auto", fontSize: 10 }}>{showConfig ? "▾" : "▸"}</span>
+            <Icon name="settings" /><span>Configuración</span>
+            <span style={{ marginLeft: "auto", fontSize: 10 }}><Icon name={showConfig ? "chevronD" : "chevronR"} size={12} /></span>
           </button>
           {showConfig && (
             <div>
@@ -3127,7 +3276,7 @@ export default function App() {
               <BackupControls />
             </div>
           )}
-          <div style={{ fontSize: 10, color: "#363b3f", textAlign: "center", marginTop: 8 }}>v{APP_VERSION}</div>
+          <div style={{ fontSize: 10, color: C.faint, textAlign: "center", marginTop: 8 }}>v{APP_VERSION}</div>
         </div>
       </div>
 
@@ -3141,7 +3290,7 @@ export default function App() {
         {/* Página activa */}
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
           {page === "home"     && <DashboardPage onNavigate={navigate} />}
-          {page === "races"    && <RacesPage />}
+          {page === "races"    && <RacesPage key={openRace?.id ?? "lista"} openRace={openRace} />}
           {page === "athletes" && <AthletesPage />}
           {page === "history"  && <HistorialPage />}
         </div>
