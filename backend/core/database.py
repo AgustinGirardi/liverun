@@ -66,6 +66,8 @@ async def init_db():
             "ALTER TABLE runners ADD COLUMN email VARCHAR(200)",
             "ALTER TABLE races ADD COLUMN registration_url VARCHAR(400)",
             "ALTER TABLE races ADD COLUMN capacity INTEGER",
+            "ALTER TABLE races ADD COLUMN published_at DATETIME",
+            "ALTER TABLE races ADD COLUMN published_code VARCHAR(40)",
         ]
         for sql in migrations:
             try:

@@ -12,6 +12,15 @@ function getWsBase() {
 
 function pad(n, l = 2) { return String(n).padStart(l, "0") }
 
+// "2026-09-13" -> "13 sep 2026". Se parsea a mano: new Date("2026-09-13") toma
+// UTC y en Argentina corre el día para atrás.
+const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+function formatDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "")
+  if (!m || +m[2] < 1 || +m[2] > 12) return iso || ""
+  return `${+m[3]} ${MESES[+m[2] - 1]} ${m[1]}`
+}
+
 function formatNs(ns) {
   if (!ns && ns !== 0) return "--:--:--.---"
   const ms = Number(BigInt(ns) / 1000000n)
@@ -439,6 +448,9 @@ const C = {
   accent: "#00e5a0", accent2: "#00bf85", onAccent: "#06281d",
   blue: "#4d9fff", gold: "#f5a623", danger: "#ff4d4d",
 }
+// Podio: plata y bronce (el oro es C.gold)
+const SILVER = "#aabbcc"
+const BRONZE = "#cd7c4a"
 const FONT_DISPLAY = 'ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif'
 const FONT_NUM = { fontVariantNumeric: "tabular-nums", fontFeatureSettings: '"tnum" 1' }
 const RADIUS = { card: 16, hero: 20, pill: 999, sm: 8 }
@@ -526,6 +538,56 @@ const REG_STATUS = {
   DQ:  { color: C.danger,  label: "DQ" },
 }
 
+// "hace 3 min" en rioplatense. El backend guarda UTC sin zona: se le agrega la Z
+// para que el navegador no lo lea como hora local.
+function timeAgo(iso) {
+  if (!iso) return ""
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + "Z")
+  const min = Math.floor((Date.now() - d.getTime()) / 60000)
+  if (min < 1) return "recién"
+  if (min < 60) return `hace ${min} min`
+  const h = Math.floor(min / 60)
+  if (h < 24) return `hace ${h} h`
+  const dias = Math.floor(h / 24)
+  if (dias === 1) return "ayer"
+  if (dias <= 7) return `hace ${dias} días`
+  const pad = n => String(n).padStart(2, "0")
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
+}
+
+// Chip de publicación: guarda el "hace X" fresco con su propio timer, así el
+// padre no re-renderiza entero cada minuto.
+function PublishedChip({ race }) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => tick(n => n + 1), 60000)
+    return () => clearInterval(t)
+  }, [])
+  const copy = () => {
+    navigator.clipboard.writeText(race.published_code || "")
+      .then(() => notify("Código copiado", { kind: "success" }))
+      .catch(() => notify("No se pudo copiar el código", { kind: "error" }))
+  }
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 6px 4px 10px", background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: RADIUS.pill, color: C.muted, fontSize: 12, whiteSpace: "nowrap" }}>
+      <span>{race.status === "PLANNED" ? "Anunciado" : "Publicado"}</span>
+      {race.published_code && (
+        <>
+          <span aria-hidden="true">·</span>
+          <span>código</span>
+          <span style={{ ...FONT_NUM, fontFamily: "ui-monospace, Consolas, monospace", color: C.fg, fontWeight: 700 }}>{race.published_code}</span>
+          <button onClick={copy} title="Copiar código" aria-label="Copiar código"
+            style={{ display: "inline-flex", alignItems: "center", padding: 3, background: "transparent", border: "none", color: C.muted, cursor: "pointer" }}>
+            <Icon name="copy" size={13} />
+          </button>
+        </>
+      )}
+      <span aria-hidden="true">·</span>
+      <span>{timeAgo(race.published_at)}</span>
+    </span>
+  )
+}
+
 function RaceStatusBadge({ status }) {
   const s = RACE_STATUS[status] || RACE_STATUS.PLANNED
   return (
@@ -576,6 +638,7 @@ function useTimingEngine(raceId) {
           capture_ns: r.finish_time_ns,
           net_time_ns: r.net_time_ns,
           position: r.position,
+          distance_km: r.distance_km ?? null,
         }))
       ))
       .catch(() => {})
@@ -612,6 +675,7 @@ function useTimingEngine(raceId) {
             capture_ns: data.capture_ns,
             net_time_ns: data.net_time_ns,
             position: data.position,
+            distance_km: data.distance_km ?? null,
           }].sort((a, b) => a.capture_ns - b.capture_ns)
         })
       } else if (event === "UNASSIGNED") {
@@ -785,7 +849,7 @@ function InscriptosView({ race }) {
   }
 
   const deleteReg = async (reg) => {
-    if (!confirm(`¿Quitar a ${reg.runner.full_name} (dorsal ${reg.bib_number}) de esta carrera?`)) return
+    if (!(await ask({ title: "Quitar inscripto", message: `¿Quitar a ${reg.runner.full_name} (dorsal ${reg.bib_number}) de esta carrera?`, confirmLabel: "Quitar", danger: true }))) return
     await fetch(API + "/races/" + raceId + "/registrations/" + reg.id, { method: "DELETE" })
     load()
   }
@@ -808,7 +872,7 @@ function InscriptosView({ race }) {
 
   const bulkDelete = async () => {
     if (selected.size === 0) return
-    if (!confirm(`¿Eliminar ${selected.size} inscripto${selected.size > 1 ? "s" : ""}? Esta acción no se puede deshacer.`)) return
+    if (!(await ask({ title: "Eliminar inscriptos", message: `¿Eliminar ${selected.size} inscripto${selected.size > 1 ? "s" : ""}? Esta acción no se puede deshacer.`, confirmLabel: "Eliminar", danger: true }))) return
     setBulkDeleting(true)
     await fetch(API + "/races/" + raceId + "/registrations/bulk-delete", {
       method: "POST",
@@ -1216,6 +1280,64 @@ function WallClock({ style }) {
   return <span style={style}>{pad(now.getHours())}:{pad(now.getMinutes())}:{pad(now.getSeconds())}</span>
 }
 
+// Ritmo en min/km ("4:52 /km"); vacío si falta tiempo neto o distancia.
+function formatPace(netNs, km) {
+  if (!netNs || !km) return ""
+  const secPerKm = Math.round(netNs / 1e9 / km)
+  return `${Math.floor(secPerKm / 60)}:${String(secPerKm % 60).padStart(2, "0")} /km`
+}
+
+// Clasificación agrupada por distancia. La posición se calcula acá (por tiempo
+// neto dentro de cada grupo) porque la del servidor queda vieja si después se
+// asigna a alguien que cruzó antes.
+function Standings({ finishers, onCorrect }) {
+  const timeOf = f => f.net_time_ns || f.capture_ns
+  const byDist = new Map()
+  finishers.forEach(f => {
+    const k = f.distance_km ?? null
+    if (!byDist.has(k)) byDist.set(k, [])
+    byDist.get(k).push(f)
+  })
+  // Ascendente por distancia; los que no tienen distancia van al final
+  const keys = [...byDist.keys()].sort((a, b) => (a === null) - (b === null) || a - b)
+  const showHeaders = keys.length > 1
+  const podium = [C.gold, SILVER, BRONZE]
+
+  return keys.map((k, gi) => {
+    const rows = byDist.get(k).slice().sort((a, b) => timeOf(a) - timeOf(b))
+    return (
+      <div key={k ?? "none"} style={{ marginTop: showHeaders && gi > 0 ? 20 : 0 }}>
+        {showHeaders && (
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, padding: "0 0 6px", borderBottom: `1px solid ${C.lineStrong}`, display: "flex", justifyContent: "space-between" }}>
+            <span>{k === null ? "" : `${k} km`}</span>
+            <span>{rows.length}</span>
+          </div>
+        )}
+        {rows.map((f, i) => (
+          <div key={f.capture_id ?? `b${f.bib_number}`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${C.surface2}` }}>
+            <span style={{ ...FONT_NUM, fontFamily: "monospace", fontSize: 13, color: i < 3 ? podium[i] : C.faint, fontWeight: i < 3 ? 700 : 400, minWidth: 22 }}>{i + 1}</span>
+            <span style={{ fontFamily: "monospace", fontSize: 11, background: C.surface2, padding: "1px 6px", borderRadius: 3, color: C.muted }}>{f.bib_number}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.runner?.full_name || "--"}</div>
+              <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.fg }}>{formatNs(timeOf(f))}</div>
+              {formatPace(f.net_time_ns, f.distance_km) && (
+                <div style={{ ...FONT_NUM, fontSize: 11, color: C.muted }}>{formatPace(f.net_time_ns, f.distance_km)}</div>
+              )}
+              {onCorrect && f.capture_id && (
+                <button onClick={() => onCorrect(f.capture_id)} title="Quitar el dorsal y devolver la llegada a la cola para reasignarla"
+                  style={{ padding: "1px 0", background: "transparent", color: C.gold, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, ...WITH_ICON, gap: 4 }}><Icon name="pencil" size={11} />Corregir</button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  })
+}
+
 function TimingPage({ race, onRaceChange, onFinish }) {
   const raceId = race?.id
   const { queue: rawQueue, finishers, connected, error, clearError, capture, assignBib, undoAssign, discard, bibLookup } = useTimingEngine(raceId)
@@ -1284,11 +1406,12 @@ function TimingPage({ race, onRaceChange, onFinish }) {
 
   // El aviso de conexión espera 2 s: al abrir la pantalla el socket tarda un
   // instante y no tiene sentido alarmar por eso.
+  // Cada corte arranca su propio timer; el cleanup (al volver la conexión) rearma graceOver en false.
   const [graceOver, setGraceOver] = useState(false)
   useEffect(() => {
     if (connected) return
     const t = setTimeout(() => setGraceOver(true), 2000)
-    return () => clearTimeout(t)
+    return () => { clearTimeout(t); setGraceOver(false) }
   }, [connected])
   const offline = !connected && graceOver
 
@@ -1308,12 +1431,12 @@ function TimingPage({ race, onRaceChange, onFinish }) {
   }
 
   const startRace = async () => {
-    if (raceStartNs) { alert("La largada ya fue registrada"); return }
-    if (!confirm("¿Registrar largada AHORA?")) return
+    if (raceStartNs) { notify("La largada ya fue registrada", { kind: "info" }); return }
+    if (!(await ask({ title: "Registrar largada", message: "Los tiempos netos se van a medir desde este instante. Hacelo en el momento exacto de la largada.", confirmLabel: "Registrar largada" }))) return
     const r = await fetch(API + "/races/" + raceId + "/start", { method: "POST" })
     const data = await r.json()
     if (r.ok) { setRaceStartNs(data.race_start_ns); onRaceChange?.() }
-    else alert(data.detail || "Error")
+    else notify(data.detail || "Error", { kind: "error" })
   }
 
   if (!race) return (
@@ -1338,17 +1461,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
           </div>
           {finishers.length === 0
             ? <div style={{ textAlign: "center", padding: 32, color: C.faint }}>Sin tiempos registrados</div>
-            : finishers.map((f, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.surface2}` }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14, color: i === 0 ? C.gold : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : C.faint, minWidth: 24, fontWeight: i < 3 ? 700 : 400 }}>{i + 1}</span>
-                <span style={{ fontFamily: "monospace", fontSize: 11, background: C.surface2, padding: "1px 6px", borderRadius: 3, color: C.muted }}>{f.bib_number}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{f.runner?.full_name || "--"}</div>
-                  <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
-                </div>
-                <span style={{ ...FONT_NUM, fontFamily: "monospace", fontSize: 13, color: C.fg, fontWeight: 600 }}>{formatNs(f.net_time_ns || f.capture_ns)}</span>
-              </div>
-            ))
+            : <Standings finishers={finishers} />
           }
         </div>
       </div>
@@ -1498,23 +1611,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
         </div>
         {finishers.length === 0
           ? <div style={{ textAlign: "center", padding: 24, color: C.faint, fontSize: 13 }}>Sin finishers aún</div>
-          : finishers.map((f, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${C.surface2}` }}>
-              <span style={{ fontFamily: "monospace", fontSize: 13, color: i === 0 ? C.gold : i === 1 ? "#aabbcc" : i === 2 ? "#cd7c4a" : C.faint, minWidth: 22 }}>{i + 1}</span>
-              <span style={{ fontFamily: "monospace", fontSize: 11, background: C.surface2, padding: "1px 6px", borderRadius: 3, color: C.muted }}>{f.bib_number}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.runner?.full_name || "--"}</div>
-                <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.fg }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
-                {f.capture_id && (
-                  <button onClick={() => undoAssign(f.capture_id)} title="Quitar el dorsal y devolver la llegada a la cola para reasignarla"
-                    style={{ padding: "1px 0", background: "transparent", color: C.gold, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, ...WITH_ICON, gap: 4 }}><Icon name="pencil" size={11} />Corregir</button>
-                )}
-              </div>
-            </div>
-          ))
+          : <Standings finishers={finishers} onCorrect={undoAssign} />
         }
       </div>
       </div>{/* end grid */}
@@ -1624,7 +1721,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{race.name}</div>
             <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
-              {[race.race_date, race.location].filter(Boolean).join(" · ")}
+              {[formatDate(race.race_date), race.location].filter(Boolean).join(" · ")}
             </div>
           </div>
         </div>
@@ -1955,7 +2052,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
     })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      alert(err.detail || "No se puede cambiar el estado")
+      notify(err.detail || "No se puede cambiar el estado", { kind: "error" })
       return false
     }
     refreshRace()
@@ -1969,25 +2066,25 @@ function RaceDetailPage({ race: initialRace, onBack }) {
     const aviso = n > 0
       ? `Quedan ${n} llegada${n > 1 ? "s" : ""} sin dorsal asignado en la cola.\n\nSi finalizás ahora, esos tiempos no entran en los resultados (podés reabrir la carrera para corregir).\n\n¿Finalizar "${race.name}" igual?`
       : `¿Finalizar "${race.name}"?\n\nSe cierra el cronómetro y la carrera pasa a Finalizadas. Después vas a poder publicar y enviar los resultados.`
-    if (!confirm(aviso)) return
+    if (!(await ask({ title: "Finalizar carrera", message: aviso, confirmLabel: "Finalizar carrera", danger: true }))) return
     if (await changeStatus("FINISHED")) setSubPage("resultados")
   }
 
   const reopenForCorrection = async () => {
-    if (!confirm(`¿Reabrir "${race.name}" para corregir?\n\nLa carrera vuelve al estado "En curso" para que puedas ajustar dorsales, tiempos o estados de los corredores. Cuando termines, finalizala de nuevo.\n\nNo puede haber otra carrera en curso al mismo tiempo.`)) return
+    if (!(await ask({ title: "Reabrir carrera", confirmLabel: "Reabrir", message: `¿Reabrir "${race.name}" para corregir?\n\nLa carrera vuelve al estado "En curso" para que puedas ajustar dorsales, tiempos o estados de los corredores. Cuando termines, finalizala de nuevo.\n\nNo puede haber otra carrera en curso al mismo tiempo.` }))) return
     if (await changeStatus("ACTIVE")) setSubPage("cronometro")
   }
 
   const duplicate = async () => {
-    if (!confirm(`¿Duplicar "${race.name}" como nueva carrera?\n\nSe crea una copia en estado "En preparación" con los mismos inscriptos (sin tiempos ni resultados). Útil para ediciones recurrentes.`)) return
+    if (!(await ask({ title: "Duplicar carrera", confirmLabel: "Duplicar", message: `¿Duplicar "${race.name}" como nueva carrera?\n\nSe crea una copia en estado "En preparación" con los mismos inscriptos (sin tiempos ni resultados). Útil para ediciones recurrentes.` }))) return
     const r = await fetch(API + "/races/" + race.id + "/duplicate", { method: "POST" })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      alert("Error al duplicar: " + (err.detail || "error desconocido"))
+      notify("Error al duplicar: " + (err.detail || "error desconocido"), { kind: "error" })
       return
     }
     const created = await r.json()
-    alert(`Carrera duplicada: "${created.name}".\nLa encontrás en la lista de carreras.`)
+    notify(`Carrera duplicada: "${created.name}".\nLa encontrás en la lista de carreras.`, { kind: "success" })
     onBack()
   }
 
@@ -1995,7 +2092,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
     // Verificar que la nube esté configurada
     const cfg = await fetch(API + "/cloud/config").then(r => r.json()).catch(() => null)
     if (!cfg || !cfg.configured) {
-      alert("Primero configurá la conexión al portal en Configuración → Nube (URL + API key).")
+      notify("Primero configurá la conexión al portal en Configuración → Nube (URL + API key).", { kind: "error" })
       return
     }
     // Una carrera todavía en preparación se anuncia en el calendario del portal;
@@ -2005,20 +2102,22 @@ function RaceDetailPage({ race: initialRace, onBack }) {
     const aviso = esEvento
       ? `¿Anunciar "${race.name}" en el calendario del portal?\n\nSe enviará: nombre, fecha, lugar, distancias, cupo, cantidad de inscriptos y el link de inscripción.\nNO se envían datos de los corredores.\n\nLos corredores lo van a ver en: ${cfg.url}`
       : `¿Publicar los resultados de "${race.name}" en el portal público?\n\nSe enviará: nombre, categoría, club, dorsal, distancia y tiempos.\nNO se envía DNI ni fecha de nacimiento.\n\nLos corredores podrán reclamar su resultado en: ${cfg.url}`
-    if (!confirm(aviso)) return
+    if (!(await ask({ title: esEvento ? "Anunciar en el portal" : "Publicar resultados", message: aviso, confirmLabel: esEvento ? "Anunciar" : "Publicar" }))) return
     setPublishing(true)
     try {
       const r = await fetch(API + "/races/" + race.id + "/publish", { method: "POST" })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) {
-        alert("No se pudo publicar: " + (data.detail || "error desconocido"))
+        notify("No se pudo publicar: " + (data.detail || "error desconocido"), { kind: "error" })
         return
       }
-      alert(data.event
-        ? `✅ ${data.message}\n\nInscriptos informados: ${data.registered_count}\nCódigo de la carrera: ${data.code}\n\nYa aparece en el Calendario del portal. Cuando publiques los resultados, pasa sola a Carreras con el mismo código.`
-        : `✅ ${data.message}\n\nResultados publicados: ${data.published_results}\nCódigo de la carrera: ${data.code}\n\nLos corredores ya pueden buscarla en el portal con ese código.`)
+      // el código queda visible en el chip del header; el aviso ya no necesita ser sticky
+      notify(data.event
+        ? `${data.message}\n\nInscriptos informados: ${data.registered_count}\nCódigo de la carrera: ${data.code}\n\nYa aparece en el Calendario del portal. Cuando publiques los resultados, pasa sola a Carreras con el mismo código.`
+        : `${data.message}\n\nResultados publicados: ${data.published_results}\nCódigo de la carrera: ${data.code}\n\nLos corredores ya pueden buscarla en el portal con ese código.`, { kind: "success" })
+      refreshRace()
     } catch (e) {
-      alert("No se pudo publicar: " + e.message)
+      notify("No se pudo publicar: " + e.message, { kind: "error" })
     } finally {
       setPublishing(false)
     }
@@ -2027,24 +2126,24 @@ function RaceDetailPage({ race: initialRace, onBack }) {
   const sendResults = async () => {
     const cfg = await fetch(API + "/email/config").then(r => r.json()).catch(() => null)
     if (!cfg || !cfg.configured) {
-      alert("Primero configurá el envío de emails en Configuración → Email (API key + remitente).")
+      notify("Primero configurá el envío de emails en Configuración → Email (API key + remitente).", { kind: "error" })
       return
     }
-    if (!confirm(`¿Enviar por email el resultado a los finishers de "${race.name}"?\n\nSe enviará a cada corredor que tenga email cargado: su tiempo, posición y un link al portal.\n\nRemitente: ${cfg.from_name} <${cfg.from_email}>`)) return
+    if (!(await ask({ title: "Enviar resultados por email", confirmLabel: "Enviar", message: `¿Enviar por email el resultado a los finishers de "${race.name}"?\n\nSe enviará a cada corredor que tenga email cargado: su tiempo, posición y un link al portal.\n\nRemitente: ${cfg.from_name} <${cfg.from_email}>` }))) return
     setSending(true)
     try {
       const r = await fetch(API + "/races/" + race.id + "/send-results", { method: "POST" })
       const data = await r.json().catch(() => ({}))
       if (!r.ok) {
-        alert("No se pudo enviar: " + (data.detail || "error desconocido"))
+        notify("No se pudo enviar: " + (data.detail || "error desconocido"), { kind: "error" })
         return
       }
-      let msg = `✅ Emails enviados: ${data.sent}\n`
+      let msg = `Emails enviados: ${data.sent}\n`
       if (data.no_email) msg += `Sin email (omitidos): ${data.no_email}\n`
       if (data.failed) msg += `\nFallidos: ${data.failed}\n` + (data.failed_detail || []).join("\n")
-      alert(msg)
+      notify(msg, { kind: data.failed ? "error" : "success" })
     } catch (e) {
-      alert("No se pudo enviar: " + e.message)
+      notify("No se pudo enviar: " + e.message, { kind: "error" })
     } finally {
       setSending(false)
     }
@@ -2063,11 +2162,13 @@ function RaceDetailPage({ race: initialRace, onBack }) {
         <button onClick={onBack} style={{ ...BTN_GHOST, marginTop: 4, flexShrink: 0 }}>← Carreras</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 20 }}>{race.name}</div>
-          <div style={{ fontSize: 12, color: C.faint, marginTop: 3 }}>
-            {[race.race_date, race.location].filter(Boolean).join(" · ")}
+          <div style={{ fontSize: 12, color: C.faint, marginTop: 3, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span>{[formatDate(race.race_date), race.location].filter(Boolean).join(" · ")}</span>
+            {/* El chip va acá y no en la fila de acciones: ahí le sacaba ancho al nombre. */}
+            {race.published_at && <PublishedChip race={race} />}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0, marginTop: 2 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0, marginTop: 2 }}>
           {/* Acciones ordenadas por etapa: secundarias a la izquierda, y a la
               derecha la única acción principal de este momento de la carrera. */}
           <RaceStatusBadge status={race.status} />
@@ -2096,7 +2197,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
               <button onClick={publish} disabled={publishing}
                 title="Publicar los resultados parciales en el portal público (sin DNI ni fecha de nacimiento)"
                 style={{ ...BTN_GHOST, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
-                {publishing ? "Publicando…" : <span style={WITH_ICON}><Icon name="cloud" size={13} />Publicar parciales</span>}
+                {publishing ? "Publicando…" : <span style={WITH_ICON}><Icon name="cloud" size={13} />{race.published_at ? "Volver a publicar parciales" : "Publicar parciales"}</span>}
               </button>
               {subPage !== "cronometro" && (
                 <button onClick={finishRace}
@@ -2112,7 +2213,9 @@ function RaceDetailPage({ race: initialRace, onBack }) {
                 ? "Anunciar la carrera en el calendario del portal"
                 : "Publicar los resultados en el portal público (sin DNI ni fecha de nacimiento)"}
               style={{ ...BTN_PRIMARY, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
-              {publishing ? "Publicando…" : <span style={WITH_ICON}><Icon name="cloud" size={13} />{race.status === "PLANNED" ? "Publicar en calendario" : "Publicar resultados"}</span>}
+              {publishing ? "Publicando…" : <span style={WITH_ICON}><Icon name="cloud" size={13} />{race.status === "PLANNED"
+                ? (race.published_at ? "Volver a anunciar" : "Publicar en calendario")
+                : (race.published_at ? "Volver a publicar" : "Publicar resultados")}</span>}
             </button>
           )}
         </div>
@@ -2251,7 +2354,7 @@ function DashboardPage({ onNavigate }) {
                   style={{ ...CARD, padding: 14, display: "flex", alignItems: "center", gap: 12, cursor: "pointer", textAlign: "left", color: C.fg, width: "100%" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{race.name}</div>
-                    <div style={{ fontSize: 12, color: C.muted }}>{race.race_date || "Sin fecha"}</div>
+                    <div style={{ fontSize: 12, color: C.muted }}>{formatDate(race.race_date) || "Sin fecha"}</div>
                   </div>
                   <RaceStatusBadge status={race.status} />
                   <Icon name="chevronR" size={14} style={{ color: C.faint }} />
@@ -2291,7 +2394,7 @@ function DashboardPage({ onNavigate }) {
                     <Icon name="trophy" size={15} style={{ color: C.gold }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{race.name}</div>
-                      <div style={{ fontSize: 12, color: C.muted }}>{race.race_date || "Sin fecha"}</div>
+                      <div style={{ fontSize: 12, color: C.muted }}>{formatDate(race.race_date) || "Sin fecha"}</div>
                     </div>
                     <span style={{ color: C.gold, fontSize: 12, fontWeight: 600 }}>Ver resultados</span>
                   </button>
@@ -2330,7 +2433,7 @@ const GRUPOS_CARRERA = [
 ]
 const VISIBLES_FINALIZADAS = 6
 
-function RacesPage({ openRace }) {
+function RacesPage({ openRace, onOpenRace }) {
   const [races, setRaces]       = useState([])
   const [drillRace, setDrillRace] = useState(openRace || null)
   const [verTodas, setVerTodas] = useState(false)
@@ -2344,6 +2447,13 @@ function RacesPage({ openRace }) {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Avisa al padre qué carrera está abierta (para la barra superior); al
+  // volver a la lista o desmontarse, el cleanup lo deja en null.
+  useEffect(() => {
+    onOpenRace?.(drillRace)
+    return () => onOpenRace?.(null)
+  }, [drillRace, onOpenRace])
 
   // Si hay drill activo, mostrar detalle
   if (drillRace) {
@@ -2376,11 +2486,11 @@ function RacesPage({ openRace }) {
     const msg = race.status === "FINISHED"
       ? `¿Eliminar "${race.name}"?\n\nSe eliminarán también todos los inscriptos, tiempos y resultados de esta carrera. Esta acción no se puede deshacer.`
       : `¿Eliminar "${race.name}"? Esta acción no se puede deshacer.`
-    if (!confirm(msg)) return
+    if (!(await ask({ title: "Eliminar carrera", message: msg, confirmLabel: "Eliminar", danger: true }))) return
     const r = await fetch(API + "/races/" + race.id, { method: "DELETE" })
     if (!r.ok) {
       const err = await r.json().catch(() => ({}))
-      alert("Error al eliminar: " + (err.detail || "error desconocido"))
+      notify("Error al eliminar: " + (err.detail || "error desconocido"), { kind: "error" })
     } else load()
   }
 
@@ -2476,7 +2586,7 @@ function RacesPage({ openRace }) {
                   {/* Sin píldora de estado: la sección ya lo dice, repetirlo en
                       cada tarjeta era ruido y tapaba fecha y lugar. */}
                   <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
-                    {race.race_date && <span style={{ color: C.muted, fontSize: 12, ...WITH_ICON, gap: 5 }}><Icon name="calendar" size={13} />{race.race_date}</span>}
+                    {race.race_date && <span style={{ color: C.muted, fontSize: 12, ...WITH_ICON, gap: 5 }}><Icon name="calendar" size={13} />{formatDate(race.race_date)}</span>}
                     {race.location && <span style={{ color: C.muted, fontSize: 12, ...WITH_ICON, gap: 5 }}><Icon name="pin" size={13} />{race.location}</span>}
                   </div>
 
@@ -2555,9 +2665,9 @@ function AthletesPage() {
   }
 
   const deleteRunner = async (runner) => {
-    if (!confirm(`¿Eliminar a ${runner.full_name}? Si está inscripto en carreras no se podrá eliminar.`)) return
+    if (!(await ask({ title: "Eliminar atleta", message: `¿Eliminar a ${runner.full_name}? Si está inscripto en carreras no se podrá eliminar.`, confirmLabel: "Eliminar", danger: true }))) return
     const r = await fetch(API + "/runners/" + runner.id, { method: "DELETE" })
-    if (!r.ok) alert("No se puede eliminar: el atleta tiene inscripciones en alguna carrera.")
+    if (!r.ok) notify("No se puede eliminar: el atleta tiene inscripciones en alguna carrera.", { kind: "error" })
     else load(search)
   }
 
@@ -2579,7 +2689,7 @@ function AthletesPage() {
 
   const bulkDelete = async () => {
     if (selected.size === 0) return
-    if (!confirm(`¿Eliminar ${selected.size} atleta${selected.size > 1 ? "s" : ""} de la base de datos?\n\nSolo se eliminarán los que no tengan inscripciones en carreras.`)) return
+    if (!(await ask({ title: "Eliminar atletas", message: `¿Eliminar ${selected.size} atleta${selected.size > 1 ? "s" : ""} de la base de datos?\n\nSolo se eliminarán los que no tengan inscripciones en carreras.`, confirmLabel: "Eliminar", danger: true }))) return
     setBulkDeleting(true)
     let deleted = 0, skipped = 0
     // Eliminar de a uno para manejar errores por FK individualmente
@@ -2589,7 +2699,7 @@ function AthletesPage() {
     }))
     setBulkDeleting(false)
     load(search)
-    if (skipped > 0) alert(`${deleted} eliminado${deleted !== 1 ? "s" : ""}. ${skipped} no se pudo${skipped !== 1 ? "n" : ""} eliminar porque tienen inscripciones en carreras.`)
+    if (skipped > 0) notify(`${deleted} eliminado${deleted !== 1 ? "s" : ""}. ${skipped} no se pudo${skipped !== 1 ? "n" : ""} eliminar porque tienen inscripciones en carreras.`, { kind: "error" })
   }
 
   return (
@@ -2837,7 +2947,7 @@ function RaceResultCard({ race, onOpen }) {
       </div>
 
       <div style={{ fontSize: 12, color: C.faint, marginBottom: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {race.race_date && <span style={{ ...WITH_ICON, gap: 5 }}><Icon name="calendar" size={13} />{race.race_date}</span>}
+        {race.race_date && <span style={{ ...WITH_ICON, gap: 5 }}><Icon name="calendar" size={13} />{formatDate(race.race_date)}</span>}
         {race.location && <span style={{ ...WITH_ICON, gap: 5 }}><Icon name="pin" size={13} />{race.location}</span>}
       </div>
 
@@ -2889,6 +2999,138 @@ function useEscape(active, onClose) {
   }, [active, onClose])
 }
 
+// ── Diálogos y avisos propios ─────────────────────────────────────────────────
+// Reemplazan a confirm()/alert(): los nativos congelan JS (ESPACIO deja de capturar
+// llegadas en el cronómetro) y se aceptan por reflejo con ESPACIO/ENTER. Store a
+// nivel módulo para llamarlos desde cualquier handler sin prop drilling.
+let dialogQueue = []   // ask() mientras hay otro abierto: se encola y se muestra después
+let notices = []
+let noticeSeq = 0
+const uiListeners = new Set()
+const emitUi = () => uiListeners.forEach(fn => fn())
+function useUiStore(read) {
+  const [, force] = useState(0)
+  useEffect(() => {
+    const fn = () => force(n => n + 1)
+    uiListeners.add(fn)
+    return () => uiListeners.delete(fn)
+  }, [])
+  return read()
+}
+
+function ask({ title, message, confirmLabel = "Aceptar", cancelLabel = "Cancelar", danger = false }) {
+  return new Promise(resolve => {
+    dialogQueue = [...dialogQueue, { title, message, confirmLabel, cancelLabel, danger, resolve }]
+    emitUi()
+  })
+}
+
+function dismissNotice(id) {
+  notices = notices.filter(n => n.id !== id)
+  emitUi()
+}
+
+// sticky: el aviso no se va solo (ej. el código de publicación, que hay que copiar).
+function notify(message, { kind = "info", sticky = false } = {}) {
+  const id = ++noticeSeq
+  notices = [...notices, { id, message, kind }]
+  emitUi()
+  if (kind !== "error" && !sticky) setTimeout(() => dismissNotice(id), 5000)
+}
+
+function DialogHost() {
+  const current = useUiStore(() => dialogQueue[0] || null)
+  const cancelRef = useRef(null)
+  const boxRef = useRef(null)
+  const prevFocus = useRef(null)
+
+  const close = useCallback((value) => {
+    if (!current) return
+    dialogQueue = dialogQueue.filter(d => d !== current)
+    emitUi()
+    current.resolve(value)
+  }, [current])
+
+  useEscape(!!current, () => close(false))
+
+  // Foco inicial en Cancelar; al cerrar vuelve a quien lo tenía.
+  useEffect(() => {
+    if (!current) return
+    prevFocus.current = document.activeElement
+    cancelRef.current?.focus()
+    return () => {
+      const el = prevFocus.current
+      if (el && el.isConnected) el.focus()
+    }
+  }, [current])
+
+  // Tab cicla dentro del diálogo. Va en window porque ESPACIO en el cronómetro
+  // le hace blur al botón enfocado y el foco queda en body, fuera de la caja.
+  useEffect(() => {
+    if (!current) return
+    const h = (e) => {
+      if (e.key !== "Tab" || !boxRef.current) return
+      const btns = boxRef.current.querySelectorAll("button")
+      const first = btns[0], last = btns[btns.length - 1]
+      const act = document.activeElement
+      if (!boxRef.current.contains(act)) { e.preventDefault(); (e.shiftKey ? last : first).focus() }
+      else if (e.shiftKey && act === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && act === last) { e.preventDefault(); first.focus() }
+    }
+    window.addEventListener("keydown", h)
+    return () => window.removeEventListener("keydown", h)
+  }, [current])
+
+  if (!current) return null
+
+  return (
+    <div onClick={() => close(false)}
+      style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000 }}>
+      <div ref={boxRef} role="dialog" aria-modal="true" aria-labelledby="dialog-title"
+        onClick={e => e.stopPropagation()}
+        style={{ ...CARD, width: 440, maxWidth: "90vw", maxHeight: "85vh", overflow: "auto", borderColor: C.lineStrong }}>
+        <div id="dialog-title" style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, marginBottom: 10 }}>{current.title}</div>
+        <div style={{ fontSize: 14, color: C.muted, lineHeight: 1.5, whiteSpace: "pre-line", marginBottom: 20 }}>{current.message}</div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button ref={cancelRef} onClick={() => close(false)} style={BTN_GHOST}>{current.cancelLabel}</button>
+          <button onClick={() => close(true)}
+            style={current.danger ? { ...BTN_PRIMARY, background: C.danger, color: C.bg } : BTN_PRIMARY}>
+            {current.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NoticeHost() {
+  const list = useUiStore(() => notices)
+  if (list.length === 0) return null
+  return (
+    <div style={{ position: "fixed", right: 20, bottom: 20, zIndex: 1900, display: "flex", flexDirection: "column", gap: 8, width: 360, maxWidth: "90vw" }}>
+      {list.map(n => {
+        const isError = n.kind === "error"
+        const isOk = n.kind === "success"
+        return (
+          <div key={n.id} role={isError ? "alert" : "status"}
+            style={{ ...CARD, padding: "12px 12px 12px 14px", display: "flex", alignItems: "flex-start", gap: 10, background: C.surface2, borderColor: isError ? C.danger : C.lineStrong }}>
+            {(isError || isOk) && (
+              <span style={{ color: isError ? C.danger : C.accent, marginTop: 1, flexShrink: 0, display: "inline-flex" }}>
+                <Icon name={isError ? "alert" : "check"} size={16} />
+              </span>
+            )}
+            <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-line", color: C.fg, minWidth: 0, overflowWrap: "anywhere", userSelect: "text" }}>{n.message}</div>
+            <button onClick={() => dismissNotice(n.id)} aria-label="Cerrar aviso"
+              style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer", padding: 2, display: "inline-flex", flexShrink: 0 }}>
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function EmailControls() {
   const [open, setOpen]   = useState(false)
   useEscape(open, () => setOpen(false))
@@ -2917,18 +3159,18 @@ function EmailControls() {
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.detail || "No se pudo guardar")
       setCfg(d); setKey("")
-    } catch (e) { alert("Error: " + e.message) } finally { setBusy(false) }
+    } catch (e) { notify("Error: " + e.message, { kind: "error" }) } finally { setBusy(false) }
   }
 
   const sendTest = async () => {
-    if (!testTo.trim()) { alert("Ingresá un email para la prueba."); return }
+    if (!testTo.trim()) { notify("Ingresá un email para la prueba.", { kind: "error" }); return }
     setBusy(true)
     try {
       const r = await fetch(API + "/email/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: testTo.trim() }) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d.detail || "Error")
-      alert("✅ Email de prueba enviado a " + testTo.trim())
-    } catch (e) { alert("No se pudo enviar la prueba: " + e.message) } finally { setBusy(false) }
+      notify("Email de prueba enviado a " + testTo.trim(), { kind: "success" })
+    } catch (e) { notify("No se pudo enviar la prueba: " + e.message, { kind: "error" }) } finally { setBusy(false) }
   }
 
   const btn = { width: "100%", padding: "7px 8px", marginBottom: 6, fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: `1px solid ${C.line}`, background: C.surface2, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }
@@ -3150,7 +3392,7 @@ function CloudControls() {
       if (!r.ok) throw new Error(d.detail || "No se pudo guardar")
       setCfg(d); setKey(""); setOpen(false)
     } catch (e) {
-      alert("Error: " + e.message)
+      notify("Error: " + e.message, { kind: "error" })
     } finally {
       setBusy(false)
     }
@@ -3217,7 +3459,7 @@ function BackupControls() {
     const file = e.target.files?.[0]
     e.target.value = ""  // permitir re-seleccionar el mismo archivo
     if (!file) return
-    if (!confirm(`¿Restaurar desde "${file.name}"?\n\nEsto reemplaza TODOS los datos actuales. Se guardará una copia de seguridad del estado actual antes de reemplazar.`)) return
+    if (!(await ask({ title: "Restaurar respaldo", confirmLabel: "Restaurar", danger: true, message: `¿Restaurar desde "${file.name}"?\n\nEsto reemplaza TODOS los datos actuales. Se guardará una copia de seguridad del estado actual antes de reemplazar.` }))) return
     setBusy(true)
     try {
       const fd = new FormData()
@@ -3225,10 +3467,11 @@ function BackupControls() {
       const res = await fetch(API + "/restore", { method: "POST", body: fd })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || "No se pudo restaurar")
-      alert((data.message || "Respaldo restaurado.") + "\n\nLa aplicación se recargará.")
-      window.location.reload()
+      notify((data.message || "Respaldo restaurado.") + "\n\nLa aplicación se recargará.", { kind: "success" })
+      // Un respiro para que se lea el aviso antes de que la recarga lo borre
+      setTimeout(() => window.location.reload(), 2500)
     } catch (err) {
-      alert("Error al restaurar: " + err.message)
+      notify("Error al restaurar: " + err.message, { kind: "error" })
     } finally {
       setBusy(false)
     }
@@ -3261,6 +3504,9 @@ export default function App() {
   // entra directo a esa carrera en vez de dejar al operador buscándola.
   const [openRace, setOpenRace] = useState(null)
   const navigate = useCallback((p, race = null) => { setOpenRace(race); setPage(p) }, [])
+  // Nombre de la carrera abierta en Carreras, para la barra superior.
+  const [openRaceName, setOpenRaceName] = useState(null)
+  const onOpenRace = useCallback(r => setOpenRaceName(r?.name ?? null), [])
 
   const PAGES = [
     { id: "races",    label: "Carreras",  icon: "flag" },
@@ -3339,17 +3585,23 @@ export default function App() {
         {/* Top bar — la hora del día es referencia; el dato clave es el
             tiempo de carrera, que vive en el cronómetro. */}
         <div style={{ height: 52, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", padding: "0 24px", background: C.surface, flexShrink: 0 }}>
-          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>{pageLabel}</span>
-          <WallClock style={{ marginLeft: "auto", ...FONT_NUM, fontSize: 15, fontWeight: 600, color: C.muted }} />
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {page === "races" && openRaceName
+              ? <><span style={{ color: C.muted }}>{pageLabel} › </span><span style={{ color: C.fg }}>{openRaceName}</span></>
+              : pageLabel}
+          </span>
+          <WallClock style={{ marginLeft: "auto", paddingLeft: 16, flexShrink: 0, ...FONT_NUM, fontSize: 15, fontWeight: 600, color: C.muted }} />
         </div>
         {/* Página activa */}
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
           {page === "home"     && <DashboardPage onNavigate={navigate} />}
-          {page === "races"    && <RacesPage key={openRace?.id ?? "lista"} openRace={openRace} />}
+          {page === "races"    && <RacesPage key={openRace?.id ?? "lista"} openRace={openRace} onOpenRace={onOpenRace} />}
           {page === "athletes" && <AthletesPage />}
           {page === "history"  && <HistorialPage />}
         </div>
       </div>
+      <DialogHost />
+      <NoticeHost />
     </div>
   )
 }

@@ -173,6 +173,8 @@ class TimingEngine:
         )).scalar_one()
         position = pos_count + 1
 
+        # Mismo criterio que get_results: la distancia propia pisa a la de la carrera y 0 = sin distancia.
+        dist_km = registration.distance_km if registration.distance_km is not None else (race.distance_km if race else None)
         response = AssignBibResponse(
             split_id=split.id,
             capture_id=capture.id,
@@ -181,6 +183,7 @@ class TimingEngine:
             runner=self._runner_out(registration.runner),
             net_time_ns=net_time_ns,
             position=position,
+            distance_km=dist_km or None,
         )
         await manager.broadcast(WSEvent(event=WSEventType.ASSIGNED, data=response.model_dump(mode="json")))
         return response
