@@ -435,7 +435,7 @@ function autoCategory(birthDate, gender) {
 const C = {
   bg: "#0d0f10", surface: "#141618", surface2: "#1c1f21",
   line: "#262b2e", lineStrong: "#363b3f",
-  fg: "#e8eaeb", muted: "#8a9299", faint: "#7a8288",
+  fg: "#e8eaeb", muted: "#9aa1a7", faint: "#868e94",
   accent: "#00e5a0", accent2: "#00bf85", onAccent: "#06281d",
   blue: "#4d9fff", gold: "#f5a623", danger: "#ff4d4d",
 }
@@ -445,14 +445,12 @@ const RADIUS = { card: 16, hero: 20, pill: 999, sm: 8 }
 
 // ── Estilos compartidos ───────────────────────────────────────────────────────
 
-// Degradado de marca mint→teal — acento del operador (títulos + acciones principales).
-const OP_GRAD = `linear-gradient(135deg, ${C.accent2}, ${C.accent})`
 const INPUT = {
   background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: RADIUS.sm,
   padding: "8px 12px", color: C.fg, fontSize: 13, outline: "none", width: "100%",
 }
 const BTN_PRIMARY = {
-  padding: "8px 18px", background: OP_GRAD, border: "none",
+  padding: "8px 18px", background: C.accent, border: "none",
   borderRadius: RADIUS.pill, cursor: "pointer", fontWeight: 800, fontSize: 12,
   color: C.onAccent, fontFamily: FONT_DISPLAY, letterSpacing: 0.2,
 }
@@ -466,11 +464,6 @@ const BTN_DANGER = {
 }
 const CARD = {
   background: C.surface, border: `1px solid ${C.line}`, borderRadius: RADIUS.card, padding: 16,
-}
-
-// Acento de marca: degradado mint→teal clippeado a texto, para una palabra/frase de un título.
-function OpGrad({ children }) {
-  return <span style={{ background: OP_GRAD, WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>{children}</span>
 }
 
 // ── Íconos ────────────────────────────────────────────────────────────────────
@@ -1045,7 +1038,7 @@ function InscriptosView({ race }) {
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>
-                    Categoría {newForm.birth_date && <span style={{ color: `${C.accent}60` }}>(auto)</span>}
+                    Categoría {newForm.birth_date && <span style={{ color: C.muted }}>(auto)</span>}
                   </div>
                   <input
                     value={newForm.category}
@@ -1193,6 +1186,36 @@ function InscriptosView({ race }) {
 // PÁGINA: MOTOR DE TIEMPOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Tiempo de carrera con centésimas. Escribe directo en su nodo en cada cuadro:
+// un setState a 60 fps re-renderizaba toda la app y metía demora al tipear.
+function RaceClock({ startNs, style }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    let raf
+    const startMs = Math.floor(startNs / 1_000_000)
+    const tick = () => {
+      const d = Math.max(0, Date.now() - startMs)
+      if (ref.current) ref.current.textContent =
+        `${pad(Math.floor(d / 3600000))}:${pad(Math.floor(d % 3600000 / 60000))}:${pad(Math.floor(d % 60000 / 1000))}.${pad(Math.floor(d % 1000 / 10))}`
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [startNs])
+  return <span ref={ref} style={style} />
+}
+
+// Hora del día: referencia secundaria, sin centésimas para no competir con el
+// tiempo de carrera.
+function WallClock({ style }) {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  return <span style={style}>{pad(now.getHours())}:{pad(now.getMinutes())}:{pad(now.getSeconds())}</span>
+}
+
 function TimingPage({ race, onRaceChange, onFinish }) {
   const raceId = race?.id
   const { queue: rawQueue, finishers, connected, error, clearError, capture, assignBib, undoAssign, discard, bibLookup } = useTimingEngine(raceId)
@@ -1200,7 +1223,6 @@ function TimingPage({ race, onRaceChange, onFinish }) {
   const queue = [...rawQueue].sort((a, b) => a.sequence_order - b.sequence_order)
   const [hints, setHints] = useState({})
   const [raceStartNs, setRaceStartNs] = useState(race?.race_start_ns || null)
-  const [elapsed, setElapsed] = useState("")
 
   useEffect(() => {
     if (!raceId) return
@@ -1209,23 +1231,6 @@ function TimingPage({ race, onRaceChange, onFinish }) {
       .then(d => setRaceStartNs(d.race_start_ns || null))
       .catch(() => {})
   }, [raceId])
-
-  // Live elapsed timer
-  useEffect(() => {
-    if (!raceStartNs) { setElapsed(""); return }
-    const tick = () => {
-      const nowMs = Date.now()
-      const startMs = Math.floor(raceStartNs / 1_000_000)
-      const diffMs = nowMs - startMs
-      const h = Math.floor(diffMs / 3600000)
-      const m = Math.floor((diffMs % 3600000) / 60000)
-      const s = Math.floor((diffMs % 60000) / 1000)
-      setElapsed(`${pad(h)}:${pad(m)}:${pad(s)}`)
-    }
-    tick()
-    const t = setInterval(tick, 1000)
-    return () => clearInterval(t)
-  }, [raceStartNs])
 
   // ESPACIO captura siempre, también mientras se tipea un dorsal: los dorsales
   // no llevan espacios y el operador no puede soltar el teclado cuando llega
@@ -1245,19 +1250,47 @@ function TimingPage({ race, onRaceChange, onFinish }) {
     return () => window.removeEventListener("keydown", h)
   }, [capture])
 
+  // Descartar no pide confirmación: un confirm() nativo congela la página (ESPACIO
+  // deja de capturar) y ESPACIO/ENTER lo aceptan por reflejo. La fila se oculta
+  // y el descarte se envía recién a los 8 s, salvo que se deshaga antes.
+  const [discarding, setDiscarding] = useState(null) // { id, seq }
+  const discardTimer = useRef(null)
+  const commitDiscard = useCallback((d) => {
+    clearTimeout(discardTimer.current)
+    setDiscarding(null)
+    if (d) discard(d.id)
+  }, [discard])
+  const askDiscard = (item) => {
+    commitDiscard(discarding)
+    const d = { id: item.id, seq: item.sequence_order }
+    setDiscarding(d)
+    discardTimer.current = setTimeout(() => commitDiscard(d), 8000)
+  }
+  const pendingRef = useRef(null)
+  useEffect(() => { pendingRef.current = discarding }, [discarding])
+  useEffect(() => () => { // al salir de la pantalla, lo pendiente se confirma
+    clearTimeout(discardTimer.current)
+    if (pendingRef.current) discard(pendingRef.current.id)
+  }, [discard])
+  const visibleQueue = discarding ? queue.filter(i => i.id !== discarding.id) : queue
+
   // Si el foco no está en un dorsal, llevarlo a la captura pendiente más vieja
   // para poder tipear el número apenas se captura.
-  const queueKey = queue.map(i => i.id).join(",")
+  const queueKey = visibleQueue.map(i => i.id).join(",")
   useEffect(() => {
     if (document.activeElement?.tagName === "INPUT") return
     document.querySelector(".bib-input")?.focus()
   }, [queueKey])
 
+  // El aviso de conexión espera 2 s: al abrir la pantalla el socket tarda un
+  // instante y no tiene sentido alarmar por eso.
+  const [graceOver, setGraceOver] = useState(false)
   useEffect(() => {
-    if (!error) return
-    const t = setTimeout(clearError, 6000)
+    if (connected) return
+    const t = setTimeout(() => setGraceOver(true), 2000)
     return () => clearTimeout(t)
-  }, [error, clearError])
+  }, [connected])
+  const offline = !connected && graceOver
 
   const handleInput = async (id, val) => {
     setHints(p => ({ ...p, [id]: null }))
@@ -1300,7 +1333,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
         </div>
         <div style={{ ...CARD }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, marginBottom: 12, display: "flex", alignItems: "center" }}>
-            Clasificación <span style={{ marginLeft: 4 }}><OpGrad>final</OpGrad></span>
+            Clasificación <span style={{ marginLeft: 4 }}>final</span>
             <span style={{ marginLeft: "auto", background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length} finishers</span>
           </div>
           {finishers.length === 0
@@ -1313,7 +1346,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
                   <div style={{ fontSize: 13, fontWeight: 500 }}>{f.runner?.full_name || "--"}</div>
                   <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
                 </div>
-                <span style={{ fontFamily: "monospace", fontSize: 13, color: C.accent, fontWeight: 600 }}>{formatNs(f.net_time_ns || f.capture_ns)}</span>
+                <span style={{ ...FONT_NUM, fontFamily: "monospace", fontSize: 13, color: C.fg, fontWeight: 600 }}>{formatNs(f.net_time_ns || f.capture_ns)}</span>
               </div>
             ))
           }
@@ -1339,15 +1372,14 @@ function TimingPage({ race, onRaceChange, onFinish }) {
           </button>
         </div>
       ) : (
-        <div style={{ background: "#001a0f", border: `2px solid ${C.accent}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16 }}>
-          <span aria-hidden="true" style={{ width: 14, height: 14, borderRadius: 14, background: C.accent, flexShrink: 0 }} />
+        <div style={{ background: C.surface, border: `1px solid ${C.lineStrong}`, borderRadius: RADIUS.hero, padding: "14px 20px", display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.accent, marginBottom: 2 }}>CARRERA EN CURSO</div>
-            <div style={{ fontSize: 12, color: "#00a070" }}>Largada registrada — los tiempos se miden desde ese momento</div>
+            <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 15, color: C.fg, marginBottom: 2 }}>Carrera en curso</div>
+            <div style={{ fontSize: 12, color: C.muted }}>Largada registrada: los tiempos se miden desde ese momento</div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 34, fontWeight: 800, color: C.accent, lineHeight: 1 }}>{elapsed}</div>
-            <div style={{ fontSize: 10, color: "#00a070", marginTop: 2, letterSpacing: 1, textTransform: "uppercase" }}>Tiempo transcurrido</div>
+            <RaceClock startNs={raceStartNs} style={{ display: "block", fontFamily: FONT_DISPLAY, ...FONT_NUM, fontSize: 44, fontWeight: 800, color: C.accent, lineHeight: 1, letterSpacing: -0.5 }} />
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Tiempo de carrera</div>
           </div>
           {/* Cerrar la carrera vive donde está el operador el día de la
               carrera, no escondido en la cabecera. */}
@@ -1359,11 +1391,28 @@ function TimingPage({ race, onRaceChange, onFinish }) {
         </div>
       )}
 
+      {offline && (
+        <div role="status" style={{ background: `${C.danger}15`, border: `1px solid ${C.danger}60`, borderRadius: RADIUS.sm, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, color: C.fg, fontSize: 14 }}>
+          <Icon name="alert" size={18} style={{ color: C.danger, flexShrink: 0 }} />
+          <span><strong>Sin conexión en vivo, reconectando.</strong> ESPACIO sigue capturando llegadas; asignar y descartar vuelven cuando se recupere la conexión.</span>
+        </div>
+      )}
+
+      {/* El error queda hasta que el operador lo cierra: si se iba solo, una
+          acción fallida durante un pelotón pasaba sin que nadie la viera. */}
       {error && (
-        <div role="alert" style={{ background: `${C.danger}15`, border: `1px solid ${C.danger}60`, borderRadius: RADIUS.sm, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, color: C.danger, fontSize: 13 }}>
+        <div role="alert" style={{ background: `${C.danger}15`, border: `1px solid ${C.danger}60`, borderRadius: RADIUS.sm, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, color: C.danger, fontSize: 14 }}>
           <span style={{ flex: 1 }}>{error}</span>
           <button onClick={clearError} aria-label="Cerrar aviso"
-            style={{ background: "transparent", border: "none", color: C.danger, cursor: "pointer", fontSize: 14 }}>✕</button>
+            style={{ background: "transparent", border: "none", color: C.danger, cursor: "pointer", padding: 4, display: "flex" }}><Icon name="x" size={16} /></button>
+        </div>
+      )}
+
+      {discarding && (
+        <div role="status" style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: RADIUS.sm, padding: "8px 8px 8px 14px", display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
+          <span style={{ flex: 1 }}>Llegada #{discarding.seq} descartada.</span>
+          <button onClick={() => { clearTimeout(discardTimer.current); setDiscarding(null) }}
+            style={{ ...BTN_GHOST, color: C.fg, padding: "6px 14px" }}>Deshacer</button>
         </div>
       )}
 
@@ -1372,7 +1421,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
       {/* Columna izquierda */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <button onClick={capture}
-          style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 800, fontFamily: FONT_DISPLAY, background: OP_GRAD, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: C.onAccent, letterSpacing: 1 }}>
+          style={{ width: "100%", padding: 20, fontSize: 18, fontWeight: 800, fontFamily: FONT_DISPLAY, background: C.accent, border: "none", borderRadius: RADIUS.pill, cursor: "pointer", color: C.onAccent, letterSpacing: 1 }}>
           <span style={{ ...WITH_ICON, gap: 10 }}><Icon name="timer" size={22} />Capturar llegada</span>
         </button>
 
@@ -1382,31 +1431,31 @@ function TimingPage({ race, onRaceChange, onFinish }) {
             <kbd style={{ background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 3, padding: "1px 6px", fontFamily: "monospace", fontSize: 11 }}>ENTER</kbd> asigna y pasa a la siguiente
           </div>
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 8, height: 8, borderRadius: "50%", background: connected ? C.accent : C.danger, boxShadow: connected ? `0 0 6px ${C.accent}` : "none" }} />
-            <span style={{ fontSize: 11, color: connected ? C.accent : C.danger }}>{connected ? "Conectado" : "Reconectando..."}</span>
+            <div aria-hidden="true" style={{ width: 10, height: 10, borderRadius: "50%", background: connected ? C.accent : C.danger }} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: connected ? C.muted : C.danger }}>{connected ? "Conectado" : "Reconectando…"}</span>
           </div>
         </div>
 
         <div style={{ ...CARD, flex: 1, overflow: "auto" }}>
           <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
             Cola de capturas
-            {queue.length > 0 && (
+            {visibleQueue.length > 0 && (
               <span style={{ marginLeft: "auto", background: `${C.gold}15`, color: C.gold, border: `1px solid ${C.gold}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>
-                {queue.length} pendiente{queue.length > 1 ? "s" : ""}
+                {visibleQueue.length} pendiente{visibleQueue.length > 1 ? "s" : ""}
               </span>
             )}
           </div>
 
-          {queue.length === 0 && (
+          {visibleQueue.length === 0 && (
             <div style={{ textAlign: "center", padding: 32, color: C.faint }}>
               {connected ? "Presioná ESPACIO para capturar llegadas" : "Sin conexión — reconectando..."}
             </div>
           )}
 
-          {queue.map(item => (
-            <div key={item.id} style={{ background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 6, padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <span style={{ fontFamily: "monospace", fontSize: 11, color: C.faint, minWidth: 22 }}>#{item.sequence_order}</span>
-              <span style={{ fontFamily: "monospace", fontSize: 14, color: C.accent, minWidth: 100 }}>
+          {visibleQueue.map(item => (
+            <div key={item.id} style={{ background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 6, padding: "8px 12px", display: "flex", alignItems: "center", gap: 12, marginBottom: 6, maxWidth: 820 }}>
+              <span style={{ ...FONT_NUM, fontSize: 12, color: C.faint, minWidth: 28 }}>#{item.sequence_order}</span>
+              <span style={{ ...FONT_NUM, fontFamily: "monospace", fontSize: 15, color: C.fg, minWidth: 110 }}>
                 {raceStartNs ? formatNs(item.captured_ns - raceStartNs) : formatNs(item.captured_ns)}
               </span>
               <input
@@ -1416,10 +1465,10 @@ function TimingPage({ race, onRaceChange, onFinish }) {
                 aria-label={`Dorsal de la llegada #${item.sequence_order}`}
                 onInput={e => handleInput(item.id, e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleAssign(item.id)}
-                style={{ width: 88, background: "#232729", border: `1px solid ${C.lineStrong}`, borderRadius: 4, padding: "6px 8px", fontFamily: "monospace", fontSize: 16, color: C.fg, textAlign: "center", outline: "none" }}
+                style={{ width: 104, background: C.bg, border: `1px solid ${C.lineStrong}`, borderRadius: 4, padding: "6px 8px", fontFamily: "monospace", fontSize: 22, fontWeight: 700, color: C.fg, textAlign: "center", outline: "none" }}
                 autoComplete="off"
               />
-              <span style={{ flex: 1, fontSize: 11, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              <span style={{ flex: 1, fontSize: 16, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                 color: hints[item.id]?.already_finished ? C.gold : hints[item.id]?.found ? C.accent : hints[item.id] ? C.danger : C.faint }}>
                 {hints[item.id]?.already_finished
                   ? `Ya registrado — ${hints[item.id].runner?.full_name || ""}`
@@ -1428,10 +1477,13 @@ function TimingPage({ race, onRaceChange, onFinish }) {
                     : hints[item.id] ? "No encontrado" : "--"}
               </span>
               <button onClick={() => handleAssign(item.id)}
-                style={{ padding: "4px 10px", background: `${C.accent}20`, color: C.accent, border: `1px solid ${C.accent}40`, borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}>Asignar</button>
-              <button onClick={() => { if (confirm(`¿Descartar la llegada #${item.sequence_order}? Usalo sólo para capturas por error.`)) discard(item.id) }}
+                style={{ padding: "8px 14px", background: "transparent", color: C.fg, border: `1px solid ${C.lineStrong}`, borderRadius: 6, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>Asignar</button>
+              {/* Separado de Asignar para que un clic apurado no caiga en el otro. */}
+              <button onClick={() => askDiscard(item)}
                 title="Descartar captura (fue un error)" aria-label={`Descartar llegada #${item.sequence_order}`}
-                style={{ padding: "4px 8px", background: "transparent", color: C.danger, border: `1px solid ${C.line}`, borderRadius: 4, cursor: "pointer", fontSize: 12 }}>✕</button>
+                style={{ marginLeft: 20, padding: 8, background: "transparent", color: C.faint, border: "none", borderRadius: 6, cursor: "pointer", display: "flex" }}
+                onMouseEnter={e => e.currentTarget.style.color = C.danger}
+                onMouseLeave={e => e.currentTarget.style.color = C.faint}><Icon name="trash" size={16} /></button>
             </div>
           ))}
 
@@ -1441,7 +1493,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
       {/* Columna derecha: Clasificación en vivo */}
       <div style={{ ...CARD, overflow: "auto" }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.muted, marginBottom: 12, display: "flex", alignItems: "center" }}>
-          Clasificación <span style={{ marginLeft: 4 }}><OpGrad>en vivo</OpGrad></span>
+          Clasificación <span style={{ marginLeft: 4 }}>en vivo</span>
           <span style={{ marginLeft: "auto", background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 8px", fontSize: 11 }}>{finishers.length}</span>
         </div>
         {finishers.length === 0
@@ -1455,7 +1507,7 @@ function TimingPage({ race, onRaceChange, onFinish }) {
                 <div style={{ fontSize: 11, color: C.faint }}>{f.runner?.category || ""}</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.accent }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
+                <div style={{ ...FONT_NUM, fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 13, color: C.fg }}>{formatNs(f.net_time_ns || f.capture_ns)}</div>
                 {f.capture_id && (
                   <button onClick={() => undoAssign(f.capture_id)} title="Quitar el dorsal y devolver la llegada a la cola para reasignarla"
                     style={{ padding: "1px 0", background: "transparent", color: C.gold, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, ...WITH_ICON, gap: 4 }}><Icon name="pencil" size={11} />Corregir</button>
@@ -1570,7 +1622,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
           <button onClick={onBack} style={{ ...BTN_GHOST, flexShrink: 0, marginTop: 2 }}>← Carreras</button>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 18 }}><OpGrad>{race.name}</OpGrad></div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>{race.name}</div>
             <div style={{ fontSize: 12, color: C.faint, marginTop: 2 }}>
               {[race.race_date, race.location].filter(Boolean).join(" · ")}
             </div>
@@ -1703,7 +1755,7 @@ function ResultsDetail({ race, onBack, hideBackButton = false }) {
                                 </span>
                               </td>
                               <td style={{ padding: "9px 14px", fontSize: 13, color: C.muted }}>{r.club || "--"}</td>
-                              <td style={{ padding: "9px 14px", fontFamily: "monospace", color: C.accent, fontSize: 14, fontWeight: 600 }}>
+                              <td style={{ padding: "9px 14px", fontFamily: "monospace", ...FONT_NUM, color: C.fg, fontSize: 14, fontWeight: 600 }}>
                                 {formatNs(r.net_time_ns || r.finish_time_ns)}
                               </td>
                               <td style={{ padding: "9px 10px", textAlign: "right" }}>
@@ -2010,7 +2062,7 @@ function RaceDetailPage({ race: initialRace, onBack }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 0 }}>
         <button onClick={onBack} style={{ ...BTN_GHOST, marginTop: 4, flexShrink: 0 }}>← Carreras</button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 20 }}><OpGrad>{race.name}</OpGrad></div>
+          <div style={{ fontWeight: 700, fontSize: 20 }}>{race.name}</div>
           <div style={{ fontSize: 12, color: C.faint, marginTop: 3 }}>
             {[race.race_date, race.location].filter(Boolean).join(" · ")}
           </div>
@@ -2123,7 +2175,9 @@ function DashboardPage({ onNavigate }) {
 
   const active   = races.filter(r => r.status === "ACTIVE")
   const finished = races.filter(r => r.status === "FINISHED")
+  // Las más cercanas primero; las que no tienen fecha, al final.
   const planned  = races.filter(r => r.status === "PLANNED")
+    .sort((a, b) => (a.race_date || "9999").localeCompare(b.race_date || "9999"))
   const live     = active[0]
 
   const dateStr = now.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
@@ -2140,7 +2194,7 @@ function DashboardPage({ onNavigate }) {
       {/* ── Encabezado ── */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontFamily: FONT_DISPLAY, fontSize: 24, fontWeight: 800, letterSpacing: -0.3, color: C.fg }}>
-          Panel de <OpGrad>control</OpGrad>
+          Panel de control
         </div>
         <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}</div>
       </div>
@@ -2151,7 +2205,7 @@ function DashboardPage({ onNavigate }) {
           style={{ width: "100%", textAlign: "left", marginBottom: 20, padding: "18px 22px", borderRadius: RADIUS.hero, cursor: "pointer",
             background: `linear-gradient(135deg, #0d1a14 0%, ${C.surface} 70%)`, border: `1px solid ${C.accent}60`, color: C.fg,
             display: "flex", alignItems: "center", gap: 16 }}>
-          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 12, background: C.accent, boxShadow: `0 0 0 5px ${C.accent}25`, flexShrink: 0 }} />
+          <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: 12, background: C.accent, flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.accent }}>Carrera en curso</div>
             <div style={{ fontFamily: FONT_DISPLAY, fontSize: 19, fontWeight: 800, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{live.name}</div>
@@ -2334,7 +2388,7 @@ function RacesPage({ openRace }) {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Carreras</OpGrad></span>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>Carreras</span>
           <span style={{ marginLeft: 10, background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{races.length}</span>
         </div>
         <button onClick={() => { setShowForm(!showForm); setError("") }} style={BTN_PRIMARY}>+ Nueva Carrera</button>
@@ -2409,19 +2463,15 @@ function RacesPage({ openRace }) {
             <div style={{ fontSize: 12, color: C.faint, marginTop: -6, marginBottom: 12 }}>{g.ayuda}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
               {visibles.map(race => (
-                <div key={race.id}
-                  onClick={() => setDrillRace(race)}
-                  style={{ ...CARD, cursor: "pointer", transition: "border-color 0.15s, transform 0.1s", position: "relative" }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = `${C.accent}50`; e.currentTarget.style.transform = "translateY(-1px)" }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = C.line; e.currentTarget.style.transform = "translateY(0)" }}>
+                <div key={race.id} style={{ position: "relative" }}>
+                  {/* La tarjeta entera es un botón, así se entra con teclado; eliminar
+                      queda afuera para que ENTER en la tarjeta nunca borre. */}
+                  <button onClick={() => setDrillRace(race)}
+                    style={{ ...CARD, display: "block", width: "100%", height: "100%", textAlign: "left", color: C.fg, cursor: "pointer", transition: "border-color 0.15s, transform 0.1s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = C.lineStrong; e.currentTarget.style.transform = "translateY(-1px)" }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = C.line; e.currentTarget.style.transform = "translateY(0)" }}>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, flex: 1, paddingRight: 8 }}>{race.name}</div>
-                    <button onClick={(e) => deleteRace(race, e)}
-                      style={{ background: "transparent", border: "none", color: C.faint, cursor: "pointer", fontSize: 14, padding: "0 4px", lineHeight: 1 }}
-                      onMouseEnter={e => e.currentTarget.style.color = C.danger}
-                      onMouseLeave={e => e.currentTarget.style.color = C.faint} aria-label={`Eliminar ${race.name}`} title="Eliminar carrera"><Icon name="x" size={14} /></button>
-                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8, paddingRight: 28 }}>{race.name}</div>
 
                   {/* Sin píldora de estado: la sección ya lo dice, repetirlo en
                       cada tarjeta era ruido y tapaba fecha y lugar. */}
@@ -2434,9 +2484,14 @@ function RacesPage({ openRace }) {
                     <div style={{ fontSize: 12, color: C.accent2, marginBottom: 8, ...WITH_ICON, gap: 4 }}><Icon name="check" size={12} />Largada registrada</div>
                   )}
 
-                  <div style={{ marginTop: 8, fontSize: 12, color: `${C.accent}70`, fontWeight: 600 }}>
+                  <div style={{ marginTop: 8, fontSize: 12, color: C.muted, fontWeight: 600 }}>
                     Entrar →
                   </div>
+                  </button>
+                  <button onClick={(e) => deleteRace(race, e)}
+                    style={{ position: "absolute", top: 10, right: 10, background: "transparent", border: "none", color: C.faint, cursor: "pointer", padding: 6, borderRadius: 6, display: "flex" }}
+                    onMouseEnter={e => e.currentTarget.style.color = C.danger}
+                    onMouseLeave={e => e.currentTarget.style.color = C.faint} aria-label={`Eliminar ${race.name}`} title="Eliminar carrera"><Icon name="x" size={14} /></button>
                 </div>
               ))}
             </div>
@@ -2541,7 +2596,7 @@ function AthletesPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Atletas</OpGrad></span>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>Atletas</span>
           <span style={{ marginLeft: 10, background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>{runners.length}</span>
           <span style={{ marginLeft: 8, fontSize: 12, color: C.faint }}>— base global de corredores</span>
         </div>
@@ -2599,7 +2654,7 @@ function AthletesPage() {
             </div>
             <div>
               <div style={{ fontSize: 11, color: C.faint, marginBottom: 4, textTransform: "uppercase" }}>
-                Categoría {form.birth_date && <span style={{ color: `${C.accent}60` }}>(auto)</span>}
+                Categoría {form.birth_date && <span style={{ color: C.muted }}>(auto)</span>}
               </div>
               <input
                 value={form.category}
@@ -2730,7 +2785,7 @@ function HistorialPage() {
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
         <div>
-          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}><OpGrad>Historial</OpGrad> de Carreras</span>
+          <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>Historial de Carreras</span>
           <span style={{ marginLeft: 10, background: `${C.blue}15`, color: C.blue, border: `1px solid ${C.blue}30`, borderRadius: 20, padding: "2px 10px", fontSize: 12 }}>
             {races.length} carrera{races.length !== 1 ? "s" : ""}
           </span>
@@ -2824,8 +2879,19 @@ function RaceResultCard({ race, onOpen }) {
 // APP PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Esc cierra el modal abierto, como en cualquier diálogo del sistema.
+function useEscape(active, onClose) {
+  useEffect(() => {
+    if (!active) return
+    const h = (e) => { if (e.key === "Escape") onClose() }
+    window.addEventListener("keydown", h)
+    return () => window.removeEventListener("keydown", h)
+  }, [active, onClose])
+}
+
 function EmailControls() {
   const [open, setOpen]   = useState(false)
+  useEscape(open, () => setOpen(false))
   const [cfg, setCfg]     = useState(null)
   const [fromEmail, setFromEmail] = useState("")
   const [fromName, setFromName]   = useState("LiveRun")
@@ -2876,7 +2942,7 @@ function EmailControls() {
       </button>
       {open && (
         <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
+          <div role="dialog" aria-modal="true" aria-label="Envío de emails" onClick={e => e.stopPropagation()} style={{ width: 460, maxHeight: "90vh", overflowY: "auto", background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Envío de emails (Brevo)</div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
               Creá una cuenta gratis en <span style={{ color: C.blue }}>brevo.com</span>, verificá tu email remitente y pegá tu API key (Settings → SMTP &amp; API → API Keys). 300 emails/día gratis.
@@ -2914,6 +2980,7 @@ function AccountControls() {
   const [err, setErr]     = useState("")
   const [busy, setBusy]   = useState(false)
   const [waiting, setWaiting] = useState(false)  // esperando el login con Google
+  useEscape(open && !waiting, () => setOpen(false))
   const pollRef = useRef(null)
 
   const loadMe = useCallback(() => {
@@ -3000,7 +3067,7 @@ function AccountControls() {
       {open && (
         <div onClick={() => !waiting && setOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div onClick={e => e.stopPropagation()}
+          <div role="dialog" aria-modal="true" aria-label="Cuenta" onClick={e => e.stopPropagation()}
             style={{ width: 400, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
               {mode === "register" ? "Crear cuenta" : "Iniciar sesión"}
@@ -3054,6 +3121,7 @@ function AccountControls() {
 
 function CloudControls() {
   const [open, setOpen] = useState(false)
+  useEscape(open, () => setOpen(false))
   const [cfg, setCfg]   = useState(null)
   const [url, setUrl]   = useState("")
   const [key, setKey]   = useState("")
@@ -3108,7 +3176,7 @@ function CloudControls() {
       {open && (
         <div onClick={() => setOpen(false)}
           style={{ position: "fixed", inset: 0, background: "#000a", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div onClick={e => e.stopPropagation()}
+          <div role="dialog" aria-modal="true" aria-label="Portal en la nube" onClick={e => e.stopPropagation()}
             style={{ width: 440, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 16, padding: 24, color: C.fg }}>
             <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>Portal en la nube</div>
             <div style={{ fontSize: 12, color: C.muted, marginBottom: 18 }}>
@@ -3187,21 +3255,7 @@ function BackupControls() {
 
 export default function App() {
   const [page, setPage]   = useState("home")
-  const [clock, setClock] = useState("")
   const [showConfig, setShowConfig] = useState(false)
-
-  // Reloj maestro con centésimas — requestAnimationFrame para un tick fluido.
-  useEffect(() => {
-    let raf
-    const tick = () => {
-      const n = new Date()
-      const cs = Math.floor(n.getMilliseconds() / 10)
-      setClock(`${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}.${pad(cs)}`)
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
 
   // onNavigate: permite al Dashboard navegar a otras secciones; con `race`,
   // entra directo a esa carrera en vez de dejar al operador buscándola.
@@ -3223,22 +3277,22 @@ export default function App() {
       <div style={{ width: 190, background: C.surface, borderRight: `1px solid ${C.line}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
 
         {/* Logo — clickeable → Inicio */}
-        <div
-          onClick={() => navigate("home")}
-          style={{ padding: "18px 16px 14px", borderBottom: `1px solid ${C.line}`, cursor: "pointer", userSelect: "none" }}
+        <button
+          onClick={() => navigate("home")} aria-label="LiveRun, ir al inicio"
+          style={{ padding: "18px 16px 14px", background: "transparent", border: "none", borderBottom: `1px solid ${C.line}`, cursor: "pointer", userSelect: "none", textAlign: "left", color: C.fg, width: "100%" }}
           onMouseEnter={e => e.currentTarget.style.background = C.surface2}
           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img src="/logo.svg" alt="" width={24} height={24} style={{ display: "block", flexShrink: 0 }} />
             <div style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 20, letterSpacing: -0.5, color: C.accent }}>LIVE<span style={{ color: C.muted, fontWeight: 500 }}>RUN</span></div>
           </div>
-          <div style={{ fontSize: 10, color: C.faint, letterSpacing: 1.5, textTransform: "uppercase", marginTop: 4 }}>Race Timing System</div>
-        </div>
+          <div style={{ fontSize: 11, color: C.faint, marginTop: 4 }}>Cronometraje de carreras</div>
+        </button>
 
         <nav style={{ flex: 1, padding: "12px 8px" }}>
           {/* Inicio */}
           <button onClick={() => navigate("home")} aria-current={page === "home" ? "page" : undefined}
-            style={{ width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === "home" ? `${C.accent}20` : "transparent", color: page === "home" ? C.accent : C.muted, border: `1px solid ${page === "home" ? `${C.accent}40` : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
+            style={{ width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === "home" ? C.surface2 : "transparent", color: page === "home" ? C.fg : C.muted, border: `1px solid ${page === "home" ? C.lineStrong : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
             <Icon name="home" /><span>Inicio</span>
           </button>
 
@@ -3246,7 +3300,7 @@ export default function App() {
 
           {PAGES.map(p => (
             <button key={p.id} onClick={() => navigate(p.id)} aria-current={page === p.id ? "page" : undefined}
-              style={{ width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === p.id ? `${C.accent}20` : "transparent", color: page === p.id ? C.accent : C.muted, border: `1px solid ${page === p.id ? `${C.accent}40` : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
+              style={{ width: "100%", textAlign: "left", padding: "9px 10px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600, marginBottom: 2, background: page === p.id ? C.surface2 : "transparent", color: page === p.id ? C.fg : C.muted, border: `1px solid ${page === p.id ? C.lineStrong : "transparent"}`, display: "flex", alignItems: "center", gap: 8 }}>
               <Icon name={p.icon} />
               <span>{p.label}</span>
             </button>
@@ -3276,16 +3330,17 @@ export default function App() {
               <BackupControls />
             </div>
           )}
-          <div style={{ fontSize: 10, color: C.faint, textAlign: "center", marginTop: 8 }}>v{APP_VERSION}</div>
+          <div style={{ fontSize: 11, color: C.faint, textAlign: "center", marginTop: 8 }}>v{APP_VERSION}</div>
         </div>
       </div>
 
       {/* Contenido principal */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {/* Top bar — reloj maestro (dato clave de la pantalla) */}
+        {/* Top bar — la hora del día es referencia; el dato clave es el
+            tiempo de carrera, que vive en el cronómetro. */}
         <div style={{ height: 52, borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", padding: "0 24px", background: C.surface, flexShrink: 0 }}>
           <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>{pageLabel}</span>
-          <div style={{ marginLeft: "auto", ...FONT_NUM, fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 800, color: C.accent }}>{clock}</div>
+          <WallClock style={{ marginLeft: "auto", ...FONT_NUM, fontSize: 15, fontWeight: 600, color: C.muted }} />
         </div>
         {/* Página activa */}
         <div style={{ flex: 1, overflow: "auto", padding: "20px 24px" }}>
