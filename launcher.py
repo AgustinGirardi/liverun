@@ -27,8 +27,8 @@ LOADING_HTML = """<!DOCTYPE html>
   }
   .wrap { text-align: center; }
   .logo { font-size: 32px; font-weight: 900; letter-spacing: -1px; color: #00e5a0; margin-bottom: 6px; }
-  .logo span { color: #4b5563; font-weight: 300; }
-  .sub { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #374151; margin-bottom: 36px; }
+  .logo span { color: #9aa1a7; font-weight: 300; }
+  .sub { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: #868e94; margin-bottom: 36px; }
   .bar-wrap { width: 200px; height: 3px; background: #1c1f21; border-radius: 99px; margin: 0 auto; overflow: hidden; }
   .bar {
     height: 100%; width: 40%; background: #00e5a0;
@@ -39,7 +39,7 @@ LOADING_HTML = """<!DOCTYPE html>
     0%   { transform: translateX(-100%); }
     100% { transform: translateX(600%); }
   }
-  .msg { margin-top: 20px; font-size: 12px; color: #374151; }
+  .msg { margin-top: 20px; font-size: 12px; color: #868e94; }
 </style>
 </head>
 <body>
