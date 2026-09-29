@@ -10,7 +10,7 @@ import sqlite3
 import shutil
 import tempfile
 import anyio
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
@@ -815,6 +815,17 @@ def _email_hash(email):
     return hashlib.sha256(("chronotrack-v1:" + e).encode()).hexdigest()
 
 
+async def _mark_published(race: Race, db: AsyncSession, code) -> str:
+    """Deja asentado que la carrera se publicó (cuándo y con qué código del portal).
+    Sólo se llama cuando el portal respondió bien. Se guarda en UTC sin zona,
+    igual que created_at, así el operador lo ve aunque reinicie la app."""
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    race.published_at = now
+    race.published_code = str(code)[:40] if code else None
+    await db.commit()
+    return now.isoformat() + "Z"
+
+
 async def _publish_event(race: Race, db: AsyncSession, cfg: dict) -> dict:
     """Anuncia una carrera futura en el calendario del portal.
 
@@ -868,9 +879,11 @@ async def _publish_event(race: Race, db: AsyncSession, cfg: dict) -> dict:
         cloud_resp = json.loads(text)
     except Exception:
         cloud_resp = {"raw": text}
+    published_at = await _mark_published(race, db, cloud_resp.get("code"))
     return {
         "message": "Evento publicado en el calendario",
         "code": cloud_resp.get("code"),
+        "published_at": published_at,
         "event": True,
         "registered_count": inscriptos,
         "portal_url": cfg["url"].rstrip("/"),
@@ -966,9 +979,11 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     except Exception:
         cloud_resp = {"raw": text}
 
+    published_at = await _mark_published(race_obj, db, cloud_resp.get("code"))
     return {
         "message": "Resultados publicados correctamente",
         "code": cloud_resp.get("code"),
+        "published_at": published_at,
         "published_results": cloud_resp.get("published_results", len(results)),
         "portal_url": cfg["url"].rstrip("/"),
     }

@@ -57,6 +57,9 @@ class Race(Base):
     # portal como evento con estos dos datos (el cupo y dónde inscribirse).
     registration_url = Column(String(400), nullable=True)
     capacity         = Column(Integer, nullable=True)
+    # Estado de publicación en el portal (UTC): se completa sólo si el portal aceptó.
+    published_at     = Column(DateTime, nullable=True)
+    published_code   = Column(String(40), nullable=True)
     created_at     = Column(DateTime, server_default=func.now())
     registrations  = relationship("Registration", back_populates="race")
     captures       = relationship("TimestampCapture", back_populates="race")

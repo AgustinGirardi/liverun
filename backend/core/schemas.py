@@ -89,6 +89,8 @@ class RaceOut(BaseModel):
     race_start_ns: Optional[int]   = None
     registration_url: Optional[str] = None
     capacity:         Optional[int] = None
+    published_at:     Optional[datetime] = None
+    published_code:   Optional[str] = None
     created_at:    datetime
     model_config = {"from_attributes": True}
 
@@ -142,6 +144,7 @@ class AssignBibResponse(BaseModel):
     runner:          RunnerOut
     net_time_ns:     Optional[int] = None
     position:        Optional[int] = None
+    distance_km:     Optional[float] = None
     model_config = {"from_attributes": True}
 
 class BibLookupResponse(BaseModel):
