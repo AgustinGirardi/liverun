@@ -4,6 +4,7 @@
  * cuando vence sin pagar, las funciones premium quedan tras el muro suave.
  */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import { api, type Profile } from '@/lib/api';
 
@@ -16,17 +17,34 @@ type EntitlementValue = {
 
 const EntitlementContext = createContext<EntitlementValue | null>(null);
 
+/** Reintento de la carga del perfil si falló (sin red, servidor caído). */
+const REINTENTO_MS = 30_000;
+
 export function EntitlementProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [fallo, setFallo] = useState(false);
 
   const refresh = useCallback(() => {
-    api.profile().then(setProfile).catch(() => {});
+    api.profile()
+      .then((p) => { setProfile(p); setFallo(false); })
+      // Se conserva el último perfil conocido; se marca el fallo para reintentar.
+      .catch(() => setFallo(true));
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Mientras carga, asumimos acceso para no parpadear un muro que no corresponde.
-  const access = profile ? profile.access : true;
+  // Si falló, reintentar cada tanto y al volver a primer plano.
+  useEffect(() => {
+    if (!fallo) return;
+    const id = setInterval(refresh, REINTENTO_MS);
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') refresh(); });
+    return () => { clearInterval(id); sub.remove(); };
+  }, [fallo, refresh]);
+
+  // Mientras carga la primera vez, asumimos acceso para no parpadear un muro
+  // que no corresponde. Si la carga falló sin ningún valor previo, NO se deja
+  // acceso para siempre: false hasta que un reintento lo confirme.
+  const access = profile ? profile.access : !fallo;
 
   return (
     <EntitlementContext.Provider value={{ profile, access, refresh }}>

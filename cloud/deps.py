@@ -1,6 +1,7 @@
 """Dependencias compartidas entre el portal (main.py) y la API móvil (run.py):
 rate limiting por IP y autenticación por token."""
 import ipaddress
+import os
 import time
 from collections import defaultdict
 
@@ -109,6 +110,17 @@ def current_user(authorization: str = Header(None), db: Session = Depends(get_db
     user = db.get(PortalUser, uid)
     if not user:
         raise HTTPException(401, "Usuario no encontrado")
+    # tokens_valid_from se mueve al cambiar o resetear la contraseña, al vincular Google a
+    # una cuenta sin verificar y se fija al crear la cuenta. Esto último cubre
+    # los ids reutilizados de SQLite: un token viejo de un usuario borrado
+    # lleva el mismo id que la cuenta nueva, pero un iat anterior a su alta.
+    # Comparación estricta: un token emitido en el mismo segundo del corte vale.
     if user.tokens_valid_from and iat < user.tokens_valid_from:
-        raise HTTPException(401, "Cerramos esta sesión porque cambiaste tu contraseña. Ingresá de nuevo.")
+        raise HTTPException(401, "Tu sesión se cerró. Ingresá de nuevo.")
     return user
+
+
+def admin_emails() -> set[str]:
+    """Emails de CT_ADMIN_EMAILS (CSV), normalizados. Fuente de verdad de
+    quién es admin: la usan el arranque y el login con Google."""
+    return {e.strip().lower() for e in os.environ.get("CT_ADMIN_EMAILS", "").split(",") if e.strip()}

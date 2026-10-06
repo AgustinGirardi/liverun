@@ -33,7 +33,11 @@ if (!TaskManager.isTaskDefined(LOCATION_TASK)) {
     if (runSession.snapshot().phase === 'idle') {
       const snap = await loadSessionSnapshot();
       if (!snap || Date.now() - snap.savedAt > AUTO_RESUME_MAX_GAP_MS) return;
-      runSession.restoreFrom(snap, { autoResume: true });
+      // Pausa manual: se restaura pero sigue en pausa (la decide el corredor).
+      // Solo se retoma sola si estaba corriendo o en auto-pausa.
+      const estabaEnPausa = snap.phase === 'paused';
+      runSession.restoreFrom(snap, { autoResume: !estabaEnPausa });
+      if (estabaEnPausa) return;
     }
 
     runSession.ingest(
@@ -48,4 +52,19 @@ if (!TaskManager.isTaskDefined(LOCATION_TASK)) {
       })),
     );
   });
+}
+
+/**
+ * Detiene la tarea de ubicación en background si está activa. Se consulta
+ * siempre al SO (no a una bandera en memoria): si Android mató y relanzó la
+ * app, la bandera se pierde pero la tarea —y el GPS— siguen prendidos.
+ */
+export async function detenerTareaUbicacion(): Promise<void> {
+  try {
+    if (await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK)) {
+      await Location.stopLocationUpdatesAsync(LOCATION_TASK);
+    }
+  } catch {
+    // tarea no registrada (Expo Go / web): no hay nada que detener
+  }
 }

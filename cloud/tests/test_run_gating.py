@@ -1,5 +1,5 @@
 """Muro premium: el ranking mundial requiere acceso; el de amigos es gratis."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -11,7 +11,7 @@ from cloud.tests.conftest import make_user
 def _expire_trial(db, email):
     """Vence la prueba: empuja created_at más allá del período de prueba."""
     u = db.scalar(select(PortalUser).where(PortalUser.email == email))
-    u.created_at = datetime.utcnow() - timedelta(days=TRIAL_DAYS + 5)
+    u.created_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=TRIAL_DAYS + 5)
     db.commit()
     return u
 
@@ -40,7 +40,7 @@ def test_amigos_siempre_gratis_aunque_venza(client, db):
 def test_mundial_con_premium_pagado(client, db):
     h = make_user(client, email="pago@test.com", username="pago")
     u = _expire_trial(db, "pago@test.com")
-    u.premium_until = datetime.utcnow() + timedelta(days=10)
+    u.premium_until = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=10)
     db.commit()
     assert client.get("/api/run/ranking?scope=global", headers=h).status_code == 200
 

@@ -39,6 +39,8 @@ export type FinishData = {
   splits: number[];
   path: { lat: number; lon: number }[];
   avgPaceSPerKm: number | null;
+  /** id fijado al iniciar (null solo si vino de un snapshot viejo sin id) */
+  clientUuid: string | null;
 };
 
 type RawLoc = {
@@ -60,6 +62,7 @@ class RunSession {
   private startMs = 0;
   private pausedAccumMs = 0;
   private pauseStartedMs = 0;
+  private clientUuid: string | null = null;
   private voiceEnabled = false;
   private listeners = new Set<() => void>();
 
@@ -71,7 +74,10 @@ class RunSession {
 
   setVoice(enabled: boolean) { this.voiceEnabled = enabled; }
 
-  start() {
+  /** `clientUuid`: id de la salida para el backend, generado al iniciar (no al
+   *  guardar) para que reintentos y recuperaciones no dupliquen la salida. */
+  start(clientUuid: string) {
+    this.clientUuid = clientUuid;
     this.tracker = newTracker();
     this.autoPause = { paused: false, stillSince: null };
     this.startedAt = new Date();
@@ -88,7 +94,8 @@ class RunSession {
   private elapsedMs(now = Date.now()): number {
     if (!this.startMs) return 0;
     let paused = this.pausedAccumMs;
-    if ((this.phase === 'paused' || this.phase === 'autopaused') && this.pauseStartedMs) {
+    // 'saving' cuenta como pausa: mientras se guarda el reloj no avanza.
+    if ((this.phase === 'paused' || this.phase === 'autopaused' || this.phase === 'saving') && this.pauseStartedMs) {
       paused += now - this.pauseStartedMs;
     }
     return Math.max(0, now - this.startMs - paused);
@@ -142,7 +149,11 @@ class RunSession {
         speedMps: loc.coords.speed,
       };
       const elapsedS = this.elapsedMs(loc.timestamp) / 1000;
-      const res = addPoint(this.tracker, p, elapsedS);
+      const res = addPoint(this.tracker, p, elapsedS, {
+        inicioMs: this.startedAt?.getTime(),
+        ahoraMs: Date.now(),
+      });
+      if (res.vieja) continue; // lectura cacheada: no sirve ni para la auto-pausa
       // Velocidad para la auto-pausa: del tracker si aceptó; si la lectura se
       // descartó (mala precisión) pero trae Doppler, usamos esa — así la
       // pausa también funciona cuando el GPS se degrada al frenar.
@@ -164,12 +175,21 @@ class RunSession {
     this.emit();
   }
 
-  markSaving() { this.phase = 'saving'; this.emit(); }
+  /** Congela el reloj mientras se guarda. Si ya estaba en pausa se conserva
+   *  el inicio de esa pausa (así no se pierde ni se duplica tiempo). */
+  markSaving() {
+    if (this.phase === 'saving' || this.phase === 'idle') return;
+    const wasPaused = this.phase === 'paused' || this.phase === 'autopaused';
+    if (!wasPaused || !this.pauseStartedMs) this.pauseStartedMs = Date.now();
+    this.phase = 'saving';
+    this.emit();
+  }
 
-  /** El guardado falló: la salida vuelve a pausa en vez de perderse. */
+  /** El guardado falló: la salida vuelve a pausa en vez de perderse. La pausa
+   *  sigue contando desde que empezó (antes o durante el guardado). */
   abortSaving() {
     if (this.phase !== 'saving') return;
-    this.pauseStartedMs = Date.now();
+    if (!this.pauseStartedMs) this.pauseStartedMs = Date.now();
     this.phase = 'paused';
     this.persist(true);
     this.emit();
@@ -192,6 +212,7 @@ class RunSession {
       netElapsedMs: this.elapsedMs(now),
       tracker: this.tracker,
       now,
+      clientUuid: this.clientUuid,
     }));
   }
 
@@ -208,6 +229,7 @@ class RunSession {
     this.pausedAccumMs = f.pausedAccumMs;
     this.pauseStartedMs = f.pauseStartedMs;
     this.tracker = f.tracker;
+    this.clientUuid = f.clientUuid;
     this.autoPause = { paused: false, stillSince: null };
     this.phase = f.phase;
     if (opts?.autoResume) {
@@ -241,6 +263,7 @@ class RunSession {
       splits: this.tracker.splits,
       path: this.tracker.path,
       avgPaceSPerKm: avgPaceSPerKm(this.tracker.distanceM, durationS),
+      clientUuid: this.clientUuid,
     };
   }
 
@@ -252,6 +275,7 @@ class RunSession {
     this.startMs = 0;
     this.pausedAccumMs = 0;
     this.pauseStartedMs = 0;
+    this.clientUuid = null;
     this.lastPersistMs = 0;
     void clearSessionSnapshot();
     this.emit();
