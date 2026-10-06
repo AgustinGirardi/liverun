@@ -58,8 +58,10 @@ Name: "{autodesktop}\{#AppName}";  Filename: "{app}\{#AppExeName}"; Tasks: deskt
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Lanzar {#AppName}"; Flags: nowait postinstall skipifsilent
 
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}"
+; Sin [UninstallDelete] sobre {app}: ahí viven la base (chronotrack.db) y la
+; config, y antes se borraban sin preguntar. El desinstalador quita sólo los
+; archivos que instaló; los datos se borran únicamente si el usuario lo pide
+; (ver CurUninstallStepChanged).
 
 [Code]
 // Cerrar la app si está corriendo antes de instalar (el nombre nuevo y el
@@ -71,5 +73,22 @@ begin
   begin
     Exec('taskkill.exe', '/f /im LiveRun.exe', '', SW_HIDE, ewNoWait, ResultCode);
     Exec('taskkill.exe', '/f /im ChronoTrack.exe', '', SW_HIDE, ewNoWait, ResultCode);
+  end;
+end;
+
+// Al desinstalar, los datos (carreras, inscriptos, tiempos, config) se
+// conservan salvo que el usuario elija borrarlos. "No" es el botón por
+// defecto y la desinstalación silenciosa nunca los borra.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    if not UninstallSilent and DirExists(ExpandConstant('{app}')) then
+    begin
+      if MsgBox(#$BF + 'Borrar tambi' + #$E9 + 'n los datos de LiveRun (carreras, inscriptos y tiempos)?' + #13#10 + #13#10 +
+                'Si eleg' + #$ED + 's "No", quedan en ' + ExpandConstant('{app}') + ' y la pr' + #$F3 + 'xima instalaci' + #$F3 + 'n los vuelve a usar.',
+                mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+        DelTree(ExpandConstant('{app}'), True, True, True);
+    end;
   end;
 end;
