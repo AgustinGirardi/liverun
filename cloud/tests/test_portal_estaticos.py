@@ -42,3 +42,9 @@ def test_detalle_de_carrera_trae_result_id(client):
     assert isinstance(res["result_id"], int)
     busq = client.get("/api/search", params={"q": "ana gomez"}).json()["results"][0]
     assert busq["result_id"] == res["result_id"]
+
+
+def test_index_tiene_open_graph(client):
+    html = client.get("/").text
+    for propiedad in ("og:title", "og:description", "og:type", "og:site_name"):
+        assert f'property="{propiedad}"' in html, propiedad
