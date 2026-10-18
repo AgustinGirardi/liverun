@@ -64,6 +64,44 @@ def avatar_dir() -> Path:
     return d
 
 
+# ── Hora argentina ────────────────────────────────────────────────────────────
+# La base guarda naive UTC, pero "hoy", "esta semana" y "este mes" son de
+# Argentina: con UTC, una salida del domingo 22:00 caía en la semana siguiente.
+# ZoneInfo si hay base de zonas (Linux la trae; Windows necesita el paquete
+# tzdata) y si no, -03:00 fijo, que da lo mismo: Argentina no tiene horario de
+# verano desde 2009. Así no sumamos dependencias.
+try:
+    from zoneinfo import ZoneInfo
+    TZ_AR = ZoneInfo("America/Argentina/Buenos_Aires")
+except Exception:
+    TZ_AR = timezone(timedelta(hours=-3), "ART")
+
+
+def ahora_utc() -> datetime:
+    """Ahora en naive UTC (lo que guarda la base). Reemplaza a utcnow()."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def hoy_ar() -> date:
+    return datetime.now(TZ_AR).date()
+
+
+def fecha_ar(dt_utc: datetime) -> date:
+    """Día calendario argentino de un datetime naive UTC de la base."""
+    return dt_utc.replace(tzinfo=timezone.utc).astimezone(TZ_AR).date()
+
+
+def inicio_dia_ar_utc(d: date) -> datetime:
+    """00:00 argentino del día `d`, expresado en naive UTC (para filtrar)."""
+    return datetime(d.year, d.month, d.day, tzinfo=TZ_AR).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def iso_utc(dt: Optional[datetime]) -> Optional[str]:
+    """isoformat de un naive UTC con la zona explícita. Sin la 'Z', los
+    clientes (new Date() en JS) lo interpretaban como hora local: 3 h corrido."""
+    return dt.isoformat() + "Z" if dt else None
+
+
 # ── Lógica pura (testeable sin DB) ────────────────────────────────────────────
 
 def week_start(d: date) -> date:
@@ -82,19 +120,19 @@ def access_status(is_admin: bool, created_at: Optional[datetime],
         return {"access": True, "plan": "admin", "since": None, "until": None, "trial_ends_at": None}
     trial_end = (created_at + timedelta(days=TRIAL_DAYS)) if created_at else None
     if premium_until and premium_until > now:
-        return {"access": True, "plan": "premium", "until": premium_until.isoformat(),
-                "trial_ends_at": trial_end.isoformat() if trial_end else None}
+        return {"access": True, "plan": "premium", "until": iso_utc(premium_until),
+                "trial_ends_at": iso_utc(trial_end)}
     if trial_end and trial_end > now:
-        return {"access": True, "plan": "trial", "until": trial_end.isoformat(),
-                "trial_ends_at": trial_end.isoformat()}
+        return {"access": True, "plan": "trial", "until": iso_utc(trial_end),
+                "trial_ends_at": iso_utc(trial_end)}
     return {"access": False, "plan": "expired", "until": None,
-            "trial_ends_at": trial_end.isoformat() if trial_end else None}
+            "trial_ends_at": iso_utc(trial_end)}
 
 
 def user_has_access(user: PortalUser, now: Optional[datetime] = None) -> bool:
     """True si el usuario puede usar funciones premium (admin, premium pagado o
     prueba vigente). Lo usan los gates premium del servidor."""
-    n = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    n = now or ahora_utc()
     return access_status(bool(user.is_admin), user.created_at, user.premium_until, n)["access"]
 
 
@@ -130,16 +168,45 @@ class ProfileUpdate(BaseModel):
 
 
 class ActivityIn(BaseModel):
-    # Cotas de sanidad: una salida trucha de 10.000 km rompería el ranking
-    # (integridad del juego, no solo validación). 48 h / 400 km cubren hasta
-    # ultras extremas; splits: uno por km → 400 como techo holgado.
+    # Solo forma acá; los topes de sanidad (que protegen el ranking mundial,
+    # con premios) están en validar_actividad, con mensaje en castellano.
     client_uuid: str = Field(..., min_length=1, max_length=64)
     started_at: datetime
-    duration_s: int = Field(..., ge=1, le=48 * 3600)
-    distance_m: float = Field(..., ge=0, le=400_000)
+    duration_s: int = Field(..., ge=1)
+    distance_m: float = Field(..., ge=0)
     avg_pace_s_per_km: Optional[float] = Field(None, gt=0)
     splits: list[float] = Field(default_factory=list, max_length=400)
     polyline: Optional[str] = Field(None, max_length=100_000)
+
+
+# Topes de una salida. El ranking mundial tiene premios: antes se aceptaba
+# duration_s=1 con 400 km y started_at en el futuro.
+ACT_MAX_KM = 100             # por actividad: cubre una ultra de 100 km
+ACT_MAX_HORAS = 48
+ACT_MIN_DURACION_S = 60
+ACT_RITMO_MIN_S_KM = 150     # 2:30 min/km: más rápido que un récord mundial
+ACT_TOLERANCIA_FUTURO = timedelta(minutes=10)   # relojes de teléfono desfasados
+ACT_ANTIGUEDAD_MAX = timedelta(days=365)
+ACT_TOPE_DIARIO_KM = 150     # suma de un mismo día (hora argentina)
+
+
+def validar_actividad(body: "ActivityIn", now: datetime) -> Optional[str]:
+    """Mensaje de error si la salida no es creíble, o None. Pura: `now` en
+    naive UTC. El tope diario se chequea aparte porque necesita la base."""
+    if body.duration_s < ACT_MIN_DURACION_S:
+        return "La salida es demasiado corta: tiene que durar al menos 1 minuto."
+    if body.duration_s > ACT_MAX_HORAS * 3600:
+        return f"La salida no puede durar más de {ACT_MAX_HORAS} horas."
+    if body.distance_m > ACT_MAX_KM * 1000:
+        return f"La salida no puede superar los {ACT_MAX_KM} km."
+    if body.distance_m > 0 and body.duration_s / (body.distance_m / 1000.0) < ACT_RITMO_MIN_S_KM:
+        return "El ritmo es imposible (más rápido que 2:30 min/km). Revisá el GPS de la salida."
+    inicio = _as_naive_utc(body.started_at)
+    if inicio > now + ACT_TOLERANCIA_FUTURO:
+        return "La fecha de la salida está en el futuro. Revisá la hora del teléfono."
+    if inicio < now - ACT_ANTIGUEDAD_MAX:
+        return "La salida tiene más de un año: no se puede cargar."
+    return None
 
 
 class FriendRequestIn(BaseModel):
@@ -156,7 +223,7 @@ def _activity_dict(a: Activity, full: bool = False) -> dict:
     out = {
         "id": a.id,
         "client_uuid": a.client_uuid,
-        "started_at": a.started_at.isoformat(),
+        "started_at": iso_utc(a.started_at),
         "duration_s": a.duration_s,
         "distance_m": a.distance_m,
         "avg_pace_s_per_km": a.avg_pace_s_per_km,
@@ -187,17 +254,20 @@ def _friend_ids(user_id: int, db: Session) -> set[int]:
 @router.get("/profile")
 def get_profile(user: PortalUser = Depends(current_user)):
     acc = access_status(bool(user.is_admin), user.created_at, user.premium_until,
-                        datetime.now(timezone.utc).replace(tzinfo=None))
+                        ahora_utc())
     return {
         "email": user.email,
+        "email_verified": bool(user.email_verified_at),
         "full_name": user.full_name,
         "username": user.username,
         "weekly_goal": user.weekly_goal or 3,
         "avatar_url": avatar_absoluto(user.avatar_url),
         "is_admin": bool(user.is_admin),
+        # True/False si se sabe; None en cuentas viejas vinculadas a Google.
+        "has_password": None if user.password_set is None else bool(user.password_set),
         "access": acc["access"],
         "plan": acc["plan"],
-        "premium_until": user.premium_until.isoformat() if user.premium_until else None,
+        "premium_until": iso_utc(user.premium_until),
         "trial_ends_at": acc["trial_ends_at"],
     }
 
@@ -221,15 +291,15 @@ def _admin_user_dict(u: PortalUser, now: datetime) -> dict:
     return {
         "id": u.id, "email": u.email, "full_name": u.full_name, "username": u.username,
         "is_admin": bool(u.is_admin), "plan": acc["plan"], "access": acc["access"],
-        "premium_until": u.premium_until.isoformat() if u.premium_until else None,
-        "created_at": u.created_at.isoformat() if u.created_at else None,
+        "premium_until": iso_utc(u.premium_until),
+        "created_at": iso_utc(u.created_at),
     }
 
 
 @router.get("/admin/users")
 def admin_list_users(q: str = "", limit: int = 50,
                      admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = ahora_utc()
     stmt = select(PortalUser).order_by(PortalUser.created_at.desc())
     ql = (q or "").strip().lower()
     if ql:
@@ -253,7 +323,7 @@ def admin_grant(user_id: int, body: GrantIn,
     target = db.get(PortalUser, user_id)
     if not target:
         raise HTTPException(404, "Usuario no encontrado")
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = ahora_utc()
     if body.revoke:
         target.premium_until = None
     elif body.unlimited:
@@ -321,7 +391,7 @@ def _coupon_dict(c: Coupon) -> dict:
         "id": c.id, "code": c.code, "kind": c.kind, "months": c.months,
         "percent_off": c.percent_off, "max_redemptions": c.max_redemptions,
         "redeemed_count": c.redeemed_count, "active": bool(c.active),
-        "expires_at": c.expires_at.isoformat() if c.expires_at else None,
+        "expires_at": iso_utc(c.expires_at),
     }
 
 
@@ -377,7 +447,7 @@ def redeem_coupon(body: RedeemIn, request: Request,
     # cuenta el espacio de codigos se puede barrer igual desde miles de origenes.
     rate_limit_key(f"redeem_user:{user.id}", limit=10, window=3600.0)
     code = (body.code or "").strip().upper()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = ahora_utc()
     c = db.scalar(select(Coupon).where(Coupon.code == code))
     already = bool(c and db.scalar(
         select(CouponRedemption).where(CouponRedemption.coupon_id == c.id,
@@ -403,12 +473,16 @@ def redeem_coupon(body: RedeemIn, request: Request,
         db.rollback()
         raise HTTPException(400, _CUPON_INVALIDO)
     db.add(CouponRedemption(coupon_id=c.id, user_id=user.id))
-    if c.kind == "free_months":
+    # Un descuento del 100% dejaba un checkout de monto 0 que MP rechaza (502).
+    # Como el descuento aplica solo al primer cobro, equivale a un mes gratis:
+    # se otorga directo como tal.
+    meses = c.months if c.kind == "free_months" else (1 if (c.percent_off or 0) >= 100 else None)
+    if meses:
         base = user.premium_until if (user.premium_until and user.premium_until > now) else now
-        user.premium_until = base + timedelta(days=30 * c.months)
-        msg = f"¡Listo! Sumaste {c.months} {'mes' if c.months == 1 else 'meses'} de premium."
-        result = {"kind": "free_months", "months": c.months,
-                  "premium_until": user.premium_until.isoformat()}
+        user.premium_until = base + timedelta(days=30 * meses)
+        msg = f"¡Listo! Sumaste {meses} {'mes' if meses == 1 else 'meses'} de premium."
+        result = {"kind": "free_months", "months": meses,
+                  "premium_until": iso_utc(user.premium_until)}
     else:
         user.pending_discount_percent = c.percent_off
         msg = f"¡Listo! Tenés {c.percent_off}% de descuento para tu próxima suscripción."
@@ -484,6 +558,19 @@ def create_activity(body: ActivityIn, request: Request,
         # Reintento de la cola de sincronización: idempotente, no duplica.
         return {"duplicated": True, **_activity_dict(existing)}
 
+    err = validar_actividad(body, ahora_utc())
+    if err:
+        raise HTTPException(422, err)
+    started = _as_naive_utc(body.started_at)
+    desde = inicio_dia_ar_utc(fecha_ar(started))
+    ya_del_dia = db.scalar(select(func.coalesce(func.sum(Activity.distance_m), 0.0)).where(
+        Activity.user_id == user.id,
+        Activity.started_at >= desde,
+        Activity.started_at < desde + timedelta(days=1),
+    )) or 0.0
+    if ya_del_dia + body.distance_m > ACT_TOPE_DIARIO_KM * 1000:
+        raise HTTPException(422, f"Superaste el máximo de {ACT_TOPE_DIARIO_KM} km por día.")
+
     pace = body.avg_pace_s_per_km
     if pace is None and body.distance_m > 0:
         pace = body.duration_s / (body.distance_m / 1000.0)
@@ -548,26 +635,27 @@ def delete_activity(activity_id: int,
 @router.get("/summary")
 def summary(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     acts = db.scalars(select(Activity).where(Activity.user_id == user.id)).all()
-    today = date.today()
+    today = hoy_ar()
     goal = user.weekly_goal or 3
-    dates = {a.started_at.date() for a in acts}
+    dia = {a.id: fecha_ar(a.started_at) for a in acts}  # día argentino de cada salida
+    dates = set(dia.values())
 
     wk = week_start(today)
-    week_acts = [a for a in acts if wk <= a.started_at.date() <= today]
-    month_acts = [a for a in acts if a.started_at.date().replace(day=1) == today.replace(day=1)]
+    week_acts = [a for a in acts if wk <= dia[a.id] <= today]
+    month_acts = [a for a in acts if dia[a.id].replace(day=1) == today.replace(day=1)]
 
     return {
         "streak_weeks": compute_streak(dates, goal, today),
         "week": {
-            "days_run": len({a.started_at.date() for a in week_acts}),
+            "days_run": len({dia[a.id] for a in week_acts}),
             "goal": goal,
             "km": round(sum(a.distance_m for a in week_acts) / 1000.0, 2),
         },
         "month": {
             "km": round(sum(a.distance_m for a in month_acts) / 1000.0, 2),
             "activities": len(month_acts),
-            "days_run": len({a.started_at.date() for a in month_acts}),
-            "run_dates": sorted(d.isoformat() for d in {a.started_at.date() for a in month_acts}),
+            "days_run": len({dia[a.id] for a in month_acts}),
+            "run_dates": sorted(d.isoformat() for d in {dia[a.id] for a in month_acts}),
         },
     }
 
@@ -624,7 +712,7 @@ def request_friend(body: FriendRequestIn, request: Request,
             raise HTTPException(409, "Ya le enviaste una solicitud")
         # El otro ya me había pedido: pedirle de vuelta equivale a aceptar.
         existing.status = "accepted"
-        existing.accepted_at = _as_naive_utc(datetime.now(timezone.utc))
+        existing.accepted_at = ahora_utc()
         db.commit()
         return {"status": "accepted", "friend": _user_public(target)}
 
@@ -640,7 +728,7 @@ def accept_friend(body: FriendAcceptIn,
     if not fr or fr.addressee_id != user.id or fr.status != "pending":
         raise HTTPException(404, "Solicitud no encontrada")
     fr.status = "accepted"
-    fr.accepted_at = _as_naive_utc(datetime.now(timezone.utc))
+    fr.accepted_at = ahora_utc()
     db.commit()
     requester = db.get(PortalUser, fr.requester_id)
     return {"status": "accepted", "friend": _user_public(requester)}
@@ -668,6 +756,12 @@ def list_friends(user: PortalUser = Depends(current_user), db: Session = Depends
 GLOBAL_TOP = 50
 
 
+def _offset_sqlite(momento_utc: datetime) -> str:
+    """Modificador de SQLite para pasar un naive UTC a hora argentina."""
+    off = momento_utc.replace(tzinfo=timezone.utc).astimezone(TZ_AR).utcoffset()
+    return f"{int(off.total_seconds())} seconds"
+
+
 @router.get("/ranking")
 def ranking(period: str = "week", scope: str = "friends",
             user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
@@ -682,9 +776,9 @@ def ranking(period: str = "week", scope: str = "friends",
     # El ranking de amigos es gratis; el mundial (premios) es premium.
     if scope == "global" and not user_has_access(user):
         raise HTTPException(402, "El ranking mundial es premium. Pasate a premium para competir por premios.")
-    today = date.today()
+    today = hoy_ar()
     since = week_start(today) if period == "week" else today.replace(day=1)
-    since_dt = datetime(since.year, since.month, since.day)
+    since_dt = inicio_dia_ar_utc(since)  # lunes o día 1 a las 00:00 de Argentina, en UTC
 
     def entry(u: PortalUser, km: float, days: int, count: int, position: Optional[int] = None) -> dict:
         return {
@@ -701,7 +795,8 @@ def ranking(period: str = "week", scope: str = "friends",
             select(
                 Activity.user_id,
                 func.sum(Activity.distance_m),
-                func.count(func.distinct(func.date(Activity.started_at))),
+                # Días distintos en hora argentina (SQLite: date(x, '-10800 seconds')).
+                func.count(func.distinct(func.date(Activity.started_at, _offset_sqlite(since_dt)))),
                 func.count(),
             )
             .where(Activity.started_at >= since_dt)
@@ -740,7 +835,7 @@ def ranking(period: str = "week", scope: str = "friends",
         entries.append(entry(
             u,
             sum(a.distance_m for a in user_acts) / 1000.0,
-            len({a.started_at.date() for a in user_acts}),
+            len({fecha_ar(a.started_at) for a in user_acts}),
             len(user_acts),
         ))
     entries.sort(key=lambda e: e["km"], reverse=True)

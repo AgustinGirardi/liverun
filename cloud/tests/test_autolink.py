@@ -1,5 +1,7 @@
 import hashlib
 
+from cloud.tests.conftest import verificar_email
+
 
 def _h(email):
     return hashlib.sha256(("chronotrack-v1:" + email.strip().lower()).encode()).hexdigest()
@@ -14,15 +16,30 @@ def _publish_with_email(client, email, bib="1", name="Juan Perez", source_id="ct
     }])
 
 
-def test_register_autolinks_matching_results(client):
+def test_verify_autolinks_matching_results(client):
+    # El registro ya no vincula (email sin verificar): vincula la verificación.
     _publish_with_email(client, "juan@mail.com")
     r = client.post("/api/auth/register", json={
         "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
     assert r.status_code == 200
+    assert r.json()["linked"] == 0
     token = r.json()["token"]
+    assert verificar_email(client, "juan@mail.com")["linked"] == 1
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert len(me.json()["results"]) == 1
+
+
+def test_register_sin_verificar_no_vincula(client):
+    _publish_with_email(client, "juan@mail.com")
+    r = client.post("/api/auth/register", json={
+        "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    token = r.json()["token"]
+    me = client.get("/api/me/results", headers={"Authorization": f"Bearer {token}"})
+    assert me.json()["results"] == []
+    # Tampoco al volver a entrar mientras siga sin verificar.
+    r = client.post("/api/auth/login", json={"email": "juan@mail.com", "password": "supersecreta"})
+    assert r.json()["linked"] == 0
 
 
 def test_register_does_not_link_other_emails(client):
@@ -30,14 +47,16 @@ def test_register_does_not_link_other_emails(client):
     r = client.post("/api/auth/register", json={
         "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
     token = r.json()["token"]
+    assert verificar_email(client, "juan@mail.com")["linked"] == 0
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {token}"})
     assert len(me.json()["results"]) == 0
 
 
 def test_login_links_results_published_after_register(client):
-    # Cuenta creada antes de que exista el resultado
+    # Cuenta creada (y verificada) antes de que exista el resultado
     client.post("/api/auth/register", json={
         "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    verificar_email(client, "juan@mail.com")
     _publish_with_email(client, "juan@mail.com")  # se publica después
     r = client.post("/api/auth/login", json={"email": "juan@mail.com", "password": "supersecreta"})
     token = r.json()["token"]
@@ -49,6 +68,7 @@ def test_autolink_is_idempotent(client):
     _publish_with_email(client, "juan@mail.com")
     client.post("/api/auth/register", json={
         "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    assert verificar_email(client, "juan@mail.com")["linked"] == 1
     r = client.post("/api/auth/login", json={"email": "juan@mail.com", "password": "supersecreta"})
     assert r.json()["linked"] == 0
     token = r.json()["token"]

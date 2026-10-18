@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { AppState, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
@@ -11,12 +11,18 @@ import '@/lib/location-task'; // registra la tarea de ubicación en background
 import { syncPending } from '@/lib/run-store';
 
 function Gate() {
-  const { status } = useAuth();
+  const { status, usuario } = useAuth();
 
-  // Al abrir la app con sesión, reintenta subir salidas pendientes (offline-first).
+  // Con sesión y usuario identificado, reintenta subir salidas pendientes
+  // (offline-first): al abrir y cada vez que la app vuelve a primer plano.
   useEffect(() => {
-    if (status === 'authenticated') syncPending().catch(() => {});
-  }, [status]);
+    if (status !== 'authenticated' || !usuario) return;
+    syncPending().catch(() => {});
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st === 'active') syncPending().catch(() => {});
+    });
+    return () => sub.remove();
+  }, [status, usuario]);
 
   if (status === 'loading') return null; // el splash sigue visible
   if (status !== 'authenticated') return <LoginScreen />;

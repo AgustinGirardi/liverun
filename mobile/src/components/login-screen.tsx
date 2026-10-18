@@ -151,6 +151,17 @@ export function LoginScreen() {
               {mode === 'login' ? '¿No tenés cuenta? Crear una' : '¿Ya tenés cuenta? Iniciar sesión'}
             </ThemedText>
           </Pressable>
+
+          {mode === 'login' && (
+            // El reset se hace en la web del portal: el link del mail abre el navegador igual.
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => Linking.openURL(`${API_BASE}/?olvide=1`)}>
+              <ThemedText type="link" themeColor="textSecondary" style={styles.switch}>
+                ¿Olvidaste tu contraseña?
+              </ThemedText>
+            </Pressable>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>

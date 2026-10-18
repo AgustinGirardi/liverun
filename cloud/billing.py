@@ -3,8 +3,9 @@
 Flujo:
   app/web → POST /api/run/billing/subscribe → creamos un preapproval en MP →
   devolvemos init_point → el usuario autoriza el pago → MP cobra cada mes y
-  notifica al webhook → extendemos premium_until +1 mes (idempotente por
-  mp_payment_id). El backend es la única fuente de verdad del acceso.
+  notifica al webhook → extendemos premium_until +1 mes con margen de gracia
+  (idempotente por mp_payment_id; una devolución o contracargo lo revoca).
+  El backend es la única fuente de verdad del acceso.
 
 Config (env): CT_MP_ACCESS_TOKEN (credencial del vendedor), CT_PREMIUM_PRICE
 (monto mensual), CT_PREMIUM_CURRENCY (default ARS), CT_PUBLIC_URL.
@@ -149,6 +150,17 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
     if ya:
         raise SubscriptionExists("Ya tenés una suscripción activa")
 
+    if (user.pending_discount_percent or 0) >= 100:
+        # Descuento del 100% dejado antes de que el canje lo convirtiera en un
+        # mes gratis: con monto 0 MP rechaza el preapproval (502). El cupón
+        # descuenta solo el primer cobro, así que equivale a un mes de premium:
+        # lo damos acá y la suscripción arranca a precio de lista.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        base = user.premium_until if (user.premium_until and user.premium_until > now) else now
+        user.premium_until = base + timedelta(days=DIAS_POR_COBRO)
+        user.pending_discount_percent = None
+        db.commit()
+
     # strict: el monto queda fijo en el preapproval y se cobra para siempre.
     amount = price_for(user.pending_discount_percent, strict=True)
     payload = {
@@ -183,19 +195,71 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
             "sandbox": bool(sandbox)}
 
 
+# Cuánto suma cada cobro mensual y cuánto margen damos por encima del próximo
+# débito. 30 días exactos cortaban el acceso en los meses de 31 días y durante
+# los reintentos de cobro de MP (que puede tardar varios días en debitar).
+DIAS_POR_COBRO = 30
+DIAS_DE_GRACIA = 5
+
+# Estados de MP que deshacen un pago ya aprobado.
+_ESTADOS_REVERSION = ("refunded", "charged_back")
+
+
+def _preapproval_de(payment: dict) -> Optional[str]:
+    """Id del preapproval al que pertenece un pago, si MP lo informa.
+
+    Defensivo porque MP lo manda en lugares distintos según el tipo de pago:
+    `preapproval_id` suelto, en `metadata`, o como `subscription_id` dentro de
+    `point_of_interaction.transaction_data`.
+    """
+    pre = payment.get("preapproval_id") or (payment.get("metadata") or {}).get("preapproval_id")
+    if not pre:
+        td = (payment.get("point_of_interaction") or {}).get("transaction_data") or {}
+        pre = td.get("subscription_id")
+    return str(pre) if pre else None
+
+
+def _parse_fecha_mp(valor) -> Optional[datetime]:
+    """Fecha ISO de MP ('2026-05-01T10:00:00.000-04:00') a naive UTC, o None."""
+    if not valor:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def _user_for_payment(payment: dict, db: Session) -> Optional[PortalUser]:
-    """Mapea un pago de MP a nuestro usuario: por external_reference (id) o,
-    si falta, por el preapproval asociado."""
+    """Mapea un pago de MP a nuestro usuario.
+
+    Primero por el preapproval: es un id de MP que guardamos nosotros al crear
+    la suscripción y no se recicla. Si el pago trae un preapproval que no es
+    nuestro (p. ej. la cuenta se borró y con ella su fila), NO caemos a
+    external_reference: ese número es un id de usuario de SQLite, que se puede
+    reutilizar, y el cobro huérfano terminaría acreditado a una cuenta nueva
+    que no tiene nada que ver.
+
+    Sin preapproval (pago suelto) usamos external_reference, pero solo si la
+    cuenta ya existía cuando se generó el pago; si es más nueva, el id se
+    reutilizó.
+    """
+    pre_id = _preapproval_de(payment)
+    if pre_id:
+        sub = db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == pre_id))
+        return db.get(PortalUser, sub.user_id) if sub else None
     ext = payment.get("external_reference")
     if ext and str(ext).isdigit():
         u = db.get(PortalUser, int(ext))
         if u:
+            creado_pago = _parse_fecha_mp(payment.get("date_created"))
+            if creado_pago and u.created_at and u.created_at > creado_pago + timedelta(minutes=5):
+                print(f"[MP] pago con external_reference={ext} anterior a la cuenta: "
+                      "id de usuario reutilizado, no se acredita", flush=True)
+                return None
             return u
-    pre_id = payment.get("preapproval_id") or (payment.get("metadata") or {}).get("preapproval_id")
-    if pre_id:
-        sub = db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == str(pre_id)))
-        if sub:
-            return db.get(PortalUser, sub.user_id)
     return None
 
 
@@ -203,7 +267,7 @@ def _cancelar_huerfano(payment: dict) -> None:
     """Un cobro sin dueño es una suscripción zombi: la cuenta se borró pero el
     preapproval siguió vivo (MP estaba caído en ese momento). Lo damos de baja
     para que cobre una vez y no todos los meses hasta el fin de los tiempos."""
-    pre_id = payment.get("preapproval_id") or (payment.get("metadata") or {}).get("preapproval_id")
+    pre_id = _preapproval_de(payment)
     if not pre_id:
         return
     try:
@@ -213,13 +277,71 @@ def _cancelar_huerfano(payment: dict) -> None:
         print(f"[MP] no se pudo cancelar el huérfano {pre_id}: {e}", flush=True)
 
 
-def apply_payment(payment_id: str, db: Session) -> dict:
-    """Procesa un pago notificado por el webhook. Idempotente: si ya se aplicó,
-    no hace nada. Si está aprobado, extiende premium_until +1 mes."""
-    if db.scalar(select(BillingPayment).where(BillingPayment.mp_payment_id == str(payment_id))):
+def _pago_invalido(payment: dict, db: Session) -> Optional[str]:
+    """Motivo por el que un pago aprobado NO debe dar premium, o None si vale.
+
+    Moneda y monto > 0 siempre. Si el pago viene de un preapproval nuestro, el
+    monto lo fijamos nosotros al crearlo (y un cupón puede bajarlo mucho), así
+    que no pedimos más. Si es un pago suelto, además tiene que ser razonable
+    respecto del precio de lista: la mitad como piso, para absorber la
+    diferencia de cotización del dólar entre el alta y hoy.
+    """
+    moneda = payment.get("currency_id")
+    if moneda != CURRENCY:
+        return f"moneda {moneda!r} distinta de {CURRENCY}"
+    try:
+        monto = float(payment.get("transaction_amount") or 0)
+    except (TypeError, ValueError):
+        return "monto ilegible"
+    if monto <= 0:
+        return f"monto {monto} no positivo"
+    pre_id = _preapproval_de(payment)
+    if pre_id and db.scalar(select(BillingSubscription).where(
+            BillingSubscription.mp_preapproval_id == pre_id)):
+        return None
+    piso = base_price_ars() * 0.5
+    if monto < piso:
+        return f"monto {monto} muy por debajo del precio ({piso:.2f} mínimo)"
+    return None
+
+
+def _revertir_pago(previo: BillingPayment, estado: str, db: Session) -> dict:
+    """Un pago que dimos por bueno volvió como devuelto o contracargo: sacamos
+    los días que ese pago había sumado. Queda marcado con el estado nuevo, así
+    un segundo aviso no resta dos veces. Los pagos anteriores a la columna
+    granted_s no guardan cuánto sumaron: se asume un mes."""
+    user = db.get(PortalUser, previo.user_id)
+    dias = timedelta(seconds=previo.granted_s) if previo.granted_s else timedelta(days=DIAS_POR_COBRO)
+    if user and user.premium_until:
+        user.premium_until = user.premium_until - dias
+    previo.status = estado
+    db.commit()
+    print(f"[MP] pago {previo.mp_payment_id} {estado}: se revocan {dias.days} días "
+          f"de premium al usuario {previo.user_id}", flush=True)
+    return {"status": "revocado"}
+
+
+def apply_payment(payment_id: str, db: Session, preapproval_id: Optional[str] = None) -> dict:
+    """Procesa un pago notificado por el webhook.
+
+    Idempotente por mp_payment_id: un pago ya aplicado no vuelve a sumar. Si un
+    pago ya aplicado vuelve como devuelto o contracargo, revoca lo que había
+    sumado (MP avisa de nuevo con el mismo id cuando el pago cambia de estado).
+
+    `preapproval_id` lo pasa el aviso subscription_authorized_payment, que lo
+    obtuvo de MP con nuestro token: sirve de pista si /v1/payments no lo trae.
+    """
+    previo = db.scalar(select(BillingPayment).where(BillingPayment.mp_payment_id == str(payment_id)))
+    if previo and previo.status != "approved":
         return {"status": "ya_procesado"}
     payment = mp_request("GET", f"/v1/payments/{payment_id}")
     status = payment.get("status")
+    if previo:
+        if status in _ESTADOS_REVERSION:
+            return _revertir_pago(previo, status, db)
+        return {"status": "ya_procesado"}
+    if preapproval_id and not _preapproval_de(payment):
+        payment = {**payment, "preapproval_id": preapproval_id}
     user = _user_for_payment(payment, db)
     if not user:
         # Plata cobrada que no podemos atribuir: casi siempre un preapproval que
@@ -230,15 +352,28 @@ def apply_payment(payment_id: str, db: Session) -> dict:
         return {"status": "sin_usuario"}
     if status != "approved":
         return {"status": status or "desconocido"}
+    motivo = _pago_invalido(payment, db)
+    if motivo:
+        # No se registra: queda en el log para revisarlo a mano, y si fue un
+        # error nuestro el próximo aviso lo vuelve a evaluar.
+        print(f"[MP] pago {payment_id} no acreditado: {motivo}", flush=True)
+        return {"status": "invalido"}
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     base = user.premium_until if (user.premium_until and user.premium_until > now) else now
-    user.premium_until = base + timedelta(days=30)
+    # +30 días desde el vencimiento vigente (nadie pierde días ya pagos o
+    # regalados), pero nunca menos de 30+5 desde hoy: el margen cubre los meses
+    # de 31 días y los reintentos de cobro de MP, y no se acumula mes a mes
+    # porque el próximo cobro vuelve a medir desde el vencimiento.
+    nuevo = max(base + timedelta(days=DIAS_POR_COBRO),
+                now + timedelta(days=DIAS_POR_COBRO + DIAS_DE_GRACIA))
+    user.premium_until = nuevo
     tenia_descuento = user.pending_discount_percent
     user.pending_discount_percent = None  # el descuento ya se usó en este cobro
     db.add(BillingPayment(
         user_id=user.id, mp_payment_id=str(payment_id),
         amount=payment.get("transaction_amount"), status=status,
+        granted_s=int((nuevo - base).total_seconds()),
     ))
     try:
         db.commit()
@@ -248,7 +383,30 @@ def apply_payment(payment_id: str, db: Session) -> dict:
         return {"status": "ya_procesado"}
     if tenia_descuento:
         _restaurar_precio_de_lista(payment, db, user)
-    return {"status": "premium_extendido", "premium_until": user.premium_until.isoformat()}
+    return {"status": "premium_extendido", "premium_until": user.premium_until.isoformat() + "Z"}
+
+
+def apply_authorized_payment(authorized_id: str, db: Session) -> dict:
+    """Aviso subscription_authorized_payment. Su data.id NO es un id de
+    /v1/payments sino de /authorized_payments (la cuota mensual del
+    preapproval): consultarlo como pago daba 404, o peor, otro pago.
+
+    Formato según la documentación de MP (lo leemos a la defensiva):
+      {"id": ..., "preapproval_id": "...", "status": "processed"|"recycling"|...,
+       "payment": {"id": 123, "status": "approved", ...}, ...}
+    Si todavía no tiene pago asociado (programada o en reintento) no hay nada
+    que acreditar: MP manda otro aviso cuando efectivamente cobra.
+    """
+    data = mp_request("GET", f"/authorized_payments/{authorized_id}")
+    pago = data.get("payment")
+    pay_id = pago.get("id") if isinstance(pago, dict) else None
+    pay_id = pay_id or data.get("payment_id")
+    if not pay_id or not str(pay_id).isdigit():
+        print(f"[MP] authorized_payment {authorized_id} todavía sin pago "
+              f"(estado {data.get('status')!r})", flush=True)
+        return {"status": "sin_pago"}
+    pre = data.get("preapproval_id")
+    return apply_payment(str(pay_id), db, preapproval_id=str(pre) if pre else None)
 
 
 def _restaurar_precio_de_lista(payment: dict, db: Session, user: PortalUser) -> None:
@@ -261,7 +419,7 @@ def _restaurar_precio_de_lista(payment: dict, db: Session, user: PortalUser) -> 
     Best effort: si MP no responde queda logueado y el usuario conserva el
     descuento — preferible a romper el webhook de un pago ya aplicado.
     """
-    pre_id = payment.get("preapproval_id") or (payment.get("metadata") or {}).get("preapproval_id")
+    pre_id = _preapproval_de(payment)
     if not pre_id:
         sub = db.scalar(select(BillingSubscription)
                         .where(BillingSubscription.user_id == user.id,

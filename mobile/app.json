@@ -77,7 +77,7 @@
     },
     "owner": "agusgirarfi",
     "runtimeVersion": {
-      "policy": "sdkVersion"
+      "policy": "fingerprint"
     },
     "updates": {
       "url": "https://u.expo.dev/252382f9-2e91-45ce-b8cc-a82e3765064d"
