@@ -1132,9 +1132,9 @@ function InscriptosView({ race }) {
                   {runnerQuery.length >= 2 && runnerResults.length > 0 && (
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, maxWidth: 340, background: C.surface2, border: `1px solid ${C.lineStrong}`, borderRadius: 6, boxShadow: "0 4px 20px #00000060", zIndex: 10, maxHeight: 240, overflowY: "auto", marginTop: 4 }}>
                       {runnerResults.map(r => (
-                        <div key={r.id}
+                        <button key={r.id} type="button"
                           onClick={() => { setSelectedRunner(r); setRunnerQuery(""); setRunnerResults([]) }}
-                          style={{ padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}
+                          style={{ width: "100%", textAlign: "left", color: C.fg, background: "transparent", border: "none", padding: "10px 14px", cursor: "pointer", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}
                           onMouseEnter={e => e.currentTarget.style.background = C.line}
                           onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                           <div>
@@ -1143,7 +1143,7 @@ function InscriptosView({ race }) {
                               {[r.category, r.club, r.gender].filter(Boolean).join(" · ")}
                             </div>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
