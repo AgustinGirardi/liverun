@@ -116,3 +116,13 @@ def test_las_medidas_dinamicas_tienen_su_css():
         assert f"var({var}" in css, f"styles.css no usa {var}"
     medidas = (_STATIC / "js/ui/componentes.js").read_text(encoding="utf-8")
     assert "iniciarMedidas" in medidas
+
+
+def test_admin_tiene_la_pestana_de_claves_con_sus_acciones():
+    admin = (_STATIC / "js/pantallas/admin.js").read_text(encoding="utf-8")
+    assert 'data-p="claves"' in admin
+    assert "/api/run/admin/publish-keys" in admin
+    for accion in ("crearClave", "rotarClave", "revocarClave", "copiarClave"):
+        assert f"{accion}(" in admin, f"falta registrar la acción {accion}"
+    # La clave en claro solo se muestra al crearla o rotarla, nunca en el listado.
+    assert "k.key" in admin and "k.prefix" in admin

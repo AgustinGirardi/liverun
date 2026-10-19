@@ -117,14 +117,16 @@ Si encontrás algo, escribime en vez de abrir un issue público.
 
 Anotada acá a propósito, porque el código público se lee mejor con sus límites a la vista:
 
-- La CSP necesita `script-src 'unsafe-inline'`: el SPA del portal engancha los
-  handlers como atributos `onclick`. Sacarlo requiere migrarlos a
-  `addEventListener`.
 - El rate limiting es en memoria y por proceso: sirve porque el portal corre en
-  un único worker. Escalar horizontalmente pide moverlo a Redis.
-- Hay una sola API key de publicación. Cada carrera ya graba qué key la publicó
-  (`owner_key_hash`), así que el día que haya una key por organizador ninguno
-  puede pisar las carreras de otro; falta emitirlas.
+  un único worker. El backend es intercambiable (`CT_RATE_LIMIT_BACKEND`,
+  contrato `Limitador` en `cloud/deps.py`), pero hoy no hay otro: escalar a más
+  de un worker pide registrar uno compartido (Redis).
+- La CSP ya no lleva `unsafe-inline` ni en scripts ni en estilos. Las medidas
+  dinámicas (cupo, barras, anillo) viajan en `data-*` y se aplican por CSSOM.
+- Cada organizador publica con su propia API key (`cloud/organizadores.py`): el
+  admin las emite, rota y revoca desde la pestaña **Claves** del portal, y cada
+  carrera queda atada a la key que la publicó. La `CT_PUBLISH_KEY` global sigue
+  valiendo hasta que se la rote o revoque.
 
 ---
 

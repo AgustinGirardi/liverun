@@ -82,6 +82,23 @@ class PublishedRace(Base):
     results      = relationship("PublishedResult", back_populates="race", cascade="all, delete-orphan")
 
 
+class PublishKey(Base):
+    """API key de publicación de un organizador. Se guarda el sha256 (la base
+    nunca tiene el secreto) y un prefijo para reconocerla en el listado. La
+    propiedad de las carreras sigue siendo `PublishedRace.owner_key_hash`; al
+    rotar una key se reapunta ese hash a la nueva."""
+    __tablename__ = "publish_keys"
+    id           = Column(Integer, primary_key=True, autoincrement=True)
+    name         = Column(String(80), nullable=False)
+    key_hash     = Column(String(64), nullable=False, unique=True, index=True)
+    key_prefix   = Column(String(16), nullable=False)
+    is_legacy    = Column(Integer, nullable=False, default=0, server_default="0")  # la CT_PUBLISH_KEY original
+    created_at   = Column(DateTime, nullable=False)
+    rotated_at   = Column(DateTime, nullable=True)
+    revoked_at   = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+
+
 class PublishedResult(Base):
     __tablename__ = "published_results"
     id             = Column(Integer, primary_key=True, autoincrement=True)

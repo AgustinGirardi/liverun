@@ -570,3 +570,7 @@ details.coupon summary::-webkit-details-marker { display:none; }
 .items-end { align-items:flex-end !important; }
 .fin-gap { justify-content:flex-end !important; gap:6px !important; }
 .eyebrow { text-transform:uppercase !important; letter-spacing:1px !important; font-weight:700 !important; }
+
+/* Clave de publicación recién emitida (admin): monoespaciada y seleccionable de un toque. */
+code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9em; }
+.clave-nueva { display:block; padding:10px 12px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; overflow-wrap:anywhere; user-select:all; }

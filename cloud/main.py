@@ -32,6 +32,7 @@ from cloud.security import (
     make_mail_token, mail_token_uid, verify_mail_token,
 )
 from cloud import mailer
+from cloud.organizadores import resolver_key, router as organizadores_router
 # Días calendario en hora argentina (ver cloud/run.py). run.py no importa main.
 from cloud.run import ahora_utc, hoy_ar
 
@@ -599,29 +600,24 @@ def _autolink(user: PortalUser, db: Session) -> int:
 
 # ── Autenticación del organizador ────────────────────────────────────────────
 
-def _check_publish_key(x_api_key: Optional[str]) -> str:
+def _check_publish_key(x_api_key: Optional[str], db: Session) -> str:
     """Valida la API key de publicación y devuelve su hash (identidad del dueño).
 
-    Se compara en bytes y no en str: hmac.compare_digest sobre str exige ASCII
-    puro, y como Starlette decodifica los headers en latin-1 un `X-API-Key: á`
+    Vale la key de un organizador (cloud/organizadores.py) o, hasta que se la
+    rote o revoque, la global CT_PUBLISH_KEY. resolver_key compara en bytes: un
+    `X-API-Key: á` llega decodificado en latin-1 y compare_digest sobre str
     reventaba con TypeError → 500 en vez de un 403 limpio.
     """
-    if not x_api_key:
-        raise HTTPException(403, "API key inválida")
-    # compare_digest: comparación en tiempo constante (no filtra la key por timing).
-    if not hmac_compare(x_api_key.encode("utf-8", "ignore"), PUBLISH_API_KEY.encode("utf-8")):
-        raise HTTPException(403, "API key inválida")
-    return hashlib.sha256(x_api_key.encode("utf-8", "ignore")).hexdigest()
+    return resolver_key(x_api_key, db, PUBLISH_API_KEY).key_hash
 
 
 def _check_race_owner(race: PublishedRace, key_hash: str) -> None:
     """Una carrera pertenece a la key que la publicó.
 
-    Hoy hay una sola CT_PUBLISH_KEY y esto no rechaza nada, pero deja la
-    propiedad grabada desde el primer día: cuando haya una key por organizador,
-    ninguno va a poder pisar ni borrar las carreras de otro sólo por conocer el
-    source_id. Las carreras previas a la migración tienen owner_key_hash NULL y
-    adoptan dueño en su próxima publicación.
+    Con una key por organizador, ninguno puede pisar ni borrar las carreras de
+    otro sólo por conocer el source_id. Rotar una key reapunta el hash de sus
+    carreras (cloud/organizadores.py). Las carreras previas a la columna tienen
+    owner_key_hash NULL y adoptan dueño en su próxima publicación.
     """
     if race.owner_key_hash and not hmac_compare(race.owner_key_hash, key_hash):
         raise HTTPException(403, "Esa carrera fue publicada por otro organizador")
@@ -634,7 +630,7 @@ def publish(payload: PublishPayload, request: Request, x_api_key: str = Header(N
     # Publicar es caro (borra y reinserta toda la carrera): sin tope, una key
     # filtrada permite machacar el servicio además de falsear resultados.
     rate_limit(request, "publish", limit=30, window=60.0)
-    key_hash = _check_publish_key(x_api_key)
+    key_hash = _check_publish_key(x_api_key, db)
 
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == payload.source_id))
     if race is None:
@@ -703,15 +699,18 @@ def publish_event(payload: EventPayload, request: Request, x_api_key: str = Head
     Mismo id estable que usa /api/publish: cuando el organizador suba los
     resultados, la misma fila pasa a 'finished' y aparece en Carreras."""
     rate_limit(request, "publish", limit=30, window=60.0)
-    key_hash = _check_publish_key(x_api_key)
+    key_hash = _check_publish_key(x_api_key, db)
 
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == payload.source_id))
     if race is None:
         race = PublishedRace(source_id=payload.source_id, code=_gen_code(payload.source_id, db))
         db.add(race)
-    elif race.results:
-        # Ya tiene resultados publicados: no se vuelve atrás sola al calendario.
-        raise HTTPException(409, "Esa carrera ya tiene resultados publicados")
+    else:
+        _check_race_owner(race, key_hash)
+        if race.results:
+            # Ya tiene resultados publicados: no se vuelve atrás sola al calendario.
+            raise HTTPException(409, "Esa carrera ya tiene resultados publicados")
+    race.owner_key_hash = key_hash
 
     race.name = payload.name
     race.location = payload.location
@@ -1322,7 +1321,7 @@ def unpublish(source_id: str, request: Request, x_api_key: str = Header(None), d
     """Elimina una carrera publicada (y sus resultados/claims). Idempotente:
     si no existe, no es error. Lo usa la app de escritorio al borrar una carrera."""
     rate_limit(request, "publish", limit=30, window=60.0)
-    key_hash = _check_publish_key(x_api_key)
+    key_hash = _check_publish_key(x_api_key, db)
     race = db.scalar(select(PublishedRace).where(PublishedRace.source_id == source_id))
     if not race:
         return {"deleted": False, "reason": "no existía"}
@@ -1347,6 +1346,7 @@ from cloud.billing_routes import router as billing_router  # noqa: E402
 app.include_router(run_router)
 app.include_router(google_router)
 app.include_router(billing_router)
+app.include_router(organizadores_router)
 
 
 # ── Estáticos: avatares y portal (al final para no tapar /api) ────────────────

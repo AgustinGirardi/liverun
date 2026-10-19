@@ -1,4 +1,4 @@
-// Administración (solo cuentas is_admin): usuarios, premium y cupones.
+// Administración (solo cuentas is_admin): usuarios, premium, cupones y claves de publicación.
 import { api, sesion, perfil } from "../nucleo/api.js";
 import { esc, fmtFecha } from "../nucleo/formato.js";
 import { registrar } from "../ui/acciones.js";
@@ -18,10 +18,11 @@ export async function mostrar(ctx) {
 
   ctx.app.innerHTML = `
     <h1>Administración</h1>
-    <p class="sub">Usuarios, pruebas, premium y cupones.</p>
+    <p class="sub">Usuarios, pruebas, premium, cupones y claves de publicación.</p>
     <div class="tabbar" role="group" aria-label="Sección">
       <button type="button" data-act="pestanaAdmin" data-p="usuarios" aria-pressed="${_pestana === "usuarios"}">Usuarios</button>
       <button type="button" data-act="pestanaAdmin" data-p="cupones" aria-pressed="${_pestana === "cupones"}">Cupones</button>
+      <button type="button" data-act="pestanaAdmin" data-p="claves" aria-pressed="${_pestana === "claves"}">Claves</button>
     </div>
     <div id="adminBody"></div>`;
   pintarPestana();
@@ -31,6 +32,7 @@ function pintarPestana() {
   document.querySelectorAll("[data-act=pestanaAdmin]").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.p === _pestana)));
   if (_pestana === "cupones") return cupones();
+  if (_pestana === "claves") return claves();
   $("adminBody").innerHTML = `
     <div id="adminStats" class="stats"></div>
     <form class="race-filter mw-520" role="search" data-submit="buscarUsuarios">
@@ -113,6 +115,108 @@ async function cargarCupones() {
     $("cpList").innerHTML = errorHtml(e.message);
   }
 }
+
+// ── Claves de publicación (una por organizador) ─────────────────────────────
+function claves() {
+  $("adminBody").innerHTML = `
+    <section class="card" aria-labelledby="tCla">
+      <h2 id="tCla">Nueva clave de publicación</h2>
+      <p class="muted mb-14">Cada organizador publica desde el escritorio con su propia clave. Se muestra una sola vez.</p>
+      <form class="row items-end" data-submit="crearClave" novalidate>
+        <div><label for="kName">Organizador</label><input id="kName" name="kName" type="text" maxlength="80" placeholder="Club Atlético Norte" required></div>
+        <button class="btn sm grad" type="submit">Crear clave</button>
+      </form>
+    </section>
+    <div id="kNueva" role="status"></div>
+    <div id="kList">${cargando()}</div>`;
+  cargarClaves();
+}
+
+function claveNueva(k, titulo) {
+  $("kNueva").innerHTML = `<section class="card" aria-labelledby="tKN">
+    <h2 id="tKN">${esc(titulo)}</h2>
+    <p class="muted mb-14">Copiala ahora y pegala en el escritorio de ${esc(k.name)}: no se vuelve a mostrar.</p>
+    <p><code class="clave-nueva">${esc(k.key)}</code></p>
+    <button type="button" class="btn ghost sm" data-act="copiarClave" data-clave="${esc(k.key)}">Copiar</button>
+  </section>`;
+}
+
+async function cargarClaves() {
+  try {
+    const ks = await api("GET", "/api/run/admin/publish-keys", null, { auth: true });
+    if (!ks.length) { $("kList").innerHTML = vacio({ icono: "estrella", titulo: "Todavía no emitiste claves." }); return; }
+    $("kList").innerHTML = `<div class="card table-card"><div class="table-wrap"><table>
+      <thead><tr><th scope="col">Organizador</th><th scope="col" class="hide-sm">Clave</th><th scope="col">Carreras</th>
+        <th scope="col" class="hide-sm">Último uso</th><th scope="col" class="num-r"><span class="sr-only">Acciones</span></th></tr></thead>
+      <tbody>${ks.map(filaClave).join("")}</tbody></table></div></div>`;
+  } catch (e) {
+    $("kList").innerHTML = errorHtml(e.message);
+  }
+}
+
+function filaClave(k) {
+  const estado = k.revoked_at ? `<span class="pill warn">revocada</span>` : k.is_legacy ? `<span class="pill plain">original</span>` : "";
+  const acciones = k.revoked_at ? "" : `
+    <button type="button" class="btn ghost sm" data-act="rotarClave" data-id="${k.id}" data-nombre="${esc(k.name)}" aria-label="Rotar la clave de ${esc(k.name)}">Rotar</button>
+    <button type="button" class="btn ghost sm" data-act="revocarClave" data-id="${k.id}" data-nombre="${esc(k.name)}" aria-label="Revocar la clave de ${esc(k.name)}">Revocar</button>`;
+  return `<tr>
+    <td><div class="fw-600">${esc(k.name)}</div>${estado}</td>
+    <td class="hide-sm"><code>${esc(k.prefix)}…</code></td>
+    <td class="tnum">${k.races}</td>
+    <td class="hide-sm">${k.last_used_at ? esc(fmtFecha(k.last_used_at.slice(0, 10))) : "—"}</td>
+    <td class="num-r"><div class="row fin-gap">${acciones}</div></td></tr>`;
+}
+
+registrar({
+  async crearClave(form) {
+    const name = form.kName.value.trim();
+    if (!name) { form.kName.focus(); return; }
+    const restaurar = ocupado(form.querySelector("[type=submit]"));
+    try {
+      const k = await api("POST", "/api/run/admin/publish-keys", { name }, { auth: true });
+      form.kName.value = "";
+      claveNueva(k, "Clave creada");
+      cargarClaves();
+    } catch (e) {
+      toast(e.message, "warn");
+    }
+    restaurar();
+  },
+  async rotarClave(btn) {
+    const nombre = btn.dataset.nombre;
+    if (!confirm(`¿Rotar la clave de ${nombre}? La actual deja de funcionar y sus carreras quedan con la nueva.`)) return;
+    const restaurar = ocupado(btn);
+    try {
+      const k = await api("POST", `/api/run/admin/publish-keys/${btn.dataset.id}/rotate`, null, { auth: true });
+      claveNueva(k, "Clave rotada");
+      cargarClaves();
+    } catch (e) {
+      restaurar();
+      toast(e.message, "warn");
+    }
+  },
+  async revocarClave(btn) {
+    const nombre = btn.dataset.nombre;
+    if (!confirm(`¿Revocar la clave de ${nombre}? Deja de poder publicar; sus carreras siguen publicadas.`)) return;
+    const restaurar = ocupado(btn);
+    try {
+      await api("POST", `/api/run/admin/publish-keys/${btn.dataset.id}/revoke`, null, { auth: true });
+      toast("Clave revocada.");
+      cargarClaves();
+    } catch (e) {
+      restaurar();
+      toast(e.message, "warn");
+    }
+  },
+  async copiarClave(btn) {
+    try {
+      await navigator.clipboard.writeText(btn.dataset.clave);
+      toast("Copiamos la clave.");
+    } catch {
+      toast("No pudimos copiar la clave. Seleccionala y copiala a mano.", "warn");
+    }
+  },
+});
 
 registrar({
   pestanaAdmin(btn) { _pestana = btn.dataset.p; pintarPestana(); },

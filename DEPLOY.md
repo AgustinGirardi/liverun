@@ -55,13 +55,21 @@ El primer deploy tarda unos minutos. Cuando termine, vas a ver la URL pública a
 
 ---
 
-## Paso 3 — Copiar la API key de publicación
+## Paso 3 — Obtener la API key de publicación
 
-1. En el dashboard de Render, abrí el servicio `chronotrack-portal`.
-2. Andá a la pestaña **Environment**.
-3. Buscá `CT_PUBLISH_KEY` y hacé click en el ojito 👁 para revelar el valor. Copialo.
+Cada organizador tiene su propia clave. Lo normal es emitirla desde el portal:
 
-Esa es la clave que conecta tu app de escritorio con el portal.
+1. Entrá al portal con una cuenta admin (`CT_ADMIN_EMAILS`) → **Administración → Claves**.
+2. Escribí el nombre del organizador y **Crear clave**. Se muestra **una sola vez**: copiala.
+3. Para cambiarla, **Rotar** (la anterior deja de funcionar, las carreras quedan con la nueva);
+   para cortar el acceso, **Revocar** (las carreras siguen publicadas).
+
+La `CT_PUBLISH_KEY` que genera Render sigue funcionando como la clave del organizador
+original, así una app de escritorio ya configurada no se queda afuera. Está en la
+pestaña **Environment** del servicio. Una vez que cada organizador tenga la suya,
+rotá o revocá esa fila en **Claves**: desde ahí la global deja de valer.
+
+Esa clave es la que conecta tu app de escritorio con el portal.
 
 ---
 
