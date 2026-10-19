@@ -48,3 +48,43 @@ def test_index_tiene_open_graph(client):
     html = client.get("/").text
     for propiedad in ("og:title", "og:description", "og:type", "og:site_name"):
         assert f'property="{propiedad}"' in html, propiedad
+
+
+def _hex(valor):
+    return [int(valor[i:i + 2], 16) for i in (1, 3, 5)]
+
+
+def _luminancia(hex_color):
+    def canal(c):
+        v = c / 255
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    r, g, b = (canal(c) for c in _hex(hex_color))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+
+def _contraste(a, b):
+    claro, oscuro = sorted((_luminancia(a), _luminancia(b)), reverse=True)
+    return (claro + 0.05) / (oscuro + 0.05)
+
+
+def _tokens(css, selector):
+    import re
+    bloque = css.split(selector + " {", 1)[1].split("}", 1)[0]
+    return dict(re.findall(r"--([\w-]+):\s*(#[0-9A-Fa-f]{6})", bloque))
+
+
+def test_tokens_de_texto_pasan_aa_en_los_dos_temas(client):
+    css = client.get("/styles.css").text
+    for selector in (":root", '[data-theme="dark"]'):
+        t = _tokens(css, selector)
+        for texto in ("txt", "mut", "dim", "acc-ink"):
+            for fondo in ("bg", "panel"):
+                assert _contraste(t[texto], t[fondo]) >= 4.5, (selector, texto, fondo)
+
+
+def test_marcas_de_datos_usan_acento_con_contraste(client):
+    assert ".bar.cur { background:var(--acc-ink); }" in client.get("/styles.css").text
+    historial = client.get("/js/pantallas/historial.js").text
+    assert 'stroke="var(--acc)"' not in historial
+    assert 'stroke="var(--acc-ink)"' in historial
+    assert "conic-gradient(var(--acc-ink)" in client.get("/js/pantallas/progreso.js").text

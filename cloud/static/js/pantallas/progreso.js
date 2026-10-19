@@ -82,7 +82,7 @@ export async function mostrar(ctx) {
   box.innerHTML = `
     <div class="run-top">
       <div class="card run-hero">
-        <div class="ring" style="background:conic-gradient(var(--acc) ${grados}deg, var(--panel2) ${grados}deg)"
+        <div class="ring" style="background:conic-gradient(var(--acc-ink) ${grados}deg, var(--panel2) ${grados}deg)"
           role="img" aria-label="Esta semana: ${sem.days_run} de ${sem.goal} días">
           <div class="ring-in"><div class="ring-v">${sem.days_run}/${sem.goal}</div><div class="ring-l">días</div></div>
         </div>

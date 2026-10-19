@@ -359,7 +359,7 @@ tr:last-child td { border-bottom:none; }
 .chart { display:flex; align-items:flex-end; gap:8px; height:120px; margin-top:6px; }
 .bar-col { flex:1; height:100%; display:flex; align-items:flex-end; }
 .bar { width:100%; border-radius:6px 6px 0 0; background:var(--panel2); min-height:4px; transform-origin:bottom; animation:growbar .7s var(--ease-out) both; }
-.bar.cur { background:var(--acc); }
+.bar.cur { background:var(--acc-ink); }
 @keyframes growbar { from { transform:scaleY(0); opacity:.3; } to { transform:scaleY(1); opacity:1; } }
 .rank-row { display:flex; align-items:center; gap:12px; padding:9px 4px; border-bottom:1px solid var(--border); }
 .rank-row:last-child { border-bottom:none; }
