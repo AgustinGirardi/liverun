@@ -1,10 +1,11 @@
 /** Anillo de progreso (SVG) que se llena con animación al montar o al cambiar. */
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
+
 import Svg, { Circle } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
-import { BrandAccent } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -18,18 +19,23 @@ type Props = {
   sub?: string;
 };
 
-export function Ring({ progress, size = 96, stroke = 9, track, color = BrandAccent, center, sub }: Props) {
+export function Ring({ progress, size = 96, stroke = 9, track, color, center, sub }: Props) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const target = Math.max(0, Math.min(1, progress));
   const anim = useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     // strokeDashoffset no lo soporta el native driver → JS driver (suficiente).
-    const a = Animated.timing(anim, { toValue: target, duration: 800, useNativeDriver: false });
+    const a = Animated.timing(anim, {
+      toValue: target,
+      duration: reduced ? 0 : 800,
+      useNativeDriver: false,
+    });
     a.start();
     return () => a.stop();
-  }, [anim, target]);
+  }, [anim, target, reduced]);
 
   const strokeDashoffset = anim.interpolate({ inputRange: [0, 1], outputRange: [c, 0] });
 

@@ -34,7 +34,7 @@ export function Avatar({ url, name, size = 40 }: Props) {
         styles.fallback,
         { width: size, height: size, borderRadius: radius, backgroundColor: `${BrandAccent}26` },
       ]}>
-      <ThemedText style={{ color: BrandAccent, fontWeight: '800', fontSize: size * 0.45 }}>
+      <ThemedText style={{ color: theme.accent, fontWeight: '800', fontSize: size * 0.45 }}>
         {initial}
       </ThemedText>
     </View>

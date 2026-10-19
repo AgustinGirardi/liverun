@@ -1,0 +1,9 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://chronotrack-portal.onrender.com/api/:path*"
+    }
+  ]
+}

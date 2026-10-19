@@ -19,6 +19,7 @@ import { captureRef } from 'react-native-view-shot';
 
 import { RouteSketch } from '@/components/route-sketch';
 import { RouteSnapshot } from '@/components/route-snapshot';
+import { CameraIcon, ImageIcon, ShareIcon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { BrandAccent, Spacing } from '@/constants/theme';
 
@@ -118,10 +119,10 @@ export function StoryCard({ stats, polyline, onClose }: Props) {
           )}
 
           <View style={styles.top}>
-            <ThemedText style={styles.brand}>
-              LIVE<ThemedText style={[styles.brand, styles.brandAccent]}>RUN</ThemedText>
+            <ThemedText allowFontScaling={false} style={styles.brand}>
+              LIVE<ThemedText allowFontScaling={false} style={[styles.brand, styles.brandAccent]}>RUN</ThemedText>
             </ThemedText>
-            {stats.when ? <ThemedText style={styles.when}>{stats.when}</ThemedText> : null}
+            {stats.when ? <ThemedText allowFontScaling={false} style={styles.when}>{stats.when}</ThemedText> : null}
           </View>
 
           {polyline ? (
@@ -142,7 +143,7 @@ export function StoryCard({ stats, polyline, onClose }: Props) {
           ) : null}
 
           <View style={styles.bottom}>
-            <ThemedText style={styles.km} numberOfLines={1} adjustsFontSizeToFit>{stats.km}</ThemedText>
+            <ThemedText allowFontScaling={false} style={styles.km} numberOfLines={1} adjustsFontSizeToFit>{stats.km}</ThemedText>
             <View style={styles.statsRow}>
               <Stat v={stats.time} l="tiempo" />
               {stats.speed ? <Stat v={stats.speed} l="km/h prom." /> : null}
@@ -154,7 +155,8 @@ export function StoryCard({ stats, polyline, onClose }: Props) {
         <View style={[styles.actions, { width: cardW }]}>
           <View style={styles.row}>
             <Pressable style={[styles.btn, styles.btnPrimary, styles.flex]} onPress={share} disabled={busy}>
-              <ThemedText style={styles.btnPrimaryText}>{busy ? '…' : '↗ Compartir'}</ThemedText>
+              {!busy && <ShareIcon size={15} color="#06281d" />}
+              <ThemedText style={styles.btnPrimaryText}>{busy ? '…' : 'Compartir'}</ThemedText>
             </Pressable>
             <Pressable style={[styles.btn, styles.btnGhost, styles.flex]} onPress={save} disabled={busy}>
               <ThemedText type="smallBold" style={styles.btnGhostText}>Guardar</ThemedText>
@@ -162,10 +164,12 @@ export function StoryCard({ stats, polyline, onClose }: Props) {
           </View>
           <View style={styles.row}>
             <Pressable style={[styles.btn, styles.btnGhost, styles.flex]} onPress={takePhoto} disabled={busy}>
-              <ThemedText type="smallBold" style={styles.btnGhostText}>{photo ? '📷 Otra foto' : '📷 Sacar foto'}</ThemedText>
+              <CameraIcon size={15} color="#e8eaeb" />
+              <ThemedText type="smallBold" style={styles.btnGhostText}>{photo ? 'Otra foto' : 'Sacar foto'}</ThemedText>
             </Pressable>
             <Pressable style={[styles.btn, styles.btnGhost, styles.flex]} onPress={pickPhoto} disabled={busy}>
-              <ThemedText type="smallBold" style={styles.btnGhostText}>🖼 Galería</ThemedText>
+              <ImageIcon size={15} color="#e8eaeb" />
+              <ThemedText type="smallBold" style={styles.btnGhostText}>Galería</ThemedText>
             </Pressable>
           </View>
           <Pressable style={styles.close} onPress={onClose}>
@@ -180,8 +184,8 @@ export function StoryCard({ stats, polyline, onClose }: Props) {
 function Stat({ v, l }: { v: string; l: string }) {
   return (
     <View style={styles.stat}>
-      <ThemedText style={styles.statV}>{v}</ThemedText>
-      <ThemedText style={styles.statL}>{l}</ThemedText>
+      <ThemedText allowFontScaling={false} style={styles.statV}>{v}</ThemedText>
+      <ThemedText allowFontScaling={false} style={styles.statL}>{l}</ThemedText>
     </View>
   );
 }
@@ -205,7 +209,9 @@ const styles = StyleSheet.create({
   actions: { gap: Spacing.two },
   row: { flexDirection: 'row', gap: Spacing.two },
   flex: { flex: 1 },
-  btn: { paddingVertical: 13, paddingHorizontal: Spacing.three, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  btn: {
+    flexDirection: 'row',
+    gap: 6, paddingVertical: 13, paddingHorizontal: Spacing.three, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   btnPrimary: { backgroundColor: BrandAccent },
   btnPrimaryText: { color: '#06281d', fontWeight: '800' },
   btnGhost: { borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Animated, type ViewProps } from 'react-native';
 
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
+
 /**
  * Aparición suave (fade + leve subida) al montar. Usa el Animated nativo de RN
  * (sin worklets/Reanimated) para que sea robusto en Expo Go. Pasale un `delay`
@@ -15,12 +17,20 @@ export function FadeIn({
   ...rest
 }: ViewProps & { delay?: number; offset?: number; duration?: number }) {
   const t = useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotion();
 
   useEffect(() => {
-    const anim = Animated.timing(t, { toValue: 1, duration, delay, useNativeDriver: true });
+    // Con "reducir movimiento" se conserva el fundido pero se quita el viaje:
+    // sin desplazamiento, sin escalonado y en un tercio del tiempo.
+    const anim = Animated.timing(t, {
+      toValue: 1,
+      duration: reduced ? 120 : duration,
+      delay: reduced ? 0 : delay,
+      useNativeDriver: true,
+    });
     anim.start();
     return () => anim.stop();
-  }, [t, delay, duration]);
+  }, [t, delay, duration, reduced]);
 
   return (
     <Animated.View
@@ -29,7 +39,9 @@ export function FadeIn({
         style,
         {
           opacity: t,
-          transform: [{ translateY: t.interpolate({ inputRange: [0, 1], outputRange: [offset, 0] }) }],
+          transform: [
+            { translateY: t.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 0 : offset, 0] }) },
+          ],
         },
       ]}>
       {children}

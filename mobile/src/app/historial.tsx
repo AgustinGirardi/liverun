@@ -6,9 +6,16 @@ import { useFocusEffect } from 'expo-router';
 import { FadeIn } from '@/components/fade-in';
 import { RouteMap } from '@/components/route-map';
 import { StoryCard } from '@/components/story-card';
+import {
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ShareIcon,
+  TrashIcon,
+} from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, line, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity, type ActivityDetail, type NewActivity } from '@/lib/api';
 import { useEntitlement } from '@/lib/entitlement';
@@ -154,7 +161,7 @@ export default function HistorialScreen() {
       void openShare(item);
     } else {
       Alert.alert(
-        '🖼 Compartir es premium',
+        'Compartir es premium',
         'Las tarjetas para compartir tus salidas son parte de premium. Tus salidas guardadas siguen intactas.',
         [{ text: 'Entendido', style: 'cancel' }],
       );
@@ -202,7 +209,7 @@ export default function HistorialScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <ThemedText type="subtitle" style={styles.title}>Salidas</ThemedText>
-        {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
+        {error && <ThemedText type="small" themeColor="danger" style={styles.error}>{error}</ThemedText>}
 
         {activities == null ? (
           <>
@@ -217,7 +224,7 @@ export default function HistorialScreen() {
             <ThemedText style={styles.emptyEmoji}>👟</ThemedText>
             <ThemedText type="smallBold">Tu historial está vacío</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-              Tocá el <ThemedText type="smallBold" style={styles.accent}>botón verde ▶</ThemedText> de abajo para estrenarlo.
+              Tocá el <ThemedText type="smallBold" themeColor="accent">botón verde</ThemedText> de abajo para estrenarlo.
             </ThemedText>
           </View>
         ) : (
@@ -252,7 +259,7 @@ export default function HistorialScreen() {
                       {selDay} de {MESES[sel.m].toLowerCase()} · {visibleRuns.length} {visibleRuns.length === 1 ? 'salida' : 'salidas'} · {num(dayKm)} km
                     </ThemedText>
                     <Pressable onPress={() => setSelDay(null)} hitSlop={8}>
-                      <ThemedText type="small" style={styles.accent}>Ver todo el mes</ThemedText>
+                      <ThemedText type="small" themeColor="accent">Ver todo el mes</ThemedText>
                     </Pressable>
                   </FadeIn>
                 )}
@@ -273,7 +280,7 @@ export default function HistorialScreen() {
                     {formatWhen(item.started_at)}
                   </ThemedText>
                   <View style={styles.row}>
-                    <ThemedText type="subtitle" style={{ color: BrandAccent }}>
+                    <ThemedText type="subtitle" style={{ color: theme.accent }}>
                       {formatKm(item.distance_m)}
                     </ThemedText>
                     <View style={styles.rowRight}>
@@ -283,9 +290,9 @@ export default function HistorialScreen() {
                           {formatPace(item.avg_pace_s_per_km)}
                         </ThemedText>
                       </View>
-                      <ThemedText type="small" themeColor="textSecondary" style={styles.chevExpand}>
-                        {expanded === item.id ? '▴' : '▾'}
-                      </ThemedText>
+                      <View style={expanded === item.id ? styles.chevFlip : undefined}>
+                        <ChevronDownIcon size={18} color={theme.textSecondary} />
+                      </View>
                     </View>
                   </View>
                 </Pressable>
@@ -297,15 +304,17 @@ export default function HistorialScreen() {
                       <Pressable
                         style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
                         onPress={() => tryShare(item)}>
-                        <ThemedText type="smallBold" style={{ color: BrandAccent }}>
-                          ↗ Compartir{access ? '' : ' ⭐'}
+                        <ShareIcon size={15} color={theme.accent} />
+                        <ThemedText type="smallBold" style={{ color: theme.accent }}>
+                          Compartir{access ? '' : ' ⭐'}
                         </ThemedText>
                       </Pressable>
                       <Pressable
                         style={[styles.shareRow, styles.actionFlex, { backgroundColor: theme.backgroundSelected }]}
                         onPress={() => confirmDelete(item)}>
-                        <ThemedText type="smallBold" style={styles.deleteText}>
-                          🗑 Eliminar
+                        <TrashIcon size={15} color={theme.danger} />
+                        <ThemedText type="smallBold" themeColor="danger" style={styles.deleteText}>
+                          Eliminar
                         </ThemedText>
                       </Pressable>
                     </View>
@@ -353,7 +362,7 @@ function PendientesBlock({ items, subiendo, onRetry }: {
             </View>
           </View>
           <View style={styles.row}>
-            <ThemedText type="subtitle" style={{ color: BrandAccent }}>{formatKm(p.distance_m)}</ThemedText>
+            <ThemedText type="subtitle" style={{ color: theme.accent }}>{formatKm(p.distance_m)}</ThemedText>
             <View style={styles.metrics}>
               <ThemedText type="smallBold">{formatDuration(p.duration_s)}</ThemedText>
               <ThemedText type="small" themeColor="textSecondary">{formatPace(p.avg_pace_s_per_km)}</ThemedText>
@@ -365,7 +374,7 @@ function PendientesBlock({ items, subiendo, onRetry }: {
         disabled={subiendo}
         onPress={onRetry}
         style={[styles.shareRow, { backgroundColor: theme.backgroundSelected }]}>
-        <ThemedText type="smallBold" style={{ color: BrandAccent }}>
+        <ThemedText type="smallBold" style={{ color: theme.accent }}>
           {subiendo ? 'Subiendo…' : `↑ Subir ${items.length === 1 ? 'la pendiente' : `las ${items.length} pendientes`} ahora`}
         </ThemedText>
       </Pressable>
@@ -395,12 +404,24 @@ function MonthCalendar({
   return (
     <View style={[styles.calCard, { backgroundColor: theme.backgroundElement }]}>
       <View style={styles.calNav}>
-        <Pressable onPress={canPrev ? onPrev : undefined} hitSlop={12} style={!canPrev && styles.navOff}>
-          <ThemedText style={styles.chev}>‹</ThemedText>
+        <Pressable
+          onPress={canPrev ? onPrev : undefined}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Mes anterior"
+          accessibilityState={{ disabled: !canPrev }}
+          style={[styles.chev, !canPrev && styles.navOff]}>
+          <ChevronLeftIcon size={22} color={theme.text} />
         </Pressable>
         <ThemedText type="smallBold">{MESES[m]} {y}</ThemedText>
-        <Pressable onPress={canNext ? onNext : undefined} hitSlop={12} style={!canNext && styles.navOff}>
-          <ThemedText style={styles.chev}>›</ThemedText>
+        <Pressable
+          onPress={canNext ? onNext : undefined}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Mes siguiente"
+          accessibilityState={{ disabled: !canNext }}
+          style={[styles.chev, !canNext && styles.navOff]}>
+          <ChevronRightIcon size={22} color={theme.text} />
         </Pressable>
       </View>
 
@@ -422,17 +443,20 @@ function MonthCalendar({
                 <Pressable
                   disabled={!run}
                   onPress={() => onSelectDay(day)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${day} de ${MESES[m]}${run ? ', con salida' : ', sin salida'}`}
+                  accessibilityState={{ disabled: !run, selected }}
                   style={[
                     styles.dayDot,
-                    run && { backgroundColor: BrandAccent },
-                    !run && isToday && { borderColor: BrandAccent, borderWidth: 1.5 },
+                    run && { backgroundColor: theme.accent },
+                    !run && isToday && { borderColor: theme.accent, borderWidth: 1.5 },
                     selected && { borderColor: theme.text, borderWidth: 2 },
                   ]}>
                   <ThemedText
                     type="small"
                     style={[
                       styles.dayNum,
-                      run ? styles.dayRun : { color: isToday ? BrandAccent : theme.textSecondary },
+                      run ? styles.dayRun : { color: isToday ? theme.accent : theme.textSecondary },
                     ]}>
                     {day}
                   </ThemedText>
@@ -457,6 +481,7 @@ function Route({ detail, bg }: { detail?: ActivityDetail | 'loading'; bg: string
 }
 
 function Splits({ detail, dividerColor }: { detail?: ActivityDetail | 'loading'; dividerColor: string }) {
+  const theme = useTheme();
   if (!detail || detail === 'loading') {
     return (
       <ThemedText type="small" themeColor="textSecondary">Cargando splits…</ThemedText>
@@ -484,6 +509,7 @@ function Splits({ detail, dividerColor }: { detail?: ActivityDetail | 'loading';
             <View
               style={[
                 styles.splitBar,
+                { backgroundColor: theme.accent },
                 { width: `${Math.max(8, (s / slowest) * 100)}%` as const },
               ]}
             />
@@ -501,17 +527,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, flexDirection: 'row', justifyContent: 'center' },
   safeArea: { flex: 1, maxWidth: MaxContentWidth, width: '100%' },
   title: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
-  error: { color: '#ff6b6b', textAlign: 'center', padding: Spacing.two },
+  error: { textAlign: 'center', padding: Spacing.two },
   list: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.two },
   empty: { textAlign: 'center', marginTop: Spacing.five },
   emptyWrap: { alignItems: 'center', gap: Spacing.two, marginTop: Spacing.five, paddingHorizontal: Spacing.three },
-  emptyEmoji: { fontSize: 40, lineHeight: 48 },
+  emptyEmoji: { fontSize: 40, lineHeight: line(48) },
   center: { textAlign: 'center' },
-  accent: { color: BrandAccent },
   // calendario
   calCard: { borderRadius: 16, padding: Spacing.three, gap: Spacing.two, marginBottom: Spacing.two },
   calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.one },
-  chev: { fontSize: 22, fontWeight: '800', paddingHorizontal: Spacing.two },
+  chev: { paddingHorizontal: Spacing.two },
+  chevFlip: { transform: [{ rotate: '180deg' }] },
   navOff: { opacity: 0.25 },
   calRow: { flexDirection: 'row' },
   dow: { flex: 1, textAlign: 'center' },
@@ -525,7 +551,6 @@ const styles = StyleSheet.create({
   card: { borderRadius: 16, padding: Spacing.three, gap: Spacing.one },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   rowRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  chevExpand: { fontSize: 15 },
   metrics: { alignItems: 'flex-end' },
   route: { borderRadius: 12, marginTop: Spacing.two, overflow: 'hidden' },
   splits: { borderTopWidth: 1, marginTop: Spacing.two, paddingTop: Spacing.two, gap: 6 },
@@ -533,9 +558,12 @@ const styles = StyleSheet.create({
   splitRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   splitKm: { width: 44 },
   splitBarTrack: { flex: 1, height: 8, borderRadius: 4, overflow: 'hidden' },
-  splitBar: { height: 8, borderRadius: 4, backgroundColor: BrandAccent },
+  splitBar: { height: 8, borderRadius: 4 },
   splitTime: { width: 52, textAlign: 'right' },
   shareRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: Spacing.one,
     alignItems: 'center',
     paddingVertical: 10,
     borderRadius: 10,
@@ -543,7 +571,7 @@ const styles = StyleSheet.create({
   },
   actionsRow: { flexDirection: 'row', gap: Spacing.two },
   actionFlex: { flex: 1 },
-  deleteText: { color: '#ff6b6b' },
+  deleteText: {},
   // pendientes de subir
   pendWrap: { paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   pendBlock: { gap: Spacing.two, marginBottom: Spacing.two },

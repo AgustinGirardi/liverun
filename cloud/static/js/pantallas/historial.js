@@ -125,7 +125,7 @@ function grafico(serie, modo, ancho) {
   const mejor = vals.indexOf(min);
   const marcas = serie.map((p, i) => `
     <circle cx="${x(i).toFixed(1)}" cy="${y(val(p)).toFixed(1)}" r="${i === mejor ? 6 : 4.5}"
-      fill="${i === mejor ? "var(--acc)" : "var(--panel)"}" stroke="var(--acc)" stroke-width="2">
+      fill="${i === mejor ? "var(--acc-ink)" : "var(--panel)"}" stroke="var(--acc-ink)" stroke-width="2">
       <title>${esc(p.race_name)} · ${esc(fmtFecha(p.race_date))}: ${lbl(val(p))}${p.position ? ` · puesto ${p.position}` : ""}</title>
     </circle>`).join("");
   const maxEtiquetas = Math.max(2, Math.floor((W - L - R) / 78));
@@ -140,7 +140,7 @@ function grafico(serie, modo, ancho) {
   return `<svg class="hist-svg" viewBox="0 0 ${W} ${H}" role="img"
       aria-label="Evolución en ${esc(est.dist)} km (${modo === "pace" ? "ritmo" : "tiempo"}): ${esc(resumen)}">
       ${grilla}
-      <polyline points="${puntos}" fill="none" stroke="var(--acc)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      <polyline points="${puntos}" fill="none" stroke="var(--acc-ink)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
       ${marcas}${fechas}
     </svg>
     <p class="dim hist-legend">Más arriba, más rápido. El punto lleno es tu mejor marca.</p>`;

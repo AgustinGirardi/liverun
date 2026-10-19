@@ -11,10 +11,11 @@ import { Avatar } from '@/components/avatar';
 import { FadeIn } from '@/components/fade-in';
 import { FriendRequests } from '@/components/friend-requests';
 import { PremiumUpsell } from '@/components/premium-upsell';
+import { SearchIcon, ShareIcon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Segmented } from '@/components/ui';
-import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, BrandAccent, line, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   api, ApiError, type FriendLists, type Ranking, type RankingEntry,
@@ -37,18 +38,18 @@ function PodiumSpot({ entry, place, theme }: { entry: RankingEntry; place: numbe
   return (
     <View style={styles.spot}>
       <ThemedText style={styles.spotTop}>{isFirst ? '👑' : MEDALS[place - 1]}</ThemedText>
-      {isFirst ? <View style={styles.firstRing}>{avatar}</View> : avatar}
+      {isFirst ? <View style={[styles.firstRing, { borderColor: theme.accent }]}>{avatar}</View> : avatar}
       <ThemedText type="smallBold" numberOfLines={1} style={styles.spotName}>
         {entry.username ?? entry.full_name ?? 'corredor'}{entry.is_me ? ' (vos)' : ''}
       </ThemedText>
-      <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(entry.km)}</ThemedText>
+      <ThemedText type="smallBold" style={{ color: theme.accent }}>{fmtKm(entry.km)}</ThemedText>
       <View
         style={[
           styles.pedestal,
           place === 1 ? styles.pedH1 : place === 2 ? styles.pedH2 : styles.pedH3,
           isFirst ? styles.pedFirst : { backgroundColor: theme.backgroundSelected },
         ]}>
-        <ThemedText style={[styles.pedNum, { color: isFirst ? BrandAccent : theme.textSecondary }]}>{place}</ThemedText>
+        <ThemedText style={[styles.pedNum, { color: isFirst ? theme.accent : theme.textSecondary }]}>{place}</ThemedText>
       </View>
     </View>
   );
@@ -156,7 +157,7 @@ export default function RankingScreen() {
   }
 
   const relationLabel = (rel: SearchedUser['relation']) =>
-    rel === 'friend' ? '✓ Amigo' : rel === 'pending' ? 'Pendiente' : '+ Agregar';
+    rel === 'friend' ? 'Amigo' : rel === 'pending' ? 'Pendiente' : '+ Agregar';
 
   const renderRow = ({ item, index }: { item: RankingEntry; index: number }) => {
     const pos = scope === 'global' && orderBy === 'km' ? item.position : index + 4; // rest empieza en 4
@@ -165,7 +166,7 @@ export default function RankingScreen() {
         style={[
           styles.rowCard,
           { backgroundColor: theme.backgroundElement },
-          item.is_me && { borderColor: BrandAccent, borderWidth: 1 },
+          item.is_me && { borderColor: theme.accent, borderWidth: 1 },
         ]}>
         <ThemedText type="smallBold" style={styles.position}>{pos ?? '–'}</ThemedText>
         <Avatar url={item.avatar_url} name={item.username ?? item.full_name} size={38} />
@@ -178,7 +179,7 @@ export default function RankingScreen() {
             {item.activities === 1 ? 'salida' : 'salidas'}
           </ThemedText>
         </View>
-        <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(item.km)}</ThemedText>
+        <ThemedText type="smallBold" style={{ color: theme.accent }}>{fmtKm(item.km)}</ThemedText>
       </View>
     );
   };
@@ -190,7 +191,7 @@ export default function RankingScreen() {
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.searchHeader}>
             <View style={[styles.searchBox, { backgroundColor: theme.backgroundElement }]}>
-              <ThemedText style={styles.searchIcon}>🔍</ThemedText>
+              <SearchIcon size={16} color={theme.textSecondary} />
               <TextInput
                 value={query}
                 onChangeText={runSearch}
@@ -200,10 +201,10 @@ export default function RankingScreen() {
                 autoCapitalize="none"
                 style={[styles.searchInput, { color: theme.text }]}
               />
-              {searching && <ActivityIndicator size="small" color={BrandAccent} />}
+              {searching && <ActivityIndicator size="small" color={theme.accent} />}
             </View>
             <Pressable onPress={() => { setSearchOpen(false); setQuery(''); setResults([]); }}>
-              <ThemedText type="smallBold" style={{ color: BrandAccent }}>Listo</ThemedText>
+              <ThemedText type="smallBold" style={{ color: theme.accent }}>Listo</ThemedText>
             </Pressable>
           </View>
 
@@ -233,12 +234,12 @@ export default function RankingScreen() {
                   onPress={() => addFriend(item)}
                   style={[
                     styles.addBtn,
-                    { borderColor: item.relation === 'none' ? BrandAccent : theme.backgroundSelected },
+                    { borderColor: item.relation === 'none' ? theme.accent : theme.backgroundSelected },
                     item.relation === 'friend' && { backgroundColor: theme.backgroundSelected },
                   ]}>
                   <ThemedText
                     type="small"
-                    style={item.relation === 'none' ? { color: BrandAccent } : { color: theme.textSecondary }}>
+                    style={item.relation === 'none' ? { color: theme.accent } : { color: theme.textSecondary }}>
                     {relationLabel(item.relation)}
                   </ThemedText>
                 </Pressable>
@@ -258,13 +259,14 @@ export default function RankingScreen() {
           <ThemedText type="subtitle">Ranking</ThemedText>
           <View style={styles.headerActions}>
             <Pressable onPress={() => setSearchOpen(true)} style={[styles.iconBtn, { backgroundColor: theme.backgroundElement }]}>
-              <ThemedText style={styles.iconTxt}>🔍</ThemedText>
+              <SearchIcon size={18} color={theme.text} />
             </Pressable>
             <Pressable
               onPress={shareRanking}
               disabled={entries.length === 0}
-              style={[styles.shareBtn, { backgroundColor: BrandAccent, opacity: entries.length === 0 ? 0.5 : 1 }]}>
-              <ThemedText type="smallBold" style={{ color: '#06281d' }}>↗ Compartir</ThemedText>
+              style={[styles.shareBtn, { backgroundColor: theme.accentSurface, opacity: entries.length === 0 ? 0.5 : 1 }]}>
+              <ShareIcon size={15} color={theme.onAccent} />
+              <ThemedText type="smallBold" themeColor="onAccent">Compartir</ThemedText>
             </Pressable>
           </View>
         </View>
@@ -281,7 +283,7 @@ export default function RankingScreen() {
                 <ThemedText style={[styles.scopeLabel, { color: on ? theme.text : theme.textSecondary }]}>
                   {o.label}
                 </ThemedText>
-                <View style={[styles.scopeUnderline, on && { backgroundColor: BrandAccent }]} />
+                <View style={[styles.scopeUnderline, on && { backgroundColor: theme.accent }]} />
               </Pressable>
             );
           })}
@@ -302,7 +304,7 @@ export default function RankingScreen() {
           </Pressable>
         </View>
 
-        {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
+        {error && <ThemedText type="small" themeColor="danger" style={styles.error}>{error}</ThemedText>}
 
         {globalLocked || locked ? (
           <PremiumUpsell
@@ -342,7 +344,7 @@ export default function RankingScreen() {
                 ranking && top3.length === 0 ? (
                   <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
                     {scope === 'friends'
-                      ? 'Todavía no tenés amigos en el ranking. Tocá 🔍 para buscar y agregar corredores.'
+                      ? 'Todavía no tenés amigos en el ranking. Tocá el botón de búsqueda para agregar corredores.'
                       : 'Sin datos todavía.'}
                   </ThemedText>
                 ) : null
@@ -356,7 +358,7 @@ export default function RankingScreen() {
                       <ThemedText type="smallBold">{me.username ?? 'vos'} (vos)</ThemedText>
                       <ThemedText type="small" themeColor="textSecondary">tu posición</ThemedText>
                     </View>
-                    <ThemedText type="smallBold" style={{ color: BrandAccent }}>{fmtKm(me.km)}</ThemedText>
+                    <ThemedText type="smallBold" style={{ color: theme.accent }}>{fmtKm(me.km)}</ThemedText>
                   </View>
                 ) : null
               }
@@ -379,8 +381,14 @@ const styles = StyleSheet.create({
   },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   iconBtn: { width: 38, height: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  iconTxt: { fontSize: 16 },
-  shareBtn: { paddingHorizontal: Spacing.three, paddingVertical: 9, borderRadius: 999 },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
   section: { paddingHorizontal: Spacing.three, paddingTop: Spacing.one },
   scopeTabs: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.five, paddingHorizontal: Spacing.three, paddingTop: Spacing.two },
   scopeTab: { alignItems: 'center', gap: 5 },
@@ -388,7 +396,7 @@ const styles = StyleSheet.create({
   scopeUnderline: { height: 2, borderRadius: 1, alignSelf: 'stretch', backgroundColor: 'transparent' },
   filterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   orderChip: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
-  error: { color: '#ff6b6b', textAlign: 'center', padding: Spacing.two },
+  error: { textAlign: 'center', padding: Spacing.two },
   list: { padding: Spacing.three, paddingBottom: BottomTabInset + Spacing.three, gap: Spacing.two },
   empty: { textAlign: 'center', marginTop: Spacing.five, paddingHorizontal: Spacing.three },
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, padding: Spacing.three },
@@ -398,9 +406,9 @@ const styles = StyleSheet.create({
   podium: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-end' },
   podiumWrap: { overflow: 'hidden', paddingHorizontal: Spacing.three, marginBottom: Spacing.two },
   spot: { flex: 1, alignItems: 'center', gap: 5 },
-  spotTop: { fontSize: 22, lineHeight: 26, height: 26 },
+  spotTop: { fontSize: 22, lineHeight: line(26), height: 26 },
   firstRing: {
-    borderRadius: 999, borderWidth: 3, borderColor: BrandAccent,
+    borderRadius: 999, borderWidth: 3,
     shadowColor: BrandAccent, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8,
   },
   spotName: { textAlign: 'center', maxWidth: '100%' },
@@ -417,7 +425,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three, paddingTop: Spacing.two, paddingBottom: Spacing.one,
   },
   searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 10 },
-  searchIcon: { fontSize: 15 },
   searchInput: { flex: 1, fontSize: 15 },
   addBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
 });

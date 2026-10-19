@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { Avatar } from '@/components/avatar';
+import { ChevronDownIcon } from '@/components/icon';
 import { ThemedText } from '@/components/themed-text';
-import { BrandAccent, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { type FriendRequest } from '@/lib/api';
 
@@ -34,10 +35,12 @@ export function FriendRequests({
       <Pressable
         onPress={() => setOpen((v) => !v)}
         style={[styles.pill, { backgroundColor: theme.backgroundElement }]}>
-        <ThemedText type="smallBold" style={styles.accent}>
+        <ThemedText type="smallBold" themeColor="accent">
           {n} {n === 1 ? 'solicitud de amistad' : 'solicitudes de amistad'}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">{open ? '▲' : '▼'}</ThemedText>
+        <View style={open ? styles.chevFlip : undefined}>
+          <ChevronDownIcon size={16} color={theme.textSecondary} />
+        </View>
       </Pressable>
 
       {open &&
@@ -50,8 +53,8 @@ export function FriendRequests({
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary">quiere ser tu amigo</ThemedText>
             </View>
-            <Pressable onPress={() => onAccept(f.friendship_id)} style={styles.accept}>
-              <ThemedText type="smallBold" style={styles.onAccent}>Aceptar</ThemedText>
+            <Pressable onPress={() => onAccept(f.friendship_id)} style={[styles.accept, { backgroundColor: theme.accentSurface }]}>
+              <ThemedText type="smallBold" themeColor="onAccent">Aceptar</ThemedText>
             </Pressable>
           </View>
         ))}
@@ -60,14 +63,14 @@ export function FriendRequests({
 }
 
 const styles = StyleSheet.create({
+  chevFlip: { transform: [{ rotate: '180deg' }] },
   wrap: { gap: Spacing.two },
   pill: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 10,
   },
-  accent: { color: BrandAccent },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, borderRadius: 16, padding: Spacing.three },
   who: { flex: 1, gap: 2 },
-  accept: { backgroundColor: BrandAccent, borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
+  accept: { borderRadius: 999, paddingHorizontal: Spacing.three, paddingVertical: 7 },
   onAccent: { color: ON_ACCENT },
 });

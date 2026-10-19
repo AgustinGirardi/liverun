@@ -10,7 +10,7 @@ import { useMemo } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { RouteSketch } from '@/components/route-sketch';
-import { BrandAccent } from '@/constants/theme';
+import { Colors } from '@/constants/theme';
 import { decodePolyline, encodePolyline } from '@/lib/tracking';
 
 // react-native-maps está en Expo Go de iOS (Apple Maps, sin API key) pero NO
@@ -51,6 +51,14 @@ function regionFor(coords: LatLon[], live: boolean) {
     longitudeDelta: Math.max((maxLon - minLon) * 1.5, 0.008),
   };
 }
+
+/**
+ * El mapa va sin estilo propio, así que sus teselas son claras en las dos
+ * apariencias. El mint de marca da 2.2:1 contra ellas y un trazo que porta
+ * información pide 3:1, así que el recorrido usa el acento del tema claro
+ * — el mismo teal profundo — sin importar la apariencia de la app.
+ */
+const ROUTE_STROKE = Colors.light.accent;
 
 export function RouteMap({
   polyline,
@@ -96,7 +104,7 @@ export function RouteMap({
       >
         <MapPolyline
           coordinates={coords.map((p) => ({ latitude: p.lat, longitude: p.lon }))}
-          strokeColor={BrandAccent}
+          strokeColor={ROUTE_STROKE}
           strokeWidth={4}
           lineJoin="round"
           lineCap="round"
