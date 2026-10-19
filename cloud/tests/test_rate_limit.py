@@ -57,3 +57,51 @@ def test_rate_limit_purges_stale_ips(client):
 
     assert "login:9.9.9.9" not in cm._RATE
     assert "login:8.8.8.8" in cm._RATE
+
+
+# ── Backend intercambiable (memoria hoy; Redis si se escala a >1 worker) ──────
+import pytest
+from fastapi import HTTPException
+
+import cloud.deps as deps
+
+
+def test_limitador_en_memoria_corta_en_el_limite_y_libera_con_la_ventana(monkeypatch):
+    lim = deps.LimitadorEnMemoria()
+    ahora = [1000.0]
+    monkeypatch.setattr(deps.time, "time", lambda: ahora[0])
+    assert lim.permitir("k", 2, 60.0) is True
+    assert lim.permitir("k", 2, 60.0) is True
+    assert lim.permitir("k", 2, 60.0) is False
+    ahora[0] += 61
+    assert lim.permitir("k", 2, 60.0) is True
+    deps._RATE.clear()
+
+
+def test_crear_limitador_default_es_en_memoria():
+    assert isinstance(deps.crear_limitador(None), deps.LimitadorEnMemoria)
+    assert isinstance(deps.crear_limitador("memoria"), deps.LimitadorEnMemoria)
+
+
+def test_crear_limitador_desconocido_dice_que_variable_corregir():
+    with pytest.raises(RuntimeError) as e:
+        deps.crear_limitador("redis")
+    assert "CT_RATE_LIMIT_BACKEND" in str(e.value)
+    assert "memoria" in str(e.value)
+
+
+def test_rate_limit_key_usa_el_limitador_inyectado(monkeypatch):
+    class Falso:
+        llamadas = []
+
+        def permitir(self, clave, limite, ventana):
+            self.llamadas.append((clave, limite, ventana))
+            return len(self.llamadas) <= 1
+
+    falso = Falso()
+    monkeypatch.setattr(deps, "_limitador", falso)
+    deps.rate_limit_key("x", limit=1, window=5.0)
+    with pytest.raises(HTTPException) as e:
+        deps.rate_limit_key("x", limit=1, window=5.0)
+    assert e.value.status_code == 429
+    assert falso.llamadas[0] == ("x", 1, 5.0)

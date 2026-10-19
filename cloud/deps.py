@@ -4,6 +4,7 @@ import ipaddress
 import os
 import time
 from collections import defaultdict
+from typing import Optional, Protocol
 
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -12,11 +13,51 @@ from cloud.db import get_db
 from cloud.models import PortalUser
 from cloud.security import verify_token
 
-# ── Rate limiting simple en memoria (proceso único en Render starter) ─────────
+# ── Rate limiting: backend intercambiable ────────────────────────────────────
+# Por defecto en memoria (proceso único en Render starter). Con más de un worker
+# cada proceso tendría su propio contador y el tope real se multiplicaría: ahí
+# hay que registrar un backend compartido (Redis) en _BACKENDS y elegirlo con
+# CT_RATE_LIMIT_BACKEND. Un backend solo implementa `permitir`.
 _RATE: dict[str, list[float]] = defaultdict(list)
 _LAST_SWEEP = [0.0]
 _SWEEP_EVERY = 300.0   # barrer como mucho cada 5 min
 _STALE_AFTER = 600.0   # una IP sin actividad en 10 min se olvida
+
+
+class Limitador(Protocol):
+    def permitir(self, clave: str, limite: int, ventana: float) -> bool:
+        """Registra un intento. False si `clave` ya hizo `limite` en `ventana` segundos."""
+
+
+class LimitadorEnMemoria:
+    def permitir(self, clave: str, limite: int, ventana: float) -> bool:
+        now = time.time()
+        # Purga periódica: sin esto el diccionario acumula IPs para siempre.
+        if now - _LAST_SWEEP[0] > _SWEEP_EVERY:
+            _LAST_SWEEP[0] = now
+            for k in list(_RATE):
+                if not any(now - t < _STALE_AFTER for t in _RATE[k]):
+                    del _RATE[k]
+        hits = [t for t in _RATE[clave] if now - t < ventana]
+        if len(hits) >= limite:
+            return False
+        hits.append(now)
+        _RATE[clave] = hits
+        return True
+
+
+_BACKENDS: dict[str, type] = {"memoria": LimitadorEnMemoria}
+
+
+def crear_limitador(nombre: Optional[str]) -> Limitador:
+    nombre = (nombre or "memoria").strip().lower()
+    if nombre not in _BACKENDS:
+        raise RuntimeError(
+            f"CT_RATE_LIMIT_BACKEND={nombre!r} no existe. Opciones: {', '.join(sorted(_BACKENDS))}.")
+    return _BACKENDS[nombre]()
+
+
+_limitador: Limitador = crear_limitador(os.environ.get("CT_RATE_LIMIT_BACKEND"))
 
 
 # Rangos publicados de Cloudflare (https://www.cloudflare.com/ips/). Solo se
@@ -86,18 +127,8 @@ def rate_limit_key(key: str, limit: int = 10, window: float = 60.0):
     un tope por IP no protege nada que se pueda adivinar (por ejemplo un codigo
     de cupon). Ahi la clave util es el usuario autenticado.
     """
-    now = time.time()
-    # Purga periódica: sin esto el diccionario acumula IPs para siempre.
-    if now - _LAST_SWEEP[0] > _SWEEP_EVERY:
-        _LAST_SWEEP[0] = now
-        for k in list(_RATE):
-            if not any(now - t < _STALE_AFTER for t in _RATE[k]):
-                del _RATE[k]
-    hits = [t for t in _RATE[key] if now - t < window]
-    if len(hits) >= limit:
+    if not _limitador.permitir(key, limit, window):
         raise HTTPException(429, "Demasiados intentos. Esperá un minuto e intentá de nuevo.")
-    hits.append(now)
-    _RATE[key] = hits
 
 
 def current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> PortalUser:
