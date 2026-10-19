@@ -5,7 +5,7 @@ import { sesion, pendiente, iniciarSesion, cerrarSesion, siExpiraLaSesion, perfi
          actualizarUsuario, olvidarPerfil } from "./nucleo/api.js";
 import { esc } from "./nucleo/formato.js";
 import { registrar, iniciarAcciones } from "./ui/acciones.js";
-import { $, toast, iniciarHoja, cerrarHoja, errorHtml } from "./ui/componentes.js";
+import { $, toast, iniciarHoja, iniciarMedidas, cerrarHoja, errorHtml } from "./ui/componentes.js";
 import { ic } from "./ui/iconos.js";
 import { ir, contarNavegacion } from "./ui/navegar.js";
 
@@ -53,7 +53,7 @@ async function render() {
     document.title = "Página no encontrada · LiveRun";
     app.innerHTML = `<h1>No encontramos esta página</h1>
       <p class="sub">Puede que el link esté mal copiado.</p>
-      <a class="btn grad" style="width:auto" href="#/">Ir al inicio</a>`;
+      <a class="btn grad w-auto" href="#/">Ir al inicio</a>`;
     return;
   }
   if (ruta.cuenta && !sesion.token) {
@@ -73,7 +73,7 @@ async function render() {
     if (turno !== _turno) return;
     // Suele pasar justo después de publicar una versión nueva.
     app.innerHTML = errorHtml("No se pudo cargar esta sección. Recargá la página.", false) +
-      `<button type="button" class="btn grad" style="width:auto" data-act="recargarPagina">Recargar</button>`;
+      `<button type="button" class="btn grad w-auto" data-act="recargarPagina">Recargar</button>`;
     return;
   }
   if (turno !== _turno) return;
@@ -242,6 +242,7 @@ function linksDeMail(p) {
 async function iniciar() {
   iniciarAcciones();
   iniciarHoja();
+  iniciarMedidas();
   siExpiraLaSesion(() => {
     toast("Tu sesión se cerró. Volvé a ingresar.", "warn");
     pintarMenu(null);

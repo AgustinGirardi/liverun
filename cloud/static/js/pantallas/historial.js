@@ -90,8 +90,8 @@ function pintar() {
   box.innerHTML = `${stats}${marcas}${evolucion}
     <div class="hist-head">
       <div>
-        <h2 style="margin:0">Mis carreras <span class="muted" style="font-weight:600">· ${d.results.length}</span></h2>
-        ${p.first_race_date ? `<p class="dim" style="margin-top:4px">Desde ${esc(fmtFecha(p.first_race_date))} · ${plural(p.months_active, "mes", "meses")} con carreras.</p>` : ""}
+        <h2 class="m-0">Mis carreras <span class="muted fw-600">· ${d.results.length}</span></h2>
+        ${p.first_race_date ? `<p class="dim mt-4">Desde ${esc(fmtFecha(p.first_race_date))} · ${plural(p.months_active, "mes", "meses")} con carreras.</p>` : ""}
       </div>
       <button type="button" class="btn ghost sm" data-act="buscarPorEmail">${ic("refrescar")}Buscar por email</button>
     </div>

@@ -33,7 +33,7 @@ function pintarPestana() {
   if (_pestana === "cupones") return cupones();
   $("adminBody").innerHTML = `
     <div id="adminStats" class="stats"></div>
-    <form class="race-filter" role="search" data-submit="buscarUsuarios" style="max-width:520px">
+    <form class="race-filter mw-520" role="search" data-submit="buscarUsuarios">
       ${ic("buscar")}
       <label for="aq" class="sr-only">Buscar usuarios</label>
       <input id="aq" name="aq" type="search" placeholder="Email, nombre o usuario" autocomplete="off">
@@ -66,10 +66,10 @@ function filaUsuario(u) {
   const b = (body, txt, etiqueta) =>
     `<button type="button" class="btn ghost sm" data-act="darPremium" data-id="${u.id}" data-body='${esc(JSON.stringify(body))}' aria-label="${etiqueta}">${txt}</button>`;
   return `<tr>
-    <td><div style="font-weight:600">${esc(u.full_name || u.username || u.email)}</div><div class="dim">${esc(u.email)}</div></td>
+    <td><div class="fw-600">${esc(u.full_name || u.username || u.email)}</div><div class="dim">${esc(u.email)}</div></td>
     <td class="hide-sm">${plan}</td>
     <td class="hide-sm">${u.premium_until ? esc(fmtFecha(u.premium_until.slice(0, 10))) : "—"}</td>
-    <td class="num-r"><div class="row" style="justify-content:flex-end;gap:6px">
+    <td class="num-r"><div class="row fin-gap">
       ${b({ months: 1 }, "+1 mes", `Sumar 1 mes a ${esc(u.email)}`)}
       ${b({ months: 12 }, "+12", `Sumar 12 meses a ${esc(u.email)}`)}
       ${b({ unlimited: true }, "Sin límite", `Premium sin límite para ${esc(u.email)}`)}
@@ -81,13 +81,13 @@ async function cupones() {
   $("adminBody").innerHTML = `
     <section class="card" aria-labelledby="tCup">
       <h2 id="tCup">Crear cupón</h2>
-      <form class="row" style="align-items:flex-end" data-submit="crearCupon" novalidate>
+      <form class="row items-end" data-submit="crearCupon" novalidate>
         <div><label for="cpCode">Código</label><input id="cpCode" name="cpCode" type="text" placeholder="VERANO2026" autocapitalize="characters" required></div>
         <div><label for="cpKind">Tipo</label><select id="cpKind" name="cpKind" data-input="tipoCupon">
           <option value="free_months">Meses gratis</option><option value="discount">Descuento %</option></select></div>
-        <div id="cpMonthsW"><label for="cpMonths">Meses</label><input id="cpMonths" name="cpMonths" type="number" min="1" value="1" style="width:90px"></div>
-        <div id="cpPctW" hidden><label for="cpPct">% de descuento</label><input id="cpPct" name="cpPct" type="number" min="1" max="100" value="20" style="width:90px"></div>
-        <div><label for="cpMax">Usos máximos</label><input id="cpMax" name="cpMax" type="number" min="1" placeholder="Sin límite" style="width:120px"></div>
+        <div id="cpMonthsW"><label for="cpMonths">Meses</label><input id="cpMonths" name="cpMonths" type="number" min="1" value="1" class="w-90"></div>
+        <div id="cpPctW" hidden><label for="cpPct">% de descuento</label><input id="cpPct" name="cpPct" type="number" min="1" max="100" value="20" class="w-90"></div>
+        <div><label for="cpMax">Usos máximos</label><input id="cpMax" name="cpMax" type="number" min="1" placeholder="Sin límite" class="w-120"></div>
         <button class="btn sm grad" type="submit">Crear</button>
       </form>
     </section>

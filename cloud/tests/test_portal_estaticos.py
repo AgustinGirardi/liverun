@@ -1,5 +1,7 @@
 """Archivos del portal: caché explícita, CSP sin scripts en línea y lo que
 necesita la tabla de una carrera."""
+from pathlib import Path
+
 from cloud.tests.conftest import publish_race
 
 
@@ -87,4 +89,30 @@ def test_marcas_de_datos_usan_acento_con_contraste(client):
     historial = client.get("/js/pantallas/historial.js").text
     assert 'stroke="var(--acc)"' not in historial
     assert 'stroke="var(--acc-ink)"' in historial
-    assert "conic-gradient(var(--acc-ink)" in client.get("/js/pantallas/progreso.js").text
+    assert "conic-gradient(var(--acc-ink)" in client.get("/styles.css").text
+
+
+# ── CSP de estilos: sin 'unsafe-inline' ──────────────────────────────────────
+_STATIC = Path(__file__).parents[1] / "static"
+
+
+def test_csp_no_permite_estilos_en_linea(client):
+    csp = client.get("/").headers["content-security-policy"]
+    estilos = next(p for p in csp.split(";") if p.strip().startswith("style-src"))
+    assert "'unsafe-inline'" not in estilos
+
+
+def test_el_portal_no_escribe_style_en_el_html():
+    """Un style="" en el markup lo bloquea la CSP. Las medidas dinámicas viajan
+    en data-* y las aplica `iniciarMedidas` por CSSOM (permitido)."""
+    culpables = [str(p.relative_to(_STATIC)) for p in _STATIC.rglob("*")
+                 if p.suffix in (".html", ".js") and 'style="' in p.read_text(encoding="utf-8")]
+    assert culpables == []
+
+
+def test_las_medidas_dinamicas_tienen_su_css():
+    css = (_STATIC / "styles.css").read_text(encoding="utf-8")
+    for var in ("--pct", "--alto", "--i", "--grados"):
+        assert f"var({var}" in css, f"styles.css no usa {var}"
+    medidas = (_STATIC / "js/ui/componentes.js").read_text(encoding="utf-8")
+    assert "iniciarMedidas" in medidas

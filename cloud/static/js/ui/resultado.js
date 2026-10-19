@@ -48,7 +48,7 @@ export function abrirResultado(r, carrera, extra = {}) {
     <div class="sheet-actions">
       ${fin ? `<button type="button" class="btn grad" data-act="certificado" autofocus>${ic("descargar")}Descargar certificado</button>` : ""}
       ${guardar}
-      ${extra.guardado ? `<p class="dim" style="text-align:center">${ic("check")} Está en tu perfil.</p>` : ""}
+      ${extra.guardado ? `<p class="dim ta-center">${ic("check")} Está en tu perfil.</p>` : ""}
     </div>`);
 }
 
@@ -60,7 +60,7 @@ registrar({
     const restaurar = ocupado(btn, "Guardando…");
     try {
       await guardarResultado(Number(btn.dataset.id));
-      btn.outerHTML = `<p class="ok" style="margin:0">${ic("check")} Guardado en tu perfil.</p>`;
+      btn.outerHTML = `<p class="ok m-0">${ic("check")} Guardado en tu perfil.</p>`;
       document.dispatchEvent(new CustomEvent("resultado-guardado"));
     } catch (e) {
       restaurar();

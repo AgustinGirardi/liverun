@@ -42,7 +42,7 @@ function portada(ctx) {
     <div class="home-foot">
       <section class="org-band" aria-labelledby="tOrg">
         <div>
-          <p class="dim" style="text-transform:uppercase;letter-spacing:1px;font-weight:700">¿Organizás carreras?</p>
+          <p class="dim eyebrow">¿Organizás carreras?</p>
           <h2 class="org-band-t" id="tOrg">Cronometrá tu carrera y publicá los resultados <span class="accent">el mismo día</span>.</h2>
           <p class="muted">Inscripciones, cronómetro de precisión, resultados al instante y certificados para cada corredor.</p>
         </div>
@@ -80,9 +80,9 @@ function panel(ctx) {
     <h1>Hola${nombre ? `, <span class="accent">${esc(nombre)}</span>` : ""}</h1>
     <p class="sub">Tus carreras, tus mejores marcas y los resultados nuevos.</p>
     <div id="dashAviso"></div>
-    <div style="max-width:640px;margin-bottom:24px">${formBusqueda("Buscá tu nombre")}</div>
+    <div class="mw-640 mb-24">${formBusqueda("Buscá tu nombre")}</div>
     <div id="dashMe">${cargando("Cargando tus carreras…")}</div>
-    <section class="home-section" style="margin-top:32px" aria-labelledby="tRecientes">
+    <section class="home-section mt-32" aria-labelledby="tRecientes">
       <div class="section-head">
         <h2 id="tRecientes">Carreras recientes</h2>
         <a class="lnk" href="#/carreras">Ver todas</a>

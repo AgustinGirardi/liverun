@@ -107,16 +107,17 @@ app.add_middleware(
 )
 
 
-# script-src sin 'unsafe-inline': el portal engancha sus acciones con
-# data-act/data-submit y un solo listener (static/js/ui/acciones.js), así que un
-# HTML inyectado no puede ejecutar nada. style-src sí lo mantiene: las vistas
-# usan algún style="" (alto de las barras, ancho del cupo).
+# Ni script-src ni style-src llevan 'unsafe-inline': el portal engancha sus
+# acciones con data-act/data-submit y un solo listener (static/js/ui/acciones.js),
+# y las medidas dinámicas (alto de las barras, ancho del cupo) viajan en data-*
+# y se aplican por CSSOM (static/js/ui/componentes.js, iniciarMedidas). Así un
+# HTML inyectado no puede ejecutar nada ni reestilizar la página.
 # img-src incluye https: por las fotos de perfil de Google, que se guardan con
 # su URL completa (lh3.googleusercontent.com).
 _CSP = (
     "default-src 'self'; "
     "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline'; "
+    "style-src 'self'; "
     "img-src 'self' https: data:; "
     "connect-src 'self'; "
     "object-src 'none'; "

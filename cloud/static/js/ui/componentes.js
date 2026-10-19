@@ -20,12 +20,12 @@ export function toast(msg, tipo) {
 
 // ── Estados de una zona de la pantalla ───────────────────────────────────────
 export function cargando(texto = "Cargando…") {
-  return `<div class="empty" aria-busy="true"><div class="waiting" style="justify-content:center"><span class="spinner"></span>${esc(texto)}</div></div>`;
+  return `<div class="empty" aria-busy="true"><div class="waiting jc-center"><span class="spinner"></span>${esc(texto)}</div></div>`;
 }
 
 export function vacio({ icono = "bandera", titulo, detalle = "", accion = "" }) {
   return `<div class="empty">${ic(icono, "ic-big")}<p>${esc(titulo)}</p>${
-    detalle ? `<p class="dim" style="margin-top:4px">${detalle}</p>` : ""}${accion}</div>`;
+    detalle ? `<p class="dim mt-4">${detalle}</p>` : ""}${accion}</div>`;
 }
 
 export function errorHtml(msg, reintentar = true) {
@@ -108,6 +108,33 @@ export function cerrarHoja() {
 export function encabezadoHoja(titulo) {
   return `<div class="sheet-head"><h2 id="sheetTitle">${titulo}</h2>
     <button type="button" class="sheet-close" data-act="cerrarHoja" aria-label="Cerrar">${ic("cerrar")}</button></div>`;
+}
+
+// Medidas dinámicas (ancho del cupo, alto de las barras, ángulo del anillo).
+// La CSP prohíbe el atributo style en el markup, así que las vistas las escriben como
+// data-pct / data-alto / data-i / data-grados y acá se pasan a custom
+// properties por CSSOM, que sí está permitido. El observer corre antes del
+// primer pintado, así que no hay parpadeo.
+const MEDIDAS = ["pct", "alto", "i", "grados"];
+const SELECTOR_MEDIDAS = MEDIDAS.map((m) => `[data-${m}]`).join(",");
+
+function aplicarMedidas(raiz) {
+  const elementos = raiz.matches?.(SELECTOR_MEDIDAS) ? [raiz] : [];
+  elementos.push(...raiz.querySelectorAll(SELECTOR_MEDIDAS));
+  for (const el of elementos) {
+    for (const m of MEDIDAS) {
+      if (el.dataset[m] !== undefined) el.style.setProperty(`--${m}`, el.dataset[m]);
+    }
+  }
+}
+
+export function iniciarMedidas() {
+  aplicarMedidas(document.body);
+  new MutationObserver((cambios) => {
+    for (const c of cambios) {
+      for (const nodo of c.addedNodes) if (nodo.nodeType === 1) aplicarMedidas(nodo);
+    }
+  }).observe(document.body, { childList: true, subtree: true });
 }
 
 export function iniciarHoja() {

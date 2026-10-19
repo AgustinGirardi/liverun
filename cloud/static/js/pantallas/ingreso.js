@@ -112,7 +112,7 @@ function olvide(ctx) {
 function nuevaContrasena(ctx) {
   if (!pendiente.reset) {
     ctx.app.innerHTML = `<div class="auth-box"><h1>Contraseña nueva</h1>
-      <div class="card"><p class="muted" style="margin-bottom:14px">Este link ya se usó o no es válido. Pedí uno nuevo.</p>
+      <div class="card"><p class="muted mb-14">Este link ya se usó o no es válido. Pedí uno nuevo.</p>
       <a class="btn grad" href="#/olvide">Pedir otro link</a></div></div>`;
     return;
   }
@@ -164,11 +164,11 @@ async function confirmarVerificacion(password) {
     if (e.status === 401) {
       card.innerHTML = `
         <form data-submit="verificarConClave" novalidate>
-          <p class="muted" style="margin-bottom:14px">Para confirmar que la cuenta es tuya, escribí su contraseña.</p>
+          <p class="muted mb-14">Para confirmar que la cuenta es tuya, escribí su contraseña.</p>
           ${password ? `<div class="err">${esc(e.message)}</div>` : ""}
           ${campoContrasena({ id: "vfPass", etiqueta: "Contraseña", autocomplete: "current-password" })}
           <button class="btn grad" type="submit">Confirmar</button>
-          <p class="muted" style="margin-top:14px">¿No creaste esta cuenta? No confirmes nada: si alguien la creó
+          <p class="muted mt-14">¿No creaste esta cuenta? No confirmes nada: si alguien la creó
             con tu email, entrá con Google y la cuenta pasa a ser tuya.</p>
         </form>`;
       $("vfPass").focus();

@@ -29,7 +29,7 @@ export async function mostrar(ctx) {
     return;
   }
   $("allRaces").innerHTML = `
-    ${est.lista.length > POR_PAGINA ? `<div class="race-filter" style="max-width:420px">
+    ${est.lista.length > POR_PAGINA ? `<div class="race-filter mw-420">
       ${ic("buscar")}
       <label for="rfiltro" class="sr-only">Filtrar carreras por nombre o lugar</label>
       <input id="rfiltro" type="search" placeholder="Filtrar por nombre o lugar" autocomplete="off" data-input="filtrarCarreras">

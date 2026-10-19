@@ -15,7 +15,7 @@ export async function mostrar(ctx) {
   ctx.app.innerHTML = `
     <h1>Buscar <span class="accent">resultados</span></h1>
     <p class="sub">Tu nombre y apellido, el nombre de la carrera o su código.</p>
-    <form class="search-big" role="search" data-submit="buscar" style="max-width:640px;margin-bottom:24px">
+    <form class="search-big mw-640 mb-24" role="search" data-submit="buscar">
       <label for="q" class="sr-only">Tu nombre o el de la carrera</label>
       ${ic("buscar")}
       <input id="q" name="q" value="${esc(q)}" placeholder="Tu nombre o la carrera" autocomplete="off" enterkeyhint="search">
@@ -53,8 +53,8 @@ export async function mostrar(ctx) {
       <div class="races-grid">${d.races.map(tarjetaCarrera).join("")}</div></section>`;
   }
   if (d.results.length) {
-    html += `<section class="home-section" style="margin-top:${d.races.length ? 28 : 0}px" aria-labelledby="tCorr">
-      <h2 id="tCorr">Corredores <span class="muted" style="font-weight:600">· ${d.results.length}${d.truncated ? "+" : ""}</span></h2>
+    html += `<section class="home-section${d.races.length ? " mt-28" : ""}" aria-labelledby="tCorr">
+      <h2 id="tCorr">Corredores <span class="muted fw-600">· ${d.results.length}${d.truncated ? "+" : ""}</span></h2>
       ${d.truncated ? `<p class="notice truncated">Hay más de ${d.limit} coincidencias: mostramos las primeras. Sumá el apellido o el nombre completo para encontrarte más rápido.</p>` : ""}
       <div class="card table-card"><div class="table-wrap"><table class="res-table">
         <thead><tr><th scope="col">Corredor</th><th scope="col">Carrera</th><th scope="col" class="hide-sm">Dist.</th>

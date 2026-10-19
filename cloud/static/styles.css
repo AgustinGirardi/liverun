@@ -348,7 +348,7 @@ tr:last-child td { border-bottom:none; }
 /* ── Mi progreso (datos de la app) ── */
 .run-top { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:14px; margin-bottom:14px; }
 .run-hero { display:flex; align-items:center; gap:18px; }
-.ring { width:104px; height:104px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+.ring { background:conic-gradient(var(--acc-ink) calc(var(--grados, 0) * 1deg), var(--panel2) calc(var(--grados, 0) * 1deg)); width:104px; height:104px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
 .ring-in { width:80px; height:80px; border-radius:50%; background:var(--panel); display:flex; flex-direction:column; align-items:center; justify-content:center; }
 .ring-v { font-family:var(--font-display); font-weight:800; font-size:20px; color:var(--txt); font-variant-numeric:tabular-nums; }
 .ring-l { font-size:11px; color:var(--mut); }
@@ -358,7 +358,7 @@ tr:last-child td { border-bottom:none; }
 .run-stats { grid-template-columns:repeat(2,minmax(0,1fr)); margin-bottom:0; }
 .chart { display:flex; align-items:flex-end; gap:8px; height:120px; margin-top:6px; }
 .bar-col { flex:1; height:100%; display:flex; align-items:flex-end; }
-.bar { width:100%; border-radius:6px 6px 0 0; background:var(--panel2); min-height:4px; transform-origin:bottom; animation:growbar .7s var(--ease-out) both; }
+.bar { width:100%; height:calc(var(--alto, 4) * 1%); animation-delay:calc(var(--i, 0) * 60ms); border-radius:6px 6px 0 0; background:var(--panel2); min-height:4px; transform-origin:bottom; animation:growbar .7s var(--ease-out) both; }
 .bar.cur { background:var(--acc-ink); }
 @keyframes growbar { from { transform:scaleY(0); opacity:.3; } to { transform:scaleY(1); opacity:1; } }
 .rank-row { display:flex; align-items:center; gap:12px; padding:9px 4px; border-bottom:1px solid var(--border); }
@@ -470,7 +470,7 @@ details.coupon summary::-webkit-details-marker { display:none; }
 .ev-cupo { margin-top:11px; max-width:340px; }
 .ev-cupo-top { display:flex; justify-content:space-between; gap:10px; font-size:12.5px; color:var(--mut); font-weight:600; margin-bottom:5px; }
 .ev-bar { height:6px; background:var(--panel2); border:1px solid var(--border); border-radius:99px; overflow:hidden; }
-.ev-bar i { display:block; height:100%; background:var(--acc); border-radius:99px; }
+.ev-bar i { display:block; height:100%; width:calc(var(--pct, 0) * 1%); background:var(--acc); border-radius:99px; }
 .ev-bar i.full { background:var(--warn); }
 .ev-action { flex-shrink:0; }
 .ev-cta { width:auto; }
@@ -544,3 +544,29 @@ details.coupon summary::-webkit-details-marker { display:none; }
   .res-go { display:none; }
   a { color:inherit; }
 }
+
+/* Utilidades chicas: reemplazan los style="" que la CSP ya no deja pasar.
+   !important para conservar la precedencia que tenía el estilo en línea. */
+.w-auto { width:auto !important; }
+.w-90 { width:90px !important; }
+.w-120 { width:120px !important; }
+.mw-420 { max-width:420px !important; }
+.mw-520 { max-width:520px !important; }
+.mw-640 { max-width:640px !important; }
+.m-0 { margin:0 !important; }
+.m-final { margin:0 0 4px !important; }
+.mt-4 { margin-top:4px !important; }
+.mt-6 { margin-top:6px !important; }
+.mt-8 { margin-top:8px !important; }
+.mt-14 { margin-top:14px !important; }
+.mt-28 { margin-top:28px !important; }
+.mt-32 { margin-top:32px !important; }
+.mb-14 { margin-bottom:14px !important; }
+.mb-24 { margin-bottom:24px !important; }
+.fw-600 { font-weight:600 !important; }
+.fs-16 { font-size:16px !important; }
+.ta-center { text-align:center !important; }
+.jc-center { justify-content:center !important; }
+.items-end { align-items:flex-end !important; }
+.fin-gap { justify-content:flex-end !important; gap:6px !important; }
+.eyebrow { text-transform:uppercase !important; letter-spacing:1px !important; font-weight:700 !important; }

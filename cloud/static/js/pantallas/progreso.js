@@ -68,7 +68,7 @@ export async function mostrar(ctx) {
   const pico = Math.max(1, mejorSemana);   // escala de las barras
   const rec = records(salidas);
   const barras = semanas.map((s, i) => `<div class="bar-col"><div class="bar${s.actual ? " cur" : ""}"
-    style="height:${Math.max(4, (s.km / pico) * 100)}%;animation-delay:${i * 60}ms" title="${fmtKm(s.km)}"></div></div>`).join("");
+    data-alto="${Math.max(4, (s.km / pico) * 100)}" data-i="${i}" title="${fmtKm(s.km)}"></div></div>`).join("");
 
   let rankingHtml = "";
   if (ranking && ranking.entries && ranking.entries.length) {
@@ -82,12 +82,12 @@ export async function mostrar(ctx) {
   box.innerHTML = `
     <div class="run-top">
       <div class="card run-hero">
-        <div class="ring" style="background:conic-gradient(var(--acc-ink) ${grados}deg, var(--panel2) ${grados}deg)"
+        <div class="ring" data-grados="${grados}"
           role="img" aria-label="Esta semana: ${sem.days_run} de ${sem.goal} días">
           <div class="ring-in"><div class="ring-v">${sem.days_run}/${sem.goal}</div><div class="ring-l">días</div></div>
         </div>
         <div class="run-hero-info">
-          <div class="dim" style="text-transform:uppercase;letter-spacing:1px;font-weight:700">Este mes</div>
+          <div class="dim eyebrow">Este mes</div>
           <div class="run-big">${mes.km.toFixed(1).replace(".", ",")}<span class="run-unit"> km</span></div>
           <div class="dim">${plural(mes.activities, "salida", "salidas")} · ${plural(mes.days_run, "día", "días")}</div>
         </div>
@@ -101,7 +101,7 @@ export async function mostrar(ctx) {
     </div>
     <section class="card" aria-labelledby="tSem"><h2 id="tSem">Km por semana</h2>
       <div class="chart" role="img" aria-label="Últimas 8 semanas: ${semanas.map((s) => fmtKm(s.km)).join(", ")}">${barras}</div>
-      <p class="dim" style="margin-top:8px">Últimas 8 semanas · la mejor, ${fmtKm(mejorSemana)}</p>
+      <p class="dim mt-8">Últimas 8 semanas · la mejor, ${fmtKm(mejorSemana)}</p>
     </section>
     ${rankingHtml}`;
 }

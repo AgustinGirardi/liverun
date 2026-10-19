@@ -29,7 +29,7 @@ function tarjetaEvento(e) {
     cupo = `<div class="ev-cupo">
       <div class="ev-cupo-top"><span>${inscriptos} de ${e.capacity} inscriptos</span><span>${lleno ? "Sin lugares" : `${pct}%`}</span></div>
       <div class="ev-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${e.capacity}" aria-valuenow="${inscriptos}"
-        aria-label="Cupo"><i class="${lleno ? "full" : ""}" style="width:${pct}%"></i></div>
+        aria-label="Cupo"><i class="${lleno ? "full" : ""}" data-pct="${pct}"></i></div>
     </div>`;
   } else if (e.registered_count != null) {
     cupo = `<div class="ev-cupo"><div class="ev-cupo-top"><span>${inscriptos} inscriptos</span><span>Sin cupo límite</span></div></div>`;
@@ -45,7 +45,7 @@ function tarjetaEvento(e) {
   return `<article class="card ev-card">
     <div class="ev-date" aria-hidden="true"><div class="ev-d">${dia}</div><div class="ev-m">${mesCorto(e.race_date)}</div></div>
     <div class="ev-body">
-      <h2 class="ev-title" style="margin:0">${esc(e.name)}</h2>
+      <h2 class="ev-title m-0">${esc(e.name)}</h2>
       <div class="meta">
         ${e.race_date ? `<span class="sr-only">${esc(fmtFecha(e.race_date))}</span>` : ""}
         ${e.location ? `<span class="meta-i">${ic("pin")}${esc(e.location)}</span>` : ""}

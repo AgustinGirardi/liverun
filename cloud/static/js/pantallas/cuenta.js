@@ -34,7 +34,7 @@ export async function mostrar(ctx) {
     ${tarjetaContrasena(p)}
     <section class="card" aria-labelledby="tBorrar">
       <h2 id="tBorrar">Eliminar la cuenta</h2>
-      <p class="muted" style="margin-bottom:14px">Se borran para siempre tus resultados guardados, tus salidas de la app
+      <p class="muted mb-14">Se borran para siempre tus resultados guardados, tus salidas de la app
         y tus amigos. Los resultados oficiales que publicó el organizador no cambian.</p>
       <button type="button" class="btn danger sm" data-act="confirmarBorrado">Eliminar mi cuenta</button>
     </section>`;
@@ -69,7 +69,7 @@ function tarjetaContrasena(p) {
   if (p.has_password === false) {
     return `<section class="card" aria-labelledby="tPw">
       <h2 id="tPw">Crear una contraseña</h2>
-      <p class="muted" style="margin-bottom:14px">Entrás con Google. Si querés, elegí una contraseña para entrar también con tu email.</p>
+      <p class="muted mb-14">Entrás con Google. Si querés, elegí una contraseña para entrar también con tu email.</p>
       <form data-submit="cambiarContrasena" data-crear novalidate>
         <div id="pwMsg" role="alert"></div>
         <input type="email" name="usuario" autocomplete="username" value="${esc(p.email)}" hidden>
@@ -83,7 +83,7 @@ function tarjetaContrasena(p) {
       <button type="button" class="btn-link" data-act="linkContrasena">Mandame un link para crearla</button></p>` : "";
   return `<section class="card" aria-labelledby="tPw">
     <h2 id="tPw">Contraseña</h2>
-    <p class="muted" style="margin-bottom:14px">Al cambiarla cerramos las sesiones abiertas en otros dispositivos. Esta queda abierta.</p>
+    <p class="muted mb-14">Al cambiarla cerramos las sesiones abiertas en otros dispositivos. Esta queda abierta.</p>
     ${google}
     <form data-submit="cambiarContrasena" novalidate>
       <div id="pwMsg" role="alert"></div>
@@ -118,7 +118,7 @@ async function abrirPremium() {
   b.innerHTML = `
     <div class="price">${precio(info.price)} <small>por mes</small></div>
     ${conDescuento ? `<div class="price-was">${precio(info.base_price)}</div>
-      <p class="pill green" style="margin-top:6px">${info.discount_percent}% de descuento en el primer pago</p>` : ""}
+      <p class="pill green mt-6">${info.discount_percent}% de descuento en el primer pago</p>` : ""}
     <ul class="sheet-list">
       <li>${ic("check")}Avisos de voz en cada kilómetro</li>
       <li>${ic("check")}Tarjetas para compartir tus salidas</li>

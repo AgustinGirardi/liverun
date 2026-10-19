@@ -36,7 +36,7 @@ export function mostrar(ctx) {
         </div>`).join("")}</div>`
     : `<div class="card org-presu">
         <div>
-          <h3 class="org-paso-t" style="font-size:16px">¿Cuánto sale?</h3>
+          <h3 class="org-paso-t fs-16">¿Cuánto sale?</h3>
           <p class="muted">El presupuesto depende de la cantidad de corredores y de las distancias de tu carrera.
             Escribinos y te lo pasamos con el detalle de lo que incluye.</p>
         </div>
@@ -46,7 +46,7 @@ export function mostrar(ctx) {
   ctx.app.innerHTML = `
     <section class="org-hero">
       <span class="pill green">Para organizadores</span>
-      <h1 class="org-title" style="margin-top:14px">Tu carrera, cronometrada y <span class="accent">publicada el mismo día</span>.</h1>
+      <h1 class="org-title mt-14">Tu carrera, cronometrada y <span class="accent">publicada el mismo día</span>.</h1>
       <p class="org-lead">LiveRun es el sistema de cronometraje que usás para tomar los tiempos, y el portal donde
         tus corredores encuentran su resultado y su certificado. Sin planillas, sin esperar hasta el lunes.</p>
       ${contacto()}
@@ -74,7 +74,7 @@ export function mostrar(ctx) {
 
     <section class="card org-final" aria-labelledby="tFinal">
       <div>
-        <h2 class="org-final-t" id="tFinal" style="margin:0 0 4px">¿Organizás una carrera?</h2>
+        <h2 class="org-final-t m-final" id="tFinal">¿Organizás una carrera?</h2>
         <p class="muted">Contanos cuándo es y cuántos corredores esperás. Te mostramos cómo queda.</p>
       </div>
       ${contacto()}

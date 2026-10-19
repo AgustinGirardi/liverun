@@ -70,7 +70,7 @@ export async function mostrar(ctx) {
     </div>
     <div id="tbl"></div>
     ${noFin.length ? `
-      <h2 style="margin-top:28px">No finalizaron <span class="muted" style="font-weight:600">· ${noFin.length}</span></h2>
+      <h2 class="mt-28">No finalizaron <span class="muted fw-600">· ${noFin.length}</span></h2>
       <div class="card table-card"><div class="table-wrap"><table>
         <thead><tr><th scope="col">Dorsal</th><th scope="col">Nombre</th><th scope="col" class="hide-sm">Dist.</th>
           <th scope="col" class="hide-sm">Categoría</th><th scope="col">Estado</th></tr></thead>
