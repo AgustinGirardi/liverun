@@ -7,11 +7,13 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PauseIcon, StopIcon } from '@/components/icon';
 import { RouteMap } from '@/components/route-map';
 import { StoryCard } from '@/components/story-card';
+import { PlayIcon } from '@/components/tab-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, line, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity, type MotivoError, type NewActivity } from '@/lib/api';
 import { useEntitlement } from '@/lib/entitlement';
@@ -85,13 +87,6 @@ export default function CorrerScreen() {
   const snap = runSession.snapshot();
   const phase = snap.phase;
   const active = phase === 'running' || phase === 'autopaused';
-
-  // Tick de 1 s para el cronómetro mientras corre.
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(force, 1000);
-    return () => clearInterval(id);
-  }, [active]);
 
   // Pantalla encendida sólo mientras hay salida en curso.
   useEffect(() => {
@@ -333,7 +328,7 @@ export default function CorrerScreen() {
           <View style={styles.idleWrap}>
             <View style={styles.idleTop}>
               <ThemedText style={styles.brand}>
-                LIVE<ThemedText style={[styles.brand, { color: BrandAccent }]}>RUN</ThemedText>
+                LIVE<ThemedText style={[styles.brand, { color: theme.accent }]}>RUN</ThemedText>
               </ThemedText>
               <ThemedText type="subtitle" style={styles.idleTitle}>¿Listo para salir?</ThemedText>
             </View>
@@ -347,7 +342,7 @@ export default function CorrerScreen() {
                   {formatWhen(lastActivity.started_at)}
                 </ThemedText>
                 <View style={styles.lastRow}>
-                  <ThemedText type="subtitle" style={{ color: BrandAccent }}>
+                  <ThemedText type="subtitle" style={{ color: theme.accent }}>
                     {formatKm(lastActivity.distance_m)}
                   </ThemedText>
                   <View style={styles.lastMetrics}>
@@ -381,7 +376,8 @@ export default function CorrerScreen() {
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.startButton}>
-                  <ThemedText style={styles.startButtonText}>▶  INICIAR SALIDA</ThemedText>
+                  <PlayIcon size={20} color={theme.onAccent} />
+                  <ThemedText style={styles.startButtonText}>INICIAR SALIDA</ThemedText>
                 </LinearGradient>
               </Pressable>
               <ThemedText type="small" themeColor="textSecondary" style={styles.gpsHint}>
@@ -394,7 +390,7 @@ export default function CorrerScreen() {
           <View style={styles.center}>
             {phase === 'autopaused' && (
               <View style={[styles.badge, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText type="smallBold" style={{ color: BrandAccent }}>AUTO-PAUSA</ThemedText>
+                <ThemedText type="smallBold" style={{ color: theme.accent }}>AUTO-PAUSA</ThemedText>
               </View>
             )}
             {phase === 'paused' && (
@@ -403,7 +399,7 @@ export default function CorrerScreen() {
               </View>
             )}
 
-            <ThemedText style={styles.time}>{formatDuration(snap.elapsedS)}</ThemedText>
+            <Elapsed active={active} />
 
             <View style={styles.metricsRow}>
               <Metric value={distanceKm} label="km" big />
@@ -420,19 +416,25 @@ export default function CorrerScreen() {
 
             <View style={styles.actions}>
               <Pressable
+                accessibilityRole="button"
                 style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.backgroundElement }, pressed && styles.pressed]}
                 onPress={togglePause}
                 disabled={phase === 'saving'}>
-                <ThemedText type="smallBold">
-                  {phase === 'paused' ? '▶ Reanudar' : '⏸ Pausar'}
-                </ThemedText>
+                {phase === 'paused' ? (
+                  <PlayIcon size={17} color={theme.text} />
+                ) : (
+                  <PauseIcon size={17} color={theme.text} />
+                )}
+                <ThemedText type="smallBold">{phase === 'paused' ? 'Reanudar' : 'Pausar'}</ThemedText>
               </Pressable>
               <Pressable
-                style={({ pressed }) => [styles.actionButton, styles.finishButton, pressed && styles.pressed]}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.actionButton, { backgroundColor: theme.accentSurface }, pressed && styles.pressed]}
                 onPress={confirmFinish}
                 disabled={phase === 'saving'}>
-                <ThemedText type="smallBold" style={styles.finishText}>
-                  {phase === 'saving' ? 'Guardando…' : '⏹ Terminar'}
+                {phase !== 'saving' && <StopIcon size={17} color={theme.onAccent} />}
+                <ThemedText type="smallBold" themeColor="onAccent" style={styles.finishText}>
+                  {phase === 'saving' ? 'Guardando…' : 'Terminar'}
                 </ThemedText>
               </Pressable>
             </View>
@@ -472,10 +474,27 @@ export default function CorrerScreen() {
   );
 }
 
+/** Cronómetro. Late una vez por segundo y vive aparte a propósito: si el tick
+ *  quedara en la pantalla, cada segundo volvería a renderizar también el mapa
+ *  en vivo y las métricas, que sólo cambian cuando llega un punto de GPS. */
+function Elapsed({ active }: { active: boolean }) {
+  const [, force] = useReducer((x) => x + 1, 0);
+
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(force, 1000);
+    return () => clearInterval(id);
+  }, [active]);
+
+  return <ThemedText style={styles.time}>{formatDuration(runSession.snapshot().elapsedS)}</ThemedText>;
+}
+
 function Metric({ value, label, big }: { value: string; label: string; big?: boolean }) {
   return (
     <View style={styles.metric}>
-      <ThemedText style={big ? styles.metricBig : styles.metricValue}>{value}</ThemedText>
+      <ThemedText themeColor={big ? 'accent' : undefined} style={big ? styles.metricBig : styles.metricValue}>
+        {value}
+      </ThemedText>
       <ThemedText type="small" themeColor="textSecondary">{label}</ThemedText>
     </View>
   );
@@ -498,22 +517,25 @@ const styles = StyleSheet.create({
   lastTitle: { letterSpacing: 2 },
   lastRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' },
   lastMetrics: { alignItems: 'flex-end' },
-  lastEmoji: { fontSize: 40, lineHeight: 48, textAlign: 'center' },
+  lastEmoji: { fontSize: 40, lineHeight: line(48), textAlign: 'center' },
   lastCenter: { textAlign: 'center' },
   idleBottom: { gap: Spacing.two, paddingBottom: Spacing.two },
   startButton: {
     borderRadius: 99,
     paddingVertical: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
   },
   startButtonText: { color: '#06281d', fontSize: 17, fontWeight: '900', letterSpacing: 1.5 },
   gpsHint: { textAlign: 'center', paddingHorizontal: Spacing.four },
   badge: { paddingHorizontal: Spacing.three, paddingVertical: 6, borderRadius: 99 },
-  time: { fontSize: 72, lineHeight: 80, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  time: { fontSize: 72, lineHeight: line(80), fontWeight: '900', fontVariant: ['tabular-nums'] },
   metricsRow: { flexDirection: 'row', gap: Spacing.five },
   metric: { alignItems: 'center', gap: 2 },
-  metricBig: { fontSize: 56, lineHeight: 62, fontWeight: '800', color: BrandAccent },
-  metricValue: { fontSize: 24, lineHeight: 30, fontWeight: '700' },
+  metricBig: { fontSize: 56, fontWeight: '800' },
+  metricValue: { fontSize: 24, lineHeight: line(30), fontWeight: '700' },
   liveMap: { alignSelf: 'stretch', marginHorizontal: Spacing.three, marginTop: Spacing.two },
   actions: { flexDirection: 'row', gap: Spacing.three, marginTop: Spacing.four },
   actionButton: {
@@ -521,10 +543,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     minWidth: 140,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.one,
   },
-  finishButton: { backgroundColor: BrandAccent },
-  finishText: { color: '#000' },
+  finishText: {},
   gpsFooter: { textAlign: 'center' },
   discardLink: { marginTop: Spacing.two, paddingVertical: Spacing.one },
   discardText: { textDecorationLine: 'underline' },

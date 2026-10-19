@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { line, Spacing } from '@/constants/theme';
 
 /** Muro suave: informa que la función es premium. No bloquea nada ya guardado.
  * Sin botón ni link de compra: las tiendas (Apple 3.1.1 / Play Billing) no
@@ -21,7 +21,7 @@ export function PremiumUpsell({ emoji, title, detail }: { emoji: string; title: 
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center', padding: Spacing.four, gap: Spacing.two, flex: 1 },
-  emoji: { fontSize: 48, lineHeight: 56 },
+  emoji: { fontSize: 48, lineHeight: line(56) },
   title: { textAlign: 'center' },
   detail: { textAlign: 'center', paddingHorizontal: Spacing.three },
   note: { textAlign: 'center' },

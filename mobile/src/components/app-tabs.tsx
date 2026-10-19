@@ -28,12 +28,16 @@ import {
   type IconProps,
 } from '@/components/tab-icon';
 import { ThemedText } from '@/components/themed-text';
-import { BrandAccent, BrandGradient, Spacing } from '@/constants/theme';
+import { BrandAccent, BrandGradient, line, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type IconComponent = (props: IconProps) => React.JSX.Element;
 
-const ON_ACCENT = '#06281d'; // verde de marca para íconos/texto sobre el mint
+/** Alto mínimo de un destino normal: el objetivo táctil de 44pt del HIG. */
+const NAV_HEIGHT = 44;
+/** Tamaño del botón central y cuánto sobresale de la fila de destinos. */
+const FAB_SIZE = 62;
+const FAB_LIFT = 21;
 
 export default function AppTabs() {
   return (
@@ -69,16 +73,26 @@ function BottomBar({ children, style, ...props }: ViewProps) {
   return (
     <View
       {...props}
+      // `box-none`: el contenedor se extiende por encima de la barra visible,
+      // pero no debe interceptar los toques de la pantalla en esa franja.
+      pointerEvents="box-none"
       style={[
         styles.bar,
-        {
-          backgroundColor: theme.backgroundElement,
-          borderTopColor: theme.border,
-          paddingBottom: Math.max(insets.bottom, Spacing.two),
-        },
+        { paddingBottom: Math.max(insets.bottom, Spacing.two) },
         style,
       ]}>
-      {children}
+      {/* La superficie visible es un hijo absoluto, no el contenedor: así el
+          contenedor puede extenderse por encima para alojar el FAB entero.
+          Android no entrega toques a lo que sobresale de los límites del padre,
+          y antes un tercio del botón principal quedaba muerto. */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.barSurface,
+          { backgroundColor: theme.backgroundElement, borderTopColor: theme.border },
+        ]}
+      />
+      <View style={styles.row}>{children}</View>
     </View>
   );
 }
@@ -88,9 +102,14 @@ type NavButtonProps = TabTriggerSlotProps & { label: string; Icon: IconComponent
 /** Destino normal: ícono + etiqueta; mint cuando está activo. */
 function NavButton({ label, Icon, isFocused, ...props }: NavButtonProps) {
   const theme = useTheme();
-  const color = isFocused ? BrandAccent : theme.textSecondary;
+  const color = isFocused ? theme.accent : theme.textSecondary;
   return (
-    <Pressable {...props} style={styles.navBtn}>
+    <Pressable
+      {...props}
+      accessibilityRole="tab"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!isFocused }}
+      style={styles.navBtn}>
       <Icon size={24} color={color} />
       <ThemedText type="small" style={[styles.label, { color }]}>
         {label}
@@ -105,13 +124,19 @@ function NavButton({ label, Icon, isFocused, ...props }: NavButtonProps) {
 function RunButton({ isFocused, ...props }: TabTriggerSlotProps) {
   const theme = useTheme();
   return (
-    <Pressable {...props} style={styles.runBtn}>
+    <Pressable
+      {...props}
+      accessibilityRole="tab"
+      accessibilityLabel="Correr"
+      accessibilityHint="Abre el cronómetro para iniciar una salida"
+      accessibilityState={{ selected: !!isFocused }}
+      style={styles.runBtn}>
       <LinearGradient
         colors={[...BrandGradient]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.fab, { borderColor: theme.background }, isFocused && styles.fabActive]}>
-        <PlayIcon size={30} color={ON_ACCENT} />
+        <PlayIcon size={30} color={theme.onAccent} />
       </LinearGradient>
     </Pressable>
   );
@@ -124,22 +149,35 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    alignItems: 'center',
+  },
+  // En pantallas anchas los destinos se limitan al mismo ancho que el contenido:
+  // estirados sobre un iPad el FAB queda perdido en el medio de la barra.
+  row: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingTop: Spacing.two,
+    paddingTop: FAB_LIFT + Spacing.two, // sitio para la parte elevada del FAB
     paddingHorizontal: Spacing.two,
+  },
+  barSurface: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    top: FAB_LIFT, // el borde visible arranca donde arrancaba la barra antes
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  navBtn: { flex: 1, alignItems: 'center', gap: 3 },
-  runBtn: { flex: 1, alignItems: 'center', gap: 3 },
-  label: { fontSize: 11, lineHeight: 14 },
+  navBtn: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 3, minHeight: NAV_HEIGHT },
+  runBtn: { flex: 1, alignItems: 'center', marginTop: -FAB_LIFT },
+  label: { fontSize: 11, lineHeight: line(14) },
   fab: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -34, // sobresale por encima de la barra
     paddingLeft: 3, // centrado óptico del triángulo de play
     borderWidth: 3, // anillo (borderColor = fondo, inline) que lo despega de la barra
     shadowColor: BrandAccent,

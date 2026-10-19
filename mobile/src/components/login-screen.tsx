@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { API_BASE, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -75,7 +75,7 @@ export function LoginScreen() {
             resizeMode="contain"
           />
           <ThemedText style={styles.brand}>
-            LIVE<ThemedText style={[styles.brand, { color: BrandAccent }]}>RUN</ThemedText>
+            LIVE<ThemedText style={[styles.brand, { color: theme.accent }]}>RUN</ThemedText>
           </ThemedText>
           <ThemedText type="subtitle" style={styles.title}>
             {mode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'}
@@ -115,13 +115,13 @@ export function LoginScreen() {
           />
 
           {error && (
-            <ThemedText type="small" style={styles.error}>
+            <ThemedText type="small" themeColor="danger" style={styles.error}>
               {error}
             </ThemedText>
           )}
 
           <Pressable
-            style={[styles.button, !canSubmit && styles.buttonDisabled]}
+            style={[styles.button, { backgroundColor: theme.accentSurface }, !canSubmit && styles.buttonDisabled]}
             onPress={submit}
             disabled={!canSubmit}>
             {busy ? (
@@ -209,11 +209,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   error: {
-    color: '#ff6b6b',
     textAlign: 'center',
   },
   button: {
-    backgroundColor: BrandAccent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',

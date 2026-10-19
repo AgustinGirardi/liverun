@@ -11,7 +11,7 @@ import { Pressable, View, StyleSheet } from 'react-native';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
-import { BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 const TABS: { name: string; href: '/' | '/correr' | '/historial' | '/ranking' | '/perfil'; label: string }[] = [
   { name: 'index', href: '/', label: 'Hoy' },
@@ -57,7 +57,7 @@ export function CustomTabList(props: TabListProps) {
     <View {...props} style={styles.tabListContainer}>
       <ThemedView type="backgroundElement" style={styles.innerContainer}>
         <ThemedText type="smallBold" style={styles.brandText}>
-          CHRONO<ThemedText type="smallBold" style={{ color: BrandAccent }}>TRACK</ThemedText> RUN
+          CHRONO<ThemedText type="smallBold" themeColor="accent">TRACK</ThemedText> RUN
         </ThemedText>
 
         {props.children}

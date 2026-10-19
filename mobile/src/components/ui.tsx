@@ -7,7 +7,7 @@ import { type ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { BrandAccent, Spacing } from '@/constants/theme';
+import { line, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /** Estilo base de tarjeta (con el fondo del tema). Usalo cuando necesitás el
@@ -63,7 +63,7 @@ export function Segmented<T extends string>({
           key={o.key}
           onPress={() => onChange(o.key)}
           style={[styles.segment, value === o.key && { backgroundColor: theme.backgroundSelected }]}>
-          <ThemedText type="small" style={value === o.key ? styles.segmentOn : undefined}>
+          <ThemedText type="small" themeColor={value === o.key ? 'accent' : undefined}>
             {o.label}
           </ThemedText>
         </Pressable>
@@ -77,8 +77,7 @@ const styles = StyleSheet.create({
   sectionTitle: { letterSpacing: 2 },
   stat: { flex: 1, alignItems: 'center', borderRadius: 16, paddingVertical: 14, paddingHorizontal: Spacing.two },
   statIcon: { fontSize: 15, marginBottom: 2 },
-  statValue: { fontSize: 26, fontWeight: '900', lineHeight: 30, fontVariant: ['tabular-nums'] },
+  statValue: { fontSize: 26, fontWeight: '900', lineHeight: line(30), fontVariant: ['tabular-nums'] },
   segmented: { flexDirection: 'row', borderRadius: 999, padding: 3 },
   segment: { paddingHorizontal: Spacing.three, paddingVertical: 6, borderRadius: 999 },
-  segmentOn: { color: BrandAccent },
 });

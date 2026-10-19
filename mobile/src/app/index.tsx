@@ -8,7 +8,7 @@ import { Ring } from '@/components/ring';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SectionTitle, useCardStyle } from '@/components/ui';
-import { BottomTabInset, BrandAccent, MaxContentWidth, Spacing } from '@/constants/theme';
+import { BottomTabInset, line, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { api, type Activity, type Profile, type Summary } from '@/lib/api';
 import { formatPace } from '@/lib/format';
@@ -61,13 +61,13 @@ export default function InicioScreen() {
             </View>
             {summary && summary.streak_weeks > 0 && (
               <View style={[styles.streak, { backgroundColor: theme.backgroundElement }]}>
-                <ThemedText style={styles.streakNum}>{summary.streak_weeks}</ThemedText>
+                <ThemedText themeColor="accent" style={styles.streakNum}>{summary.streak_weeks}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">🔥 sem</ThemedText>
               </View>
             )}
           </View>
 
-          {error && <ThemedText type="small" style={styles.error}>{error}</ThemedText>}
+          {error && <ThemedText type="small" themeColor="danger" style={styles.error}>{error}</ThemedText>}
 
           {!hasData ? (
             <View style={[card, styles.welcome]}>
@@ -77,7 +77,7 @@ export default function InicioScreen() {
                 Registrá tu primera salida y vas a ver tu meta, el gráfico de km, tus récords y logros.
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.center}>
-                Tocá <ThemedText type="smallBold" style={styles.accent}>Correr ▶</ThemedText> abajo para arrancar.
+                Tocá <ThemedText type="smallBold" themeColor="accent">Correr</ThemedText> abajo para arrancar.
               </ThemedText>
             </View>
           ) : (
@@ -90,7 +90,7 @@ export default function InicioScreen() {
                     stroke={12}
                     progress={week ? week.days_run / Math.max(1, week.goal) : 0}
                     track={theme.backgroundSelected}
-                    color={BrandAccent}
+                    color={theme.accent}
                     center={`${week?.days_run ?? 0}/${week?.goal ?? 0}`}
                     sub="días"
                   />
@@ -117,7 +117,7 @@ export default function InicioScreen() {
                             styles.bar,
                             {
                               height: `${Math.max(3, (w.km / maxKm) * 100)}%`,
-                              backgroundColor: w.isCurrent ? BrandAccent : theme.backgroundSelected,
+                              backgroundColor: w.isCurrent ? theme.accent : theme.backgroundSelected,
                             },
                           ]}
                         />
@@ -151,7 +151,7 @@ export default function InicioScreen() {
                       style={[
                         styles.badge,
                         { backgroundColor: theme.backgroundSelected, opacity: b.earned ? 1 : 0.4 },
-                        b.earned && { borderColor: BrandAccent, borderWidth: 1 },
+                        b.earned && { borderColor: theme.accent, borderWidth: 1 },
                       ]}>
                       <ThemedText style={styles.badgeEmoji}>{b.emoji}</ThemedText>
                       <ThemedText type="small" style={styles.badgeLabel} numberOfLines={2}>{b.label}</ThemedText>
@@ -185,13 +185,13 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingTop: Spacing.one },
   hello: { fontSize: 24 },
   streak: { alignItems: 'center', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 14 },
-  streakNum: { fontSize: 22, fontWeight: '900', color: BrandAccent, fontVariant: ['tabular-nums'] },
-  error: { color: '#ff6b6b', textAlign: 'center' },
+  streakNum: { fontSize: 22, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  error: { textAlign: 'center' },
   center: { textAlign: 'center' },
   hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.four, padding: Spacing.four },
   heroRing: { alignItems: 'center', gap: Spacing.two },
   heroInfo: { flex: 1, gap: Spacing.one },
-  bigNum: { fontSize: 30, lineHeight: 38, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  bigNum: { fontSize: 30, lineHeight: line(38), fontWeight: '900', fontVariant: ['tabular-nums'] },
   chart: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 80, marginVertical: Spacing.one },
   barCol: { flex: 1, height: '100%', justifyContent: 'flex-end' },
   barTrack: { height: '100%', justifyContent: 'flex-end' },
@@ -201,9 +201,8 @@ const styles = StyleSheet.create({
   recValue: { fontSize: 19, fontWeight: '800', fontVariant: ['tabular-nums'] },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   badge: { width: '31%', alignItems: 'center', gap: 4, borderRadius: 12, paddingVertical: Spacing.three, paddingHorizontal: 4 },
-  badgeEmoji: { fontSize: 26, lineHeight: 34 },
+  badgeEmoji: { fontSize: 26, lineHeight: line(34) },
   badgeLabel: { textAlign: 'center', fontWeight: '600' },
   welcome: { alignItems: 'center', paddingVertical: Spacing.five, gap: Spacing.two },
-  welcomeEmoji: { fontSize: 40, lineHeight: 48 },
-  accent: { color: BrandAccent },
+  welcomeEmoji: { fontSize: 40, lineHeight: line(48) },
 });
