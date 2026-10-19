@@ -25,7 +25,7 @@ from sqlalchemy import select, func, delete as sa_delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from cloud.db import get_db, init_db
+from cloud.db import SessionLocal, get_db, init_db
 from cloud.models import PortalUser, PublishedRace, PublishedResult, Claim
 from cloud.security import (
     hash_password, verify_password, make_token,
@@ -157,6 +157,18 @@ async def _security_headers(request: Request, call_next):
         # dejaria el navegador forzando https contra localhost.
         resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return resp
+
+
+@app.get("/api/health", include_in_schema=False)
+def health():
+    """Chequeo de vida para Render: confirma que la base responde, sin listar datos."""
+    from sqlalchemy import text
+    try:
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+    except Exception:
+        raise HTTPException(503, "Base de datos no disponible")
+    return {"status": "ok"}
 
 
 def _ensure_run_columns():

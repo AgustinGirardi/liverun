@@ -18,7 +18,7 @@ services:
     branch: main
     buildCommand: pip install -r cloud/requirements.txt
     startCommand: uvicorn cloud.main:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /api/races
+    healthCheckPath: /api/health
     autoDeploy: true         # Re-deploya en cada push a main…
     buildFilters:            # …pero SOLO si cambian archivos del portal (no el desktop).
       paths:
