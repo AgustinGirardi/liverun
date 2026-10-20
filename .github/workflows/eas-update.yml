@@ -13,6 +13,11 @@ on:
       - '.github/workflows/eas-update.yml'
   workflow_dispatch: {}
 
+# Para que un build lo reciba tienen que coincidir el canal (`preview` → branch
+# `main`, se mapea con `eas channel:edit preview --branch main`) y el
+# runtimeVersion (política `fingerprint`: un build viejo ignora el update).
+# Paso a paso en mobile/README.md → "Que la OTA llegue al teléfono".
+#
 # OJO para los builds de tienda: usan canal "production" (eas.json). Antes de
 # publicar en App Store/Play, mapear ese canal a este branch
 # (`eas channel:edit production --branch main`) o publicar también a un branch

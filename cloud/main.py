@@ -40,7 +40,9 @@ PUBLISH_API_KEY = os.environ.get("CT_PUBLISH_KEY", "dev-publish-key-change-me")
 
 # Compartidos con la API móvil (cloud/run.py). _RATE y _LAST_SWEEP se re-exportan
 # porque los tests los manipulan vía `cloud.main` (limpiar estado / forzar barrido).
-from cloud.deps import _RATE, _LAST_SWEEP, admin_emails, current_user, rate_limit, rate_limit_key  # noqa: E402,F401
+from cloud.deps import (  # noqa: E402,F401
+    _RATE, _LAST_SWEEP, admin_emails, avisar_si_multiworker, current_user, rate_limit, rate_limit_key,
+)
 
 
 # ── Coincidencia de nombre (para verificar identidad al guardar resultados) ───
@@ -391,6 +393,7 @@ def _startup():
         mailer.log.warning(
             "CT_SMTP_HOST no está configurado: los mails de verificación y de "
             "'olvidé mi contraseña' NO van a salir (ver DEPLOY.md).")
+    avisar_si_multiworker()
     init_db()
     _ensure_email_hash_column()
     _ensure_name_norm_column()

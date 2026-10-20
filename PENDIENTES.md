@@ -30,13 +30,19 @@ Lo que quedó abierto después de rescatar `backup/hardening-local-7-commits` so
 - [ ] **Portal:** listas largas de resultados sin virtualizar. Medir antes de tocar.
 - [ ] **Móvil:** `index.tsx` y `perfil.tsx` usan `ScrollView` + `.map()` sin virtualizar; revisar si crecen.
 
-## 5. Cierre del 19/10 (plan `docs/plans/2026-10-19-cerrar-los-pendientes-abiertos-de-liverun-19-10-20.md`)
+## 5. Cierre del 20/10 (plan `docs/plans/2026-10-20-cerrar-los-pendientes-abiertos-de-liverun-20-10.md`)
 
-Hecho: `rescate/movil-a11y` mergeada a `main`; ramas viejas borradas (tags `archivo/backup-hardening-local` y `archivo/web-pulido-movil` conservan lo que no estaba en `main`); `/api/health` para el health check de Render; CSP sin `unsafe-inline` también en estilos; rate limit con backend intercambiable; API key de publicación por organizador con rotación y revocación.
+Hecho en código: el escritorio avisa si `CT_PUBLISH_KEY` de la PC pisa la clave guardada (`key_from_env`); el portal avisa al arrancar si hay más de un worker con el rate limit en memoria (`aviso_multiworker`); documentados el paso a paso de la clave personal y la rotación de la global (DEPLOY.md, Paso 3), el checklist post-deploy de Render y la OTA de EAS (`mobile/README.md`).
 
-- [ ] **Snapshot del disco de Render antes del push** (hay una tabla nueva, `publish_keys`, que `create_all` crea al arrancar).
-- [ ] **Panel de Render, a mano:** `CT_SMTP_HOST/PORT/USER/PASSWORD/FROM` y `CT_PUBLIC_URL` cargadas; sin el warning "CT_SMTP_HOST no está configurado" en los logs de arranque; el deploy llega a "Live" con el health check nuevo.
-- [ ] **Ver el portal en un navegador** (temas claro y oscuro; inicio, buscar, calendario, progreso, cuenta, admin → Claves) con la consola sin violaciones de CSP: los 42 `style=""` pasaron a clases y `data-*`, y los tests no miran el layout.
-- [ ] **Repartir las claves:** emitir una por organizador en Administración → Claves, pegarla en su escritorio y recién ahí rotar o revocar la original (`CT_PUBLISH_KEY`).
-- [ ] **Rate limit con más de un worker:** registrar un backend Redis en `cloud/deps.py` (`_BACKENDS`) antes de escalar. No hay uno escrito.
-- [ ] **Borrar `origin/arreglos-revision`** (ya está en `main`) cuando se pushee.
+**No se pusheó.** El push despliega el portal en Render y hay una tabla nueva (`publish_keys`): falta el snapshot. `main` está 14 commits adelante de `origin/main`.
+
+Orden para Agustín:
+
+- [ ] **1. Snapshot del disco de Render** (Disks → Create snapshot) y recién ahí `git push origin main`.
+- [ ] **2. Checklist post-deploy** de DEPLOY.md: Live, health check, `CT_PUBLIC_URL`, `CT_SMTP_*`, logs sin avisos, mail de prueba, portal en el navegador sin violaciones de CSP.
+- [ ] **3. Clave personal:** publicar con la global (crea la fila "Organizador original") → **Rotar** esa fila → pegar la clave en ☁ Portal en la nube → republicar para comprobar. Opcional: cambiar el valor de `CT_PUBLISH_KEY` en Render.
+- [ ] **4. OTA:** `eas channel:edit preview --branch main` y `eas build -p android --profile preview`; instalar el APK. Con ese APK hacer la verificación en dispositivo de la sección 1.
+- [ ] **5. Regenerar el instalador del escritorio** (`build.bat`) para que la app instalada muestre el aviso de `CT_PUBLISH_KEY`. No bloquea: sin él la app ya permite pegar la clave.
+- [ ] **Borrar `origin/arreglos-revision`** (ya está en `main`) tras el push.
+- [ ] **Tags de archivo** `archivo/backup-hardening-local` y `archivo/web-pulido-movil`: existen solo en local. Decidir si se pushean (el repo es público).
+- [ ] **Rate limit con más de un worker:** escribir el backend Redis en `cloud/deps.py` (`_BACKENDS`) recién al escalar; el aviso del log avisa si se olvida.

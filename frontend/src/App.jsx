@@ -3701,8 +3701,13 @@ function CloudControls() {
 
             <div style={lbl}>API key de publicación</div>
             <input value={key} onChange={e => setKey(e.target.value)} type="password"
-              placeholder={cfg?.configured ? `Guardada (${cfg.api_key_masked}) — dejá vacío para mantener` : "Pegá la API key"}
+              placeholder={cfg?.configured ? `Guardada (${cfg.api_key_masked}) — dejá vacío para mantener` : "Pegá la API key (lr_pub_…)"}
               style={inp} />
+            {cfg?.key_from_env && (
+              <div role="alert" style={{ fontSize: 12, color: C.gold, marginTop: -6, marginBottom: 12 }}>
+                La variable de entorno CT_PUBLISH_KEY de este equipo tiene prioridad: la clave que guardes acá no se va a usar hasta que la quites.
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
               <button onClick={() => setOpen(false)} style={{ ...btn, width: "auto", padding: "8px 16px", margin: 0 }}>Cancelar</button>

@@ -41,6 +41,12 @@ def load_config() -> dict:
     return cfg
 
 
+def key_from_env() -> bool:
+    """True si CT_PUBLISH_KEY está definida en esta PC: en ese caso pisa la clave
+    que se guarde desde la app, y la UI tiene que avisarlo."""
+    return bool(os.environ.get("CT_PUBLISH_KEY"))
+
+
 def save_config(url: str | None = None, api_key: str | None = None) -> dict:
     """Guarda url / api_key (sólo los provistos no vacíos) y devuelve la config resultante."""
     current = dict(_DEFAULTS)

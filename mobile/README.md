@@ -30,3 +30,26 @@ El backend que consume es el portal (`cloud/`); la URL sale de
 
 `.github/workflows/eas-update.yml` publica un update OTA a EAS en cada push a
 `main` que toque `mobile/`. Los cambios nativos necesitan rebuild.
+
+### Que la OTA llegue al teléfono
+
+Un update llega a un build solo si coinciden **el canal** y **el `runtimeVersion`**:
+
+| Pieza | Valor | Dónde se define |
+|---|---|---|
+| Branch que publica el CI | `main` | `.github/workflows/eas-update.yml` |
+| Canal del build `preview` | `preview` | `eas.json` (`build.preview.channel`) |
+| Canal → branch | `preview` → `main` | EAS (no está en el repo): `npx eas-cli@latest channel:edit preview --branch main` |
+| Política de runtime | `fingerprint` | `app.json` (`runtimeVersion.policy`) |
+
+El fingerprint es un hash de lo nativo (dependencias nativas, plugins, `app.json`).
+Cambia al tocar `package.json` con paquetes nativos o `app.json`; un cambio solo de
+JS no lo cambia. Un build instalado con otro fingerprint ignora el update en silencio.
+
+- **Primera vez, o después de cambiar algo nativo:** `npx eas-cli@latest build -p android --profile preview`
+  e instalar el APK.
+- **Comprobar que coinciden:** en expo.dev, el *runtime version* del build debe ser el mismo
+  que el del último update del branch `main`. Si no, `npx eas-cli@latest fingerprint:compare`
+  dice qué difiere.
+- **Builds de tienda** (`production`): antes de publicar, `npx eas-cli@latest channel:edit production --branch main`.
+- La app baja el update al abrirse y lo aplica en la apertura siguiente: abrila dos veces.

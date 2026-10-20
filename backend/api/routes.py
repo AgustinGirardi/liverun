@@ -825,27 +825,26 @@ class CloudConfigIn(_BaseModel):
     api_key: Optional[str] = None
 
 
-@router.get("/cloud/config", tags=["Cloud"])
-async def get_cloud_config():
-    """Devuelve la URL del portal y una versión enmascarada de la API key.
-    La API key real nunca sale del backend."""
-    cfg = cloud_config.load_config()
+def _cloud_config_view(cfg: dict) -> dict:
     return {
         "url": cfg["url"],
         "api_key_masked": cloud_config.mask_key(cfg["api_key"]),
         "configured": bool(cfg["api_key"]),
+        "key_from_env": cloud_config.key_from_env(),
     }
+
+
+@router.get("/cloud/config", tags=["Cloud"])
+async def get_cloud_config():
+    """Devuelve la URL del portal y una versión enmascarada de la API key.
+    La API key real nunca sale del backend."""
+    return _cloud_config_view(cloud_config.load_config())
 
 
 @router.put("/cloud/config", tags=["Cloud"])
 async def set_cloud_config(body: CloudConfigIn):
     """Guarda la URL del portal y/o la API key de publicación (persistidas en disco)."""
-    cfg = cloud_config.save_config(url=body.url, api_key=body.api_key)
-    return {
-        "url": cfg["url"],
-        "api_key_masked": cloud_config.mask_key(cfg["api_key"]),
-        "configured": bool(cfg["api_key"]),
-    }
+    return _cloud_config_view(cloud_config.save_config(url=body.url, api_key=body.api_key))
 
 
 # ── Cuenta del organizador (sesión del portal: email/contraseña o Google) ─────

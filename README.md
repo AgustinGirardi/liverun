@@ -84,7 +84,7 @@ cd mobile && npm install && npx expo start
 ### Tests
 
 ```bash
-python -m pytest cloud/tests backend/tests -q      # 150 tests
+python -m pytest cloud/tests backend/tests -q      # 330 tests
 cd mobile && npm test
 ```
 
@@ -120,7 +120,10 @@ Anotada acá a propósito, porque el código público se lee mejor con sus lími
 - El rate limiting es en memoria y por proceso: sirve porque el portal corre en
   un único worker. El backend es intercambiable (`CT_RATE_LIMIT_BACKEND`,
   contrato `Limitador` en `cloud/deps.py`), pero hoy no hay otro: escalar a más
-  de un worker pide registrar uno compartido (Redis).
+  de un worker pide registrar uno compartido (Redis). Si alguien sube
+  `WEB_CONCURRENCY` sin hacerlo, el portal lo avisa en el log al arrancar
+  (`aviso_multiworker`). Redis no se escribió a propósito: con un solo worker
+  sería una dependencia sin uso.
 - La CSP ya no lleva `unsafe-inline` ni en scripts ni en estilos. Las medidas
   dinámicas (cupo, barras, anillo) viajan en `data-*` y se aplican por CSSOM.
 - Cada organizador publica con su propia API key (`cloud/organizadores.py`): el

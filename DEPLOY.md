@@ -57,19 +57,38 @@ El primer deploy tarda unos minutos. Cuando termine, vas a ver la URL pública a
 
 ## Paso 3 — Obtener la API key de publicación
 
-Cada organizador tiene su propia clave. Lo normal es emitirla desde el portal:
+Cada organizador tiene su propia clave (`lr_pub_…`), emitida desde el portal por una
+cuenta admin (`CT_ADMIN_EMAILS`) en **Administración → Claves**. Se muestra **una sola
+vez**: copiala en el momento.
 
-1. Entrá al portal con una cuenta admin (`CT_ADMIN_EMAILS`) → **Administración → Claves**.
-2. Escribí el nombre del organizador y **Crear clave**. Se muestra **una sola vez**: copiala.
-3. Para cambiarla, **Rotar** (la anterior deja de funcionar, las carreras quedan con la nueva);
-   para cortar el acceso, **Revocar** (las carreras siguen publicadas).
+- **Crear clave:** para un organizador nuevo. Empieza sin carreras.
+- **Rotar:** la clave anterior deja de funcionar y las carreras quedan con la nueva.
+- **Revocar:** corta la publicación; las carreras siguen publicadas.
 
-La `CT_PUBLISH_KEY` que genera Render sigue funcionando como la clave del organizador
-original, así una app de escritorio ya configurada no se queda afuera. Está en la
-pestaña **Environment** del servicio. Una vez que cada organizador tenga la suya,
-rotá o revocá esa fila en **Claves**: desde ahí la global deja de valer.
+#### Pasar al organizador original de la `CT_PUBLISH_KEY` global a su clave personal
 
-Esa clave es la que conecta tu app de escritorio con el portal.
+La `CT_PUBLISH_KEY` que genera Render (pestaña **Environment**) sigue valiendo hasta que
+se la rote o revoque, así una app de escritorio ya configurada no se queda afuera. Para
+que no publique cualquiera que tenga la app, **en este orden**:
+
+1. **Registrar la global.** Desde el escritorio, publicá o republicá una carrera con la
+   configuración actual. Eso crea en **Claves** la fila **"Organizador original"**; hasta
+   que exista, la global sigue valiendo y no hay nada que rotar.
+2. **Rotar esa fila** ("Organizador original" → **Rotar**) y copiar la clave nueva.
+   Usá *Rotar* y no *Crear clave*: rotar le pasa las carreras ya publicadas a la clave
+   nueva. Con una clave recién creada, esas carreras quedan a nombre de la global y al
+   republicarlas el portal responde 403 ("fue publicada por otro organizador").
+   Desde este momento la global ya no sirve.
+3. **Cargarla en el escritorio:** ☁ **Portal en la nube** → pegar la clave → Guardar
+   (ver Paso 4).
+4. **Comprobar:** republicá una carrera. Tiene que publicar sin error y la fila de
+   **Claves** muestra el *último uso* recién actualizado. Si el paso 3 sale mal no
+   quedás afuera: **Rotar** de nuevo tantas veces como haga falta.
+5. **Cinturón y tirantes (opcional):** en Render → Environment, cambiá `CT_PUBLISH_KEY`
+   por otro valor. No se puede borrar: el portal se niega a arrancar sin una definida
+   (`_startup` en `cloud/main.py`). Ya no la usa nadie.
+
+Para otro organizador: **Crear clave** con su nombre y pasársela por un canal privado.
 
 ---
 
@@ -81,6 +100,10 @@ Esa clave es la que conecta tu app de escritorio con el portal.
    - **URL del portal:** la URL de Render, ej. `https://chronotrack-portal.onrender.com`
    - **API key de publicación:** la que copiaste en el Paso 3.
 4. Guardar.
+
+> Si el equipo tiene la variable de entorno `CT_PUBLISH_KEY`, esa **pisa** la clave que
+> guardes acá. El modal lo avisa; quitá la variable para que valga la clave nueva.
+> La clave se guarda en `chronotrack_cloud.json`, junto a la base de datos del escritorio.
 
 Listo. Ahora, en cualquier carrera, el botón **☁ Publicar** sube los resultados
 al portal y te devuelve el código para que los corredores la busquen.
@@ -175,6 +198,24 @@ el mail ...`).
 
 Las cuentas que ya existían: las que entran con Google quedan verificadas solas;
 las de email y contraseña ven un aviso en el inicio para verificar.
+
+## Checklist después de cada deploy (a mano, en el dashboard de Render)
+
+Lo que el repo ya garantiza: `render.yaml` apunta el health check a `/api/health`
+(un `SELECT 1`, con test) y declara `CT_PUBLIC_URL` y `CT_SMTP_*`. Lo que solo se ve en
+el dashboard:
+
+- [ ] **Antes de pushear algo que crea tablas o columnas:** Disks → *Create snapshot*.
+- [ ] El deploy llega a **Live** y Settings → *Health Check Path* dice `/api/health`.
+- [ ] `curl -s https://chronotrack-portal.onrender.com/api/health` responde `{"status":"ok"}`.
+- [ ] Environment: `CT_PUBLIC_URL` y `CT_SMTP_HOST/PORT/USER/PASSWORD/FROM` con valor
+      (son `sync: false`: el Blueprint las crea vacías).
+- [ ] Logs de arranque **sin** `CT_SMTP_HOST no está configurado` y **sin** el aviso de
+      "workers con el rate limit en memoria"; un solo `Started server process`.
+- [ ] Prueba de mail: Ingresar → ¿Olvidaste tu contraseña? → llega el mail.
+- [ ] Portal en el navegador, tema claro y oscuro (inicio, buscar, calendario, progreso,
+      cuenta, admin → Claves), con la consola **sin violaciones de CSP**.
+- [ ] Disks: snapshots automáticos activos; anotar la fecha del último manual.
 
 ## Verificar que funciona
 

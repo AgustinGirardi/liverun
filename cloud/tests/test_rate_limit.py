@@ -105,3 +105,34 @@ def test_rate_limit_key_usa_el_limitador_inyectado(monkeypatch):
         deps.rate_limit_key("x", limit=1, window=5.0)
     assert e.value.status_code == 429
     assert falso.llamadas[0] == ("x", 1, 5.0)
+
+
+# ── Aviso: backend en memoria con más de un worker ────────────────────────────
+def test_aviso_multiworker_con_memoria_y_mas_de_un_worker():
+    aviso = deps.aviso_multiworker("memoria", "2")
+    assert aviso is not None
+    assert "CT_RATE_LIMIT_BACKEND" in aviso and "2" in aviso
+
+
+@pytest.mark.parametrize("backend,workers", [
+    ("memoria", "1"), ("memoria", None), ("memoria", ""), ("memoria", "muchos"), ("memoria", "0"),
+    ("redis", "4"),
+])
+def test_aviso_multiworker_calla_si_no_hay_problema(backend, workers):
+    assert deps.aviso_multiworker(backend, workers) is None
+
+
+def test_startup_loguea_el_aviso_multiworker(monkeypatch, caplog):
+    monkeypatch.setenv("WEB_CONCURRENCY", "3")
+    monkeypatch.delenv("RENDER", raising=False)
+    with caplog.at_level("WARNING", logger="cloud.deps"):
+        cm._startup()
+    assert "CT_RATE_LIMIT_BACKEND" in caplog.text
+
+
+def test_startup_no_avisa_con_un_solo_worker(monkeypatch, caplog):
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+    monkeypatch.delenv("RENDER", raising=False)
+    with caplog.at_level("WARNING", logger="cloud.deps"):
+        cm._startup()
+    assert "CT_RATE_LIMIT_BACKEND" not in caplog.text

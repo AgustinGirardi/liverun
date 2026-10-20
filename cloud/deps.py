@@ -1,6 +1,7 @@
 """Dependencias compartidas entre el portal (main.py) y la API móvil (run.py):
 rate limiting por IP y autenticación por token."""
 import ipaddress
+import logging
 import os
 import time
 from collections import defaultdict
@@ -12,6 +13,8 @@ from sqlalchemy.orm import Session
 from cloud.db import get_db
 from cloud.models import PortalUser
 from cloud.security import verify_token
+
+log = logging.getLogger("cloud.deps")
 
 # ── Rate limiting: backend intercambiable ────────────────────────────────────
 # Por defecto en memoria (proceso único en Render starter). Con más de un worker
@@ -57,7 +60,29 @@ def crear_limitador(nombre: Optional[str]) -> Limitador:
     return _BACKENDS[nombre]()
 
 
-_limitador: Limitador = crear_limitador(os.environ.get("CT_RATE_LIMIT_BACKEND"))
+_NOMBRE_BACKEND = (os.environ.get("CT_RATE_LIMIT_BACKEND") or "memoria").strip().lower()
+_limitador: Limitador = crear_limitador(_NOMBRE_BACKEND)
+
+
+def aviso_multiworker(backend: str, workers: Optional[str]) -> Optional[str]:
+    """Texto de aviso si el contador en memoria corre con más de un worker (cada
+    proceso contaría por separado y el tope real se multiplicaría); None si no hay problema.
+    `workers` es WEB_CONCURRENCY, que uvicorn lee del entorno."""
+    try:
+        n = int(workers or 1)
+    except ValueError:
+        return None
+    if backend != "memoria" or n <= 1:
+        return None
+    return (f"Hay {n} workers con el rate limit en memoria: cada proceso cuenta por separado "
+            "y el tope real se multiplica. Registrá un backend compartido (Redis) en "
+            "cloud/deps.py y elegilo con CT_RATE_LIMIT_BACKEND.")
+
+
+def avisar_si_multiworker() -> None:
+    aviso = aviso_multiworker(_NOMBRE_BACKEND, os.environ.get("WEB_CONCURRENCY"))
+    if aviso:
+        log.warning(aviso)
 
 
 # Rangos publicados de Cloudflare (https://www.cloudflare.com/ips/). Solo se
