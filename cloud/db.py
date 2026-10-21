@@ -1,5 +1,6 @@
 """Base de datos del servicio cloud (separada de la app de escritorio).
 SQLite síncrono para el MVP; migrable a Postgres cambiando la URL."""
+
 import os
 from pathlib import Path
 from sqlalchemy import create_engine
@@ -28,4 +29,5 @@ def get_db():
 
 def init_db():
     from cloud import models  # noqa: F401 — registra los modelos
+
     Base.metadata.create_all(engine)

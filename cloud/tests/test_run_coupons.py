@@ -1,4 +1,5 @@
 """Cupones: creación por admin, canje por usuario, límites y validaciones."""
+
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -20,6 +21,7 @@ def _admin(client, db, email="admin@test.com"):
 
 # ── Lógica pura de validez ────────────────────────────────────────────────────
 
+
 def test_redeemable_ok():
     c = Coupon(code="X", kind="free_months", months=1, active=1, redeemed_count=0)
     assert coupon_redeemable(c, already=False, now=NOW) is None
@@ -39,29 +41,56 @@ def test_redeemable_maximo_alcanzado():
 
 # ── Admin crea cupones ────────────────────────────────────────────────────────
 
+
 def test_admin_crea_cupon_meses_y_descuento(client, db):
     ha = _admin(client, db)
     r = client.post("/api/run/admin/coupons", json={"code": "verano26", "kind": "free_months", "months": 2}, headers=ha)
     assert r.status_code == 200 and r.json()["code"] == "VERANO26"
-    r = client.post("/api/run/admin/coupons", json={"code": "promo50a", "kind": "discount", "percent_off": 50}, headers=ha)
+    r = client.post(
+        "/api/run/admin/coupons", json={"code": "promo50a", "kind": "discount", "percent_off": 50}, headers=ha
+    )
     assert r.status_code == 200 and r.json()["percent_off"] == 50
 
 
 def test_admin_cupon_validaciones(client, db):
     ha = _admin(client, db)
-    assert client.post("/api/run/admin/coupons", json={"code": "ab", "kind": "free_months", "months": 1}, headers=ha).status_code == 422  # min_length Pydantic
-    assert client.post("/api/run/admin/coupons", json={"code": "bad code", "kind": "free_months", "months": 1}, headers=ha).status_code == 400  # regex (espacio)
-    assert client.post("/api/run/admin/coupons", json={"code": "nomonths", "kind": "free_months"}, headers=ha).status_code == 400
+    assert (
+        client.post(
+            "/api/run/admin/coupons", json={"code": "ab", "kind": "free_months", "months": 1}, headers=ha
+        ).status_code
+        == 422
+    )  # min_length Pydantic
+    assert (
+        client.post(
+            "/api/run/admin/coupons", json={"code": "bad code", "kind": "free_months", "months": 1}, headers=ha
+        ).status_code
+        == 400
+    )  # regex (espacio)
+    assert (
+        client.post("/api/run/admin/coupons", json={"code": "nomonths", "kind": "free_months"}, headers=ha).status_code
+        == 400
+    )
     client.post("/api/run/admin/coupons", json={"code": "duplica1", "kind": "free_months", "months": 1}, headers=ha)
-    assert client.post("/api/run/admin/coupons", json={"code": "duplica1", "kind": "free_months", "months": 1}, headers=ha).status_code == 409
+    assert (
+        client.post(
+            "/api/run/admin/coupons", json={"code": "duplica1", "kind": "free_months", "months": 1}, headers=ha
+        ).status_code
+        == 409
+    )
 
 
 def test_no_admin_no_crea_cupones(client):
     h = make_user(client)
-    assert client.post("/api/run/admin/coupons", json={"code": "hackear1", "kind": "free_months", "months": 1}, headers=h).status_code == 403
+    assert (
+        client.post(
+            "/api/run/admin/coupons", json={"code": "hackear1", "kind": "free_months", "months": 1}, headers=h
+        ).status_code
+        == 403
+    )
 
 
 # ── Usuario canjea ────────────────────────────────────────────────────────────
+
 
 def test_canje_meses_suma_premium(client, db):
     ha = _admin(client, db)
@@ -96,10 +125,13 @@ def test_canje_concurrente_no_supera_el_maximo(client, db, monkeypatch):
     coupon_redeemable pase (dos requests leyeron el contador antes del
     incremento de la otra), el UPDATE condicional no deja superar el tope."""
     import cloud.run as run_mod
+
     ha = _admin(client, db)
-    client.post("/api/run/admin/coupons",
-                json={"code": "carrera1", "kind": "free_months", "months": 1, "max_redemptions": 1},
-                headers=ha)
+    client.post(
+        "/api/run/admin/coupons",
+        json={"code": "carrera1", "kind": "free_months", "months": 1, "max_redemptions": 1},
+        headers=ha,
+    )
     h1 = make_user(client, email="r1@test.com")
     h2 = make_user(client, email="r2@test.com")
     assert client.post("/api/run/coupons/redeem", json={"code": "carrera1"}, headers=h1).status_code == 200
@@ -116,9 +148,9 @@ def test_canje_repetido_mismo_usuario_en_carrera_da_400_no_500(client, db, monke
     el INSERT duplicado de la redención debe caer en el try/except del commit
     (400 limpio), no en un 500 por el autoflush del UPDATE del contador."""
     import cloud.run as run_mod
+
     ha = _admin(client, db)
-    client.post("/api/run/admin/coupons",
-                json={"code": "duplica1", "kind": "free_months", "months": 1}, headers=ha)
+    client.post("/api/run/admin/coupons", json={"code": "duplica1", "kind": "free_months", "months": 1}, headers=ha)
     h = make_user(client, email="dup@test.com")
     assert client.post("/api/run/coupons/redeem", json={"code": "duplica1"}, headers=h).status_code == 200
     monkeypatch.setattr(run_mod, "coupon_redeemable", lambda *a, **k: None)  # simula el race
@@ -130,8 +162,11 @@ def test_canje_repetido_mismo_usuario_en_carrera_da_400_no_500(client, db, monke
 
 def test_canje_respeta_maximo_y_toggle(client, db):
     ha = _admin(client, db)
-    cid = client.post("/api/run/admin/coupons",
-                      json={"code": "limite01", "kind": "free_months", "months": 1, "max_redemptions": 1}, headers=ha).json()["id"]
+    cid = client.post(
+        "/api/run/admin/coupons",
+        json={"code": "limite01", "kind": "free_months", "months": 1, "max_redemptions": 1},
+        headers=ha,
+    ).json()["id"]
     h1 = make_user(client, email="u1@test.com")
     h2 = make_user(client, email="u2@test.com")
     assert client.post("/api/run/coupons/redeem", json={"code": "limite01"}, headers=h1).status_code == 200

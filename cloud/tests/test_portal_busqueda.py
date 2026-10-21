@@ -1,16 +1,25 @@
 """Búsqueda del portal: sin acentos, sin orden de palabras, con tope avisado,
 y migración de name_norm sobre una base que ya tenía resultados."""
+
 from sqlalchemy import text
 
 from cloud import billing
 from cloud.db import engine
-from cloud.main import SEARCH_LIMIT, _ensure_name_norm_column, normalizar_nombre
+from cloud.migraciones import _ensure_name_norm_column
+from cloud.nombres import normalizar_nombre
+from cloud.search import SEARCH_LIMIT
 from cloud.tests.conftest import make_user, publish_race
 
 
 def _res(name, bib, pos=1):
-    return {"bib_number": str(bib), "full_name": name, "distance_km": 10.0,
-            "net_time_ns": 1_800_000_000_000 + bib, "position": pos, "status": "FINISHER"}
+    return {
+        "bib_number": str(bib),
+        "full_name": name,
+        "distance_km": 10.0,
+        "net_time_ns": 1_800_000_000_000 + bib,
+        "position": pos,
+        "status": "FINISHER",
+    }
 
 
 def _nombres(client, q):
@@ -57,7 +66,9 @@ def test_busqueda_avisa_cuando_hay_mas_que_el_tope(client):
 def test_carrera_por_nombre_sin_acentos_y_por_codigo(client):
     pub = publish_race(client, name="Maratón de Río Cuarto", results=[_res("Ana Gómez", 1)])
     assert [r["code"] for r in client.get("/api/search", params={"q": "maraton rio"}).json()["races"]] == [pub["code"]]
-    assert [r["code"] for r in client.get("/api/search", params={"q": pub["code"].lower()}).json()["races"]] == [pub["code"]]
+    assert [r["code"] for r in client.get("/api/search", params={"q": pub["code"].lower()}).json()["races"]] == [
+        pub["code"]
+    ]
 
 
 def test_migracion_completa_name_norm_en_una_base_vieja(client):
@@ -66,8 +77,8 @@ def test_migracion_completa_name_norm_en_una_base_vieja(client):
     with engine.begin() as conn:
         conn.execute(text("UPDATE published_results SET name_norm = NULL"))
     assert _nombres(client, "jose") == []
-    _ensure_name_norm_column(lote=1)   # lotes chicos: tiene que recorrer todos
-    _ensure_name_norm_column()         # idempotente
+    _ensure_name_norm_column(lote=1)  # lotes chicos: tiene que recorrer todos
+    _ensure_name_norm_column()  # idempotente
     assert _nombres(client, "jose perez") == ["José Pérez"]
     assert _nombres(client, "suarez ines") == ["Inés Suárez"]
 
@@ -85,7 +96,8 @@ def test_error_de_mercado_pago_no_se_muestra_crudo(client, monkeypatch):
     monkeypatch.setattr(billing, "usd_ars_rate", lambda strict=False: 1000.0)
 
     def caido(*a, **k):
-        raise billing.MPError("invalid payer_email {\"status\":400}")
+        raise billing.MPError('invalid payer_email {"status":400}')
+
     monkeypatch.setattr(billing, "mp_request", caido)
     r = client.post("/api/run/billing/subscribe", headers=h)
     assert r.status_code == 502

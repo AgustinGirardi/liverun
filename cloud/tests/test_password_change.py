@@ -1,4 +1,5 @@
 """Cambio de contraseña: validaciones y cierre de las sesiones abiertas."""
+
 import time
 
 from cloud.security import SECRET, make_token, verify_token
@@ -9,8 +10,7 @@ NUEVA = "otraClave456"
 
 
 def _cambiar(client, headers, actual=ACTUAL, nueva=NUEVA):
-    return client.post("/api/auth/password", headers=headers,
-                       json={"current_password": actual, "new_password": nueva})
+    return client.post("/api/auth/password", headers=headers, json={"current_password": actual, "new_password": nueva})
 
 
 def test_cambia_la_contrasenia_y_permite_entrar_con_la_nueva(client):
@@ -19,10 +19,8 @@ def test_cambia_la_contrasenia_y_permite_entrar_con_la_nueva(client):
     assert r.status_code == 200, r.text
     assert r.json()["token"]
 
-    assert client.post("/api/auth/login",
-                       json={"email": "cambio@test.com", "password": NUEVA}).status_code == 200
-    assert client.post("/api/auth/login",
-                       json={"email": "cambio@test.com", "password": ACTUAL}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "cambio@test.com", "password": NUEVA}).status_code == 200
+    assert client.post("/api/auth/login", json={"email": "cambio@test.com", "password": ACTUAL}).status_code == 401
 
 
 def test_rechaza_si_la_actual_no_coincide(client):
@@ -30,8 +28,7 @@ def test_rechaza_si_la_actual_no_coincide(client):
     r = _cambiar(client, h, actual="noEsLaMia999")
     assert r.status_code == 400
     # y la contraseña real sigue siendo la de antes
-    assert client.post("/api/auth/login",
-                       json={"email": "malactual@test.com", "password": ACTUAL}).status_code == 200
+    assert client.post("/api/auth/login", json={"email": "malactual@test.com", "password": ACTUAL}).status_code == 200
 
 
 def test_rechaza_si_la_nueva_es_igual_a_la_actual(client):
@@ -45,8 +42,7 @@ def test_rechaza_una_nueva_demasiado_corta(client):
 
 
 def test_requiere_autenticacion(client):
-    r = client.post("/api/auth/password",
-                    json={"current_password": ACTUAL, "new_password": NUEVA})
+    r = client.post("/api/auth/password", json={"current_password": ACTUAL, "new_password": NUEVA})
     assert r.status_code == 401
 
 

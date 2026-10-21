@@ -25,6 +25,7 @@ está PRAGMA foreign_keys=ON por conexión), así no quedan filas huérfanas.
 Uso:   KEEP_EMAIL=tu@email.com python scripts/wipe_cloud_data.py
 Recuperar:  reemplazar cloud.db por el cloud.db.bak.<ts> generado.
 """
+
 import os
 import sqlite3
 import sys

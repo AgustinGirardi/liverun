@@ -3,13 +3,14 @@ LiveRun Launcher
 Abre la aplicación como ventana de escritorio (pywebview + Edge WebView2).
 Muestra pantalla de carga inmediatamente mientras el servidor arranca en segundo plano.
 """
+
 import sys
 import os
 import time
 import threading
 from pathlib import Path
 
-PORT  = 8001
+PORT = 8001
 TITLE = "LiveRun"
 
 LOADING_HTML = """<!DOCTYPE html>
@@ -89,11 +90,13 @@ def _setup_logging(base: Path):
 def run_server():
     import uvicorn
     from backend.main import app
+
     uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="warning")
 
 
 def wait_for_server(timeout: float = 30.0) -> bool:
     import urllib.request
+
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -117,6 +120,7 @@ def main():
 
     if getattr(sys, "frozen", False):
         import multiprocessing
+
         multiprocessing.freeze_support()
 
     # ── Servidor en segundo plano ──────────────────────────────────────────
@@ -128,7 +132,7 @@ def main():
 
     window = webview.create_window(
         title=TITLE,
-        html=LOADING_HTML,          # pantalla de carga inmediata
+        html=LOADING_HTML,  # pantalla de carga inmediata
         width=1400,
         height=860,
         min_size=(1024, 640),

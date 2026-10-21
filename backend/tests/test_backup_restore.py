@@ -1,4 +1,5 @@
 """Respaldo y restauración: lo que se usa el día de la carrera si algo sale mal."""
+
 from backend.tests.conftest import make_runner, make_race, register
 
 API = "/api/v1"
@@ -10,7 +11,10 @@ def test_respaldo_y_restauracion_conservan_la_carrera(client):
     register(client, race["id"], runner["id"], bib="7")
     client.post(f"{API}/races/{race['id']}/start", json={"click_delay_ms": 60_000})
     cap = client.post(f"{API}/races/{race['id']}/capture").json()
-    assert client.post(f"{API}/races/{race['id']}/captures/{cap['id']}/assign", json={"bib_number": "7"}).status_code == 200
+    assert (
+        client.post(f"{API}/races/{race['id']}/captures/{cap['id']}/assign", json={"bib_number": "7"}).status_code
+        == 200
+    )
     antes = client.get(f"{API}/races/{race['id']}/results").json()["results"]
 
     r = client.get(f"{API}/backup")

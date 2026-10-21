@@ -6,6 +6,7 @@ global sigue valiendo hasta que se la rota o revoca: la primera vez que se usa
 se registra como la key "legacy", así la app de escritorio ya instalada no se
 queda afuera el día del deploy.
 """
+
 import hashlib
 import secrets
 from hmac import compare_digest
@@ -54,8 +55,9 @@ def _registrar_legacy(db: Session, digest: str) -> Optional[PublishKey]:
     (y su hash cambió), la global fue rotada: no vale más."""
     if db.scalar(select(PublishKey).where(PublishKey.is_legacy == 1)) is not None:
         return None
-    fila = PublishKey(name="Organizador original", key_hash=digest, key_prefix="(CT_PUBLISH_KEY)",
-                      is_legacy=1, created_at=ahora_utc())
+    fila = PublishKey(
+        name="Organizador original", key_hash=digest, key_prefix="(CT_PUBLISH_KEY)", is_legacy=1, created_at=ahora_utc()
+    )
     db.add(fila)
     db.flush()
     return fila
@@ -74,9 +76,17 @@ class NuevaKey(BaseModel):
 
 
 def _dict(k: PublishKey, carreras: int) -> dict:
-    return {"id": k.id, "name": k.name, "prefix": k.key_prefix, "is_legacy": bool(k.is_legacy),
-            "races": carreras, "created_at": iso_utc(k.created_at), "rotated_at": iso_utc(k.rotated_at),
-            "revoked_at": iso_utc(k.revoked_at), "last_used_at": iso_utc(k.last_used_at)}
+    return {
+        "id": k.id,
+        "name": k.name,
+        "prefix": k.key_prefix,
+        "is_legacy": bool(k.is_legacy),
+        "races": carreras,
+        "created_at": iso_utc(k.created_at),
+        "rotated_at": iso_utc(k.rotated_at),
+        "revoked_at": iso_utc(k.revoked_at),
+        "last_used_at": iso_utc(k.last_used_at),
+    }
 
 
 def _por_id(db: Session, key_id: int) -> PublishKey:
@@ -88,7 +98,9 @@ def _por_id(db: Session, key_id: int) -> PublishKey:
 
 @router.get("")
 def listar(_: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
-    cuentas = dict(db.execute(select(PublishedRace.owner_key_hash, func.count()).group_by(PublishedRace.owner_key_hash)).all())
+    cuentas = dict(
+        db.execute(select(PublishedRace.owner_key_hash, func.count()).group_by(PublishedRace.owner_key_hash)).all()
+    )
     return [_dict(k, cuentas.get(k.key_hash, 0)) for k in db.scalars(select(PublishKey).order_by(PublishKey.id))]
 
 
@@ -96,8 +108,9 @@ def listar(_: PortalUser = Depends(require_admin), db: Session = Depends(get_db)
 def crear(body: NuevaKey, _: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     """La key en claro se devuelve esta única vez: después solo queda el hash."""
     key = _generar_key()
-    fila = PublishKey(name=body.name, key_hash=hash_key(key), key_prefix=key[:_LARGO_PREFIJO_VISIBLE],
-                      created_at=ahora_utc())
+    fila = PublishKey(
+        name=body.name, key_hash=hash_key(key), key_prefix=key[:_LARGO_PREFIJO_VISIBLE], created_at=ahora_utc()
+    )
     db.add(fila)
     db.commit()
     return {**_dict(fila, 0), "key": key}
@@ -125,5 +138,7 @@ def revocar(key_id: int, _: PortalUser = Depends(require_admin), db: Session = D
     if fila.revoked_at is None:
         fila.revoked_at = ahora_utc()
         db.commit()
-    carreras = db.scalar(select(func.count()).select_from(PublishedRace).where(PublishedRace.owner_key_hash == fila.key_hash))
+    carreras = db.scalar(
+        select(func.count()).select_from(PublishedRace).where(PublishedRace.owner_key_hash == fila.key_hash)
+    )
     return _dict(fila, carreras)

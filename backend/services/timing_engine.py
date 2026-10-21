@@ -7,12 +7,21 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from backend.models.models import (
-    TimestampCapture, Split, Registration, Runner,
-    Race, CaptureStatus, RegistrationStatus, RaceStatus,
+    TimestampCapture,
+    Split,
+    Registration,
+    Runner,
+    Race,
+    CaptureStatus,
+    RegistrationStatus,
+    RaceStatus,
 )
 from backend.core.schemas import (
-    WSEvent, WSEventType,
-    AssignBibResponse, BibLookupResponse, RunnerOut,
+    WSEvent,
+    WSEventType,
+    AssignBibResponse,
+    BibLookupResponse,
+    RunnerOut,
 )
 
 
@@ -44,6 +53,7 @@ manager = ConnectionManager()
 
 
 # ── Largadas ──────────────────────────────────────────────────────────────────
+
 
 def _misma_distancia(a: Optional[float], b: Optional[float]) -> bool:
     return a is not None and b is not None and round(a, 3) == round(b, 3)
@@ -99,10 +109,13 @@ class TimingEngine:
             # mitad de carrera, el contador retoma desde el último valor real
             # en lugar de volver a 0 (evita sequence_order duplicados).
             if not self._seq_initialized:
-                max_seq = (await db.execute(
-                    select(func.max(TimestampCapture.sequence_order))
-                    .where(TimestampCapture.race_id == self.race_id)
-                )).scalar()
+                max_seq = (
+                    await db.execute(
+                        select(func.max(TimestampCapture.sequence_order)).where(
+                            TimestampCapture.race_id == self.race_id
+                        )
+                    )
+                ).scalar()
                 self._sequence = max_seq or 0
                 self._seq_initialized = True
             self._sequence += 1
@@ -116,17 +129,19 @@ class TimingEngine:
             db.add(capture)
             await db.commit()
             await db.refresh(capture)
-        await manager.broadcast(WSEvent(
-            event=WSEventType.CAPTURE,
-            data={
-                "id": capture.id,
-                "race_id": capture.race_id,
-                "captured_ns": capture.captured_ns,
-                "sequence_order": capture.sequence_order,
-                "capture_device": capture.capture_device,
-                "status": capture.status.value,
-            },
-        ))
+        await manager.broadcast(
+            WSEvent(
+                event=WSEventType.CAPTURE,
+                data={
+                    "id": capture.id,
+                    "race_id": capture.race_id,
+                    "captured_ns": capture.captured_ns,
+                    "sequence_order": capture.sequence_order,
+                    "capture_device": capture.capture_device,
+                    "status": capture.status.value,
+                },
+            )
+        )
         return capture
 
     # ── Asignar dorsal ────────────────────────────────────────────────────────
@@ -164,14 +179,20 @@ class TimingEngine:
 
         # Evitar asignar el mismo dorsal a dos capturas distintas: si ya tiene un
         # tiempo asignado (ya cruzó meta), rechazar para no invalidar el resultado.
-        already = (await db.execute(
-            select(Split)
-            .join(TimestampCapture, Split.timestamp_id == TimestampCapture.id)
-            .where(
-                Split.registration_id == registration.id,
-                TimestampCapture.status == CaptureStatus.ASSIGNED,
+        already = (
+            (
+                await db.execute(
+                    select(Split)
+                    .join(TimestampCapture, Split.timestamp_id == TimestampCapture.id)
+                    .where(
+                        Split.registration_id == registration.id,
+                        TimestampCapture.status == CaptureStatus.ASSIGNED,
+                    )
+                )
             )
-        )).scalars().first()
+            .scalars()
+            .first()
+        )
         if already:
             raise ValueError(f"El dorsal '{bib_number}' ya tiene un tiempo asignado")
 
@@ -186,24 +207,28 @@ class TimingEngine:
         await db.refresh(split)
 
         race = await db.get(Race, self.race_id)
-        dist = registration.distance_km if registration.distance_km is not None else (race.distance_km if race else None)
+        dist = (
+            registration.distance_km if registration.distance_km is not None else (race.distance_km if race else None)
+        )
         start_ns = start_ns_para(race, dist) if race else None
         net_time_ns = (capture.captured_ns - start_ns) if start_ns else None
 
         # Posición: cuántos ASSIGNED antes que éste
-        pos_count = (await db.execute(
-            select(func.count())
-            .select_from(Split)
-            .join(TimestampCapture, Split.timestamp_id == TimestampCapture.id)
-            .join(Registration, Split.registration_id == Registration.id)
-            .where(
-                TimestampCapture.race_id == self.race_id,
-                TimestampCapture.status == CaptureStatus.ASSIGNED,
-                TimestampCapture.captured_ns < capture.captured_ns,
-                Registration.status == RegistrationStatus.OK,
-                Registration.distance_km == registration.distance_km,
+        pos_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(Split)
+                .join(TimestampCapture, Split.timestamp_id == TimestampCapture.id)
+                .join(Registration, Split.registration_id == Registration.id)
+                .where(
+                    TimestampCapture.race_id == self.race_id,
+                    TimestampCapture.status == CaptureStatus.ASSIGNED,
+                    TimestampCapture.captured_ns < capture.captured_ns,
+                    Registration.status == RegistrationStatus.OK,
+                    Registration.distance_km == registration.distance_km,
+                )
             )
-        )).scalar_one()
+        ).scalar_one()
         position = pos_count + 1
 
         response = AssignBibResponse(
@@ -287,14 +312,20 @@ class TimingEngine:
             return BibLookupResponse(found=False, bib_number=bib_number)
 
         # Verificar si ya tiene un split asignado (ya llegó a meta)
-        existing_split = (await db.execute(
-            select(Split)
-            .join(TimestampCapture, Split.timestamp_id == TimestampCapture.id)
-            .where(
-                Split.registration_id == registration.id,
-                TimestampCapture.status == CaptureStatus.ASSIGNED,
+        existing_split = (
+            (
+                await db.execute(
+                    select(Split)
+                    .join(TimestampCapture, Split.timestamp_id == TimestampCapture.id)
+                    .where(
+                        Split.registration_id == registration.id,
+                        TimestampCapture.status == CaptureStatus.ASSIGNED,
+                    )
+                )
             )
-        )).scalars().first()
+            .scalars()
+            .first()
+        )
 
         return BibLookupResponse(
             found=True,
@@ -308,10 +339,12 @@ class TimingEngine:
 
 _engines: dict[int, TimingEngine] = {}
 
+
 def get_engine(race_id: int) -> TimingEngine:
     if race_id not in _engines:
         _engines[race_id] = TimingEngine(race_id)
     return _engines[race_id]
+
 
 def reset_engines() -> None:
     """Limpia los engines en memoria (contadores de secuencia, etc.).

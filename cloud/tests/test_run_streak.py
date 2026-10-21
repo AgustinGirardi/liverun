@@ -1,4 +1,5 @@
 """Lógica pura de racha semanal (cloud/run.py::compute_streak)."""
+
 from datetime import date, timedelta
 
 from cloud.run import compute_streak, week_start

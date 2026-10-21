@@ -1,4 +1,5 @@
 """Acceso premium (prueba/premium/admin) y endpoints de administración."""
+
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -11,6 +12,7 @@ NOW = datetime(2026, 6, 12)
 
 
 # ── Lógica pura de acceso ─────────────────────────────────────────────────────
+
 
 def test_prueba_activa_recien_creado():
     acc = access_status(False, NOW - timedelta(days=10), None, NOW)
@@ -34,6 +36,7 @@ def test_admin_es_ilimitado():
 
 # ── Perfil expone el acceso ───────────────────────────────────────────────────
 
+
 def test_profile_incluye_acceso(client):
     h = make_user(client)
     p = client.get("/api/run/profile", headers=h).json()
@@ -42,6 +45,7 @@ def test_profile_incluye_acceso(client):
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
+
 
 def _make_admin(client, db, email="admin@test.com"):
     h = make_user(client, email=email, username="boss")
@@ -67,8 +71,11 @@ def test_admin_lista_y_busca_usuarios(client, db):
 
 def test_admin_otorga_y_revoca_premium(client, db):
     ha = _make_admin(client, db)
-    ana = db.scalar(select(PortalUser).where(PortalUser.email == "ana@test.com")) \
-        if db.scalar(select(PortalUser).where(PortalUser.email == "ana@test.com")) else None
+    ana = (
+        db.scalar(select(PortalUser).where(PortalUser.email == "ana@test.com"))
+        if db.scalar(select(PortalUser).where(PortalUser.email == "ana@test.com"))
+        else None
+    )
     make_user(client, email="ana@test.com", username="ana")
     ana = db.scalar(select(PortalUser).where(PortalUser.email == "ana@test.com"))
 

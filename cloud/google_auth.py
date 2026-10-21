@@ -8,6 +8,7 @@ token de sesión propio (cloud/security.py). La app nunca ve secretos.
 Config (env): CT_GOOGLE_CLIENT_ID, CT_GOOGLE_CLIENT_SECRET (OAuth Web en
 Google Cloud Console) y CT_PUBLIC_URL (URL pública del portal).
 """
+
 import base64
 import hashlib
 import hmac
@@ -61,6 +62,7 @@ router = APIRouter(prefix="/api/run/auth/google", tags=["Run"])
 
 # ── Helpers puros (testeables) ────────────────────────────────────────────────
 
+
 def valid_app_redirect(url: str) -> bool:
     """Destinos de retorno permitidos tras el login con Google:
     - deep link de la app móvil (exp/exps/chronotrackrun),
@@ -90,8 +92,7 @@ def _hash_nonce(nonce: str) -> str:
     return hashlib.sha256(nonce.encode()).hexdigest()[:32]
 
 
-def make_state(app_redirect: str, now: Optional[float] = None,
-               browser_nonce: Optional[str] = None) -> str:
+def make_state(app_redirect: str, now: Optional[float] = None, browser_nonce: Optional[str] = None) -> str:
     """state firmado (HMAC) que viaja a Google y vuelve: transporta el deep
     link de la app sin guardar estado en el servidor.
 
@@ -111,8 +112,7 @@ def make_state(app_redirect: str, now: Optional[float] = None,
     return f"{b64}.{sig}"
 
 
-def verify_state(state: str, now: Optional[float] = None,
-                 browser_nonce: Optional[str] = None) -> Optional[str]:
+def verify_state(state: str, now: Optional[float] = None, browser_nonce: Optional[str] = None) -> Optional[str]:
     """Devuelve el app_redirect si el state es válido y no venció; si no, None.
 
     Para el flujo web exige además que `browser_nonce` (la cookie) coincida con
@@ -131,16 +131,14 @@ def verify_state(state: str, now: Optional[float] = None,
             return None
         if is_web_redirect(redirect):
             esperado = payload.get("c")
-            if not esperado or not browser_nonce \
-                    or not hmac.compare_digest(esperado, _hash_nonce(browser_nonce)):
+            if not esperado or not browser_nonce or not hmac.compare_digest(esperado, _hash_nonce(browser_nonce)):
                 return None
         return redirect
     except Exception:
         return None
 
 
-def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str],
-                       picture: Optional[str]) -> PortalUser:
+def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str], picture: Optional[str]) -> PortalUser:
     """Busca por google_id; si no, vincula por email (cuenta de portal
     existente); si no, crea la cuenta. Devuelve el usuario."""
     user = db.scalar(select(PortalUser).where(PortalUser.google_id == sub))
@@ -202,13 +200,15 @@ def _decode_jwt_payload(id_token: str) -> dict:
 def exchange_code(code: str) -> dict:
     """Canjea el authorization code por el id_token en Google y devuelve sus
     claims (sub, email, name, picture...). Se monkeypatchea en tests."""
-    body = urllib.parse.urlencode({
-        "code": code,
-        "client_id": GOOGLE_CLIENT_ID,
-        "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": f"{PUBLIC_URL}/api/run/auth/google/callback",
-        "grant_type": "authorization_code",
-    }).encode()
+    body = urllib.parse.urlencode(
+        {
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": f"{PUBLIC_URL}/api/run/auth/google/callback",
+            "grant_type": "authorization_code",
+        }
+    ).encode()
     req = urllib.request.Request("https://oauth2.googleapis.com/token", data=body, method="POST")
     with urllib.request.urlopen(req, timeout=15) as resp:
         data = json.loads(resp.read())
@@ -222,6 +222,7 @@ def _app_url(app_redirect: str, **params: str) -> str:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/start")
 def google_start(app_redirect: str):
     """Arranca el login. En el flujo web deja una cookie con un nonce que el
@@ -234,24 +235,34 @@ def google_start(app_redirect: str):
     if not valid_app_redirect(app_redirect):
         raise HTTPException(400, "app_redirect inválido")
     nonce = secrets.token_urlsafe(24) if is_web_redirect(app_redirect) else None
-    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": f"{PUBLIC_URL}/api/run/auth/google/callback",
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": make_state(app_redirect, browser_nonce=nonce),
-        "prompt": "select_account",
-    })
+    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(
+        {
+            "client_id": GOOGLE_CLIENT_ID,
+            "redirect_uri": f"{PUBLIC_URL}/api/run/auth/google/callback",
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": make_state(app_redirect, browser_nonce=nonce),
+            "prompt": "select_account",
+        }
+    )
     resp = RedirectResponse(auth_url, status_code=302)
     if nonce:
-        resp.set_cookie(NONCE_COOKIE, nonce, max_age=STATE_TTL_S, path=_COOKIE_PATH,
-                        httponly=True, samesite="lax", secure=_COOKIE_SECURE)
+        resp.set_cookie(
+            NONCE_COOKIE,
+            nonce,
+            max_age=STATE_TTL_S,
+            path=_COOKIE_PATH,
+            httponly=True,
+            samesite="lax",
+            secure=_COOKIE_SECURE,
+        )
     return resp
 
 
 @router.get("/callback")
-def google_callback(request: Request, state: str, code: Optional[str] = None,
-                    error: Optional[str] = None, db: Session = Depends(get_db)):
+def google_callback(
+    request: Request, state: str, code: Optional[str] = None, error: Optional[str] = None, db: Session = Depends(get_db)
+):
     app_redirect = verify_state(state, browser_nonce=request.cookies.get(NONCE_COOKIE))
     if not app_redirect:
         raise HTTPException(400, "state inválido o vencido; volvé a intentar el login")
@@ -266,8 +277,11 @@ def google_callback(request: Request, state: str, code: Optional[str] = None,
     if claims.get("email_verified") is False:
         return RedirectResponse(_app_url(app_redirect, error="email_no_verificado"), status_code=302)
     user = upsert_google_user(
-        db, sub=str(claims["sub"]), email=claims["email"],
-        name=claims.get("name"), picture=claims.get("picture"),
+        db,
+        sub=str(claims["sub"]),
+        email=claims["email"],
+        name=claims.get("name"),
+        picture=claims.get("picture"),
     )
     # iat nunca antes del corte de sesiones (al vincular Google se pone en
     # ahora+1): si no, el token recién emitido nacería inválido.

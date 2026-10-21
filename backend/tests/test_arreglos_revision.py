@@ -1,4 +1,5 @@
 """Regresiones de la revisión de pérdida de datos (rama arreglos-revision)."""
+
 import asyncio
 import csv
 import io
@@ -28,6 +29,7 @@ def _asignar(client, race_id, cap_id, bib):
 
 # ── 1. Captura por HTTP (respaldo del WebSocket) ─────────────────────────────
 
+
 def test_captura_http_respeta_la_demora_del_cliente(client):
     race = make_race(client)
     antes = time.time_ns()
@@ -37,6 +39,7 @@ def test_captura_http_respeta_la_demora_del_cliente(client):
 
 
 # ── 2. ERROR por WebSocket con la captura ────────────────────────────────────
+
 
 def test_ws_error_incluye_capture_id(client):
     race = make_race(client)
@@ -53,6 +56,7 @@ def test_ws_error_incluye_capture_id(client):
 
 # ── 3. No se captura en carreras finalizadas ─────────────────────────────────
 
+
 def test_captura_rechazada_en_carrera_finalizada(client):
     race = make_race(client)
     client.patch(f"{API}/races/{race['id']}", json={"status": "FINISHED"})
@@ -62,6 +66,7 @@ def test_captura_rechazada_en_carrera_finalizada(client):
 
 
 # ── 5. results trae capture_id (deshacer tras recargar) ─────────────────────
+
 
 def test_results_trae_capture_id_y_permite_deshacer(client):
     race = make_race(client)
@@ -79,6 +84,7 @@ def test_results_trae_capture_id_y_permite_deshacer(client):
 
 
 # ── 6. Tiempo bruto / sin largada ────────────────────────────────────────────
+
 
 def _csv(client, race_id):
     rows = list(csv.reader(io.StringIO(client.get(f"{API}/races/{race_id}/export/csv").text)))
@@ -113,8 +119,15 @@ def test_csv_sin_largada_no_muestra_numeros_absurdos(client):
 
 def test_email_sin_largada_muestra_hora_de_llegada():
     html = email_service.build_result_email(
-        runner_name="Ana", race_name="X", race_date=None, location=None, distance_km=10,
-        net_time_ns=None, finish_time_ns=time.time_ns(), position=1, category=None,
+        runner_name="Ana",
+        race_name="X",
+        race_date=None,
+        location=None,
+        distance_km=10,
+        net_time_ns=None,
+        finish_time_ns=time.time_ns(),
+        position=1,
+        category=None,
     )
     assert "Hora de llegada" in html
     assert "4970" not in html and "4980" not in html  # nada de horas epoch
@@ -130,6 +143,7 @@ def test_patch_planned_a_active_sin_largada_rechazado(client):
 
 
 # ── 7. Largada: demora del click, corrección y por distancia ─────────────────
+
 
 def test_largada_toma_el_instante_del_click(client):
     race = make_race(client)
@@ -194,7 +208,9 @@ def test_largada_por_distancia(client):
     assert res["10"]["position"] == 1 and res["21"]["position"] == 1
 
     # Corregir sólo la de 10K no toca la de 21K
-    r = client.post(f"{API}/races/{race['id']}/start/adjust", json={"distance_km": 10.0, "start_ns": s10 - 1_000_000_000})
+    r = client.post(
+        f"{API}/races/{race['id']}/start/adjust", json={"distance_km": 10.0, "start_ns": s10 - 1_000_000_000}
+    )
     assert r.status_code == 200, r.text
     res = {r["bib_number"]: r for r in client.get(f"{API}/races/{race['id']}/results").json()["results"]}
     assert res["10"]["net_time_ns"] == c1["captured_ns"] - s10 + 1_000_000_000
@@ -242,6 +258,7 @@ def test_borrar_carrera_con_largadas_por_distancia(client):
 
 # ── 8. source_id estable por instalación ────────────────────────────────────
 
+
 def _db_sql(sql, params=()):
     con = sqlite3.connect(str(DB_PATH))
     try:
@@ -272,6 +289,7 @@ def test_migracion_conserva_ct_race_id_en_carreras_viejas(client):
         await init_db()
         await init_db()  # idempotente
         await engine.dispose()
+
     asyncio.run(migrar_dos_veces())
 
     assert _db_sql("SELECT cloud_source_id FROM races WHERE id=?", (race["id"],))[0][0] == f"ct-race-{race['id']}"
@@ -280,25 +298,32 @@ def test_migracion_conserva_ct_race_id_en_carreras_viejas(client):
 
 class _PortalFalso:
     """Reemplaza urllib.request.urlopen y guarda lo que se publicó."""
+
     def __init__(self):
         self.payloads = []
 
     def __call__(self, req, timeout=None):
         self.payloads.append((req.full_url, json.loads(req.data) if req.data else None))
-        portal = self
 
         class _Resp:
             status = 200
+
             def read(self_inner):
                 return json.dumps({"code": "ABC123", "published_results": 1}).encode()
-            def __enter__(self_inner): return self_inner
-            def __exit__(self_inner, *a): return False
+
+            def __enter__(self_inner):
+                return self_inner
+
+            def __exit__(self_inner, *a):
+                return False
+
         return _Resp()
 
 
 @pytest.fixture
 def portal(monkeypatch):
     from backend.api import routes
+
     falso = _PortalFalso()
     monkeypatch.setattr(routes.cloud_config, "load_config", lambda: {"url": "https://portal.test", "api_key": "k"})
     monkeypatch.setattr(routes.urllib.request, "urlopen", falso)
@@ -347,8 +372,10 @@ def test_despublicar_al_borrar_usa_cloud_source_id(client, portal):
 
 # ── 10. Doble asignación concurrente / capturas de otra carrera ──────────────
 
+
 def test_asignacion_concurrente_del_mismo_dorsal(client, monkeypatch):
     from sqlalchemy.ext.asyncio import AsyncSession
+
     commit_original = AsyncSession.commit
 
     async def commit_lento(self):
@@ -374,6 +401,7 @@ def test_asignacion_concurrente_del_mismo_dorsal(client, monkeypatch):
                     return "ok"
                 except ValueError:
                     return "rechazada"
+
         try:
             return await asyncio.gather(asignar(c1["id"]), asignar(c2["id"]))
         finally:
@@ -382,6 +410,7 @@ def test_asignacion_concurrente_del_mismo_dorsal(client, monkeypatch):
 
     # El engine del TestClient tiene su lock atado a otro loop: usar uno nuevo.
     from backend.services import timing_engine
+
     timing_engine.reset_engines()
     assert sorted(asyncio.run(dos_a_la_vez())) == ["ok", "rechazada"]
     assert client.get(f"{API}/races/{race['id']}/results").json()["total_finishers"] == 1
@@ -402,6 +431,7 @@ def test_no_se_opera_una_captura_de_otra_carrera(client):
 
 # ── 14. Import de inscriptos ─────────────────────────────────────────────────
 
+
 def _importar(client, race_id, nombre, contenido: bytes):
     return client.post(f"{API}/races/{race_id}/import", files={"file": (nombre, contenido)})
 
@@ -409,11 +439,7 @@ def _importar(client, race_id, nombre, contenido: bytes):
 def test_import_distancias_con_coma_y_sufijo(client):
     race = make_race(client)
     texto = (
-        "dorsal,nombre,apellido,distancia\n"
-        "1,Ana,Gomez,\"21,1\"\n"
-        "2,Beto,Lopez,10K\n"
-        "3,Caro,Diaz,5 km\n"
-        "4,Dani,Paz,media\n"
+        'dorsal,nombre,apellido,distancia\n1,Ana,Gomez,"21,1"\n2,Beto,Lopez,10K\n3,Caro,Diaz,5 km\n4,Dani,Paz,media\n'
     )
     r = _importar(client, race["id"], "inscriptos.csv", texto.encode())
     assert r.status_code == 200, r.text

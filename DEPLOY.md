@@ -46,7 +46,7 @@ git push -u origin main
 3. Conectá tu repo `chronotrack` (Render pedirá permiso para leer tu GitHub privado).
 4. Render detecta el archivo **`render.yaml`** y muestra el servicio `chronotrack-portal`.
 5. Confirmá. Render va a:
-   - Instalar dependencias (`pip install -r cloud/requirements.txt`)
+   - Instalar dependencias (`pip install -r cloud/requirements.lock`)
    - Crear el disco persistente de 1 GB en `/var/data`
    - Generar automáticamente `CT_PUBLISH_KEY` y `CT_CLOUD_SECRET`
    - Levantar el portal
@@ -244,7 +244,7 @@ Render permite tomar snapshots del disco. Para un respaldo manual podés usar el
 ### Migrar a Postgres en el futuro
 El código usa SQLAlchemy genérico. Para escalar, podés crear un Postgres en Render
 y cambiar `CT_CLOUD_DB` por la URL de Postgres (`postgresql+psycopg://...`),
-agregando `psycopg[binary]` a `cloud/requirements.txt`. Sin reescribir lógica.
+agregando `psycopg[binary]` a `cloud/requirements.txt` (y regenerando el lock). Sin reescribir lógica.
 
 ### Git: inicializar manualmente (si hiciera falta)
 ```bash

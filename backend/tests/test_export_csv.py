@@ -1,4 +1,5 @@
 """El CSV de resultados: las filas DNS/DNF/DQ deben respetar las columnas del encabezado."""
+
 import csv
 import io
 

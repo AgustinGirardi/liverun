@@ -1,5 +1,5 @@
 /** Anillo de progreso (SVG) que se llena con animación al montar o al cambiar. */
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 
 import Svg, { Circle } from 'react-native-svg';
@@ -23,7 +23,7 @@ export function Ring({ progress, size = 96, stroke = 9, track, color, center, su
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const target = Math.max(0, Math.min(1, progress));
-  const anim = useRef(new Animated.Value(0)).current;
+  const [anim] = useState(() => new Animated.Value(0));
   const reduced = useReducedMotion();
 
   useEffect(() => {

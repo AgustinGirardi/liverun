@@ -1,6 +1,7 @@
 """Regresiones de la API de Run y del portal (revisión): validación de
 actividades, fechas en hora argentina, 'Z' en los datetimes, reclamos al
 republicar y arranque por lifespan."""
+
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -16,23 +17,32 @@ def _ahora():
 
 
 def _crear(client, h, uuid="u-1", started=None, dur=1500, dist=5000.0):
-    return client.post("/api/run/activities", headers=h, json={
-        "client_uuid": uuid,
-        "started_at": (started or _ahora() - timedelta(hours=1)).isoformat() + "Z",
-        "duration_s": dur, "distance_m": dist,
-    })
+    return client.post(
+        "/api/run/activities",
+        headers=h,
+        json={
+            "client_uuid": uuid,
+            "started_at": (started or _ahora() - timedelta(hours=1)).isoformat() + "Z",
+            "duration_s": dur,
+            "distance_m": dist,
+        },
+    )
 
 
 # ── 8. Actividades creíbles ───────────────────────────────────────────────────
 
-@pytest.mark.parametrize("kw, texto", [
-    ({"dur": 1, "dist": 400_000.0}, "corta"),
-    ({"dur": 3600, "dist": 101_000.0}, "100 km"),
-    ({"dur": 600, "dist": 5000.0}, "ritmo"),                  # 2:00 min/km
-    ({"dur": 49 * 3600, "dist": 1000.0}, "48 horas"),
-    ({"started": datetime(2099, 1, 1)}, "futuro"),
-    ({"started": datetime(2020, 1, 1)}, "más de un año"),
-])
+
+@pytest.mark.parametrize(
+    "kw, texto",
+    [
+        ({"dur": 1, "dist": 400_000.0}, "corta"),
+        ({"dur": 3600, "dist": 101_000.0}, "100 km"),
+        ({"dur": 600, "dist": 5000.0}, "ritmo"),  # 2:00 min/km
+        ({"dur": 49 * 3600, "dist": 1000.0}, "48 horas"),
+        ({"started": datetime(2099, 1, 1)}, "futuro"),
+        ({"started": datetime(2020, 1, 1)}, "más de un año"),
+    ],
+)
 def test_actividad_trucha_da_422_en_castellano(client, kw, texto):
     h = make_user(client)
     r = _crear(client, h, **kw)
@@ -54,13 +64,18 @@ def test_tope_diario(client):
     # Mediodía argentino de ayer: las cuatro caen el mismo día.
     base = run.inicio_dia_ar_utc(run.hoy_ar() - timedelta(days=1)) + timedelta(hours=12)
     for i in range(3):
-        assert _crear(client, h, uuid=f"d{i}", started=base + timedelta(minutes=i),
-                      dur=5 * 3600, dist=45_000.0).status_code == 200
+        assert (
+            _crear(
+                client, h, uuid=f"d{i}", started=base + timedelta(minutes=i), dur=5 * 3600, dist=45_000.0
+            ).status_code
+            == 200
+        )
     r = _crear(client, h, uuid="d3", started=base + timedelta(minutes=4), dur=5 * 3600, dist=20_000.0)
     assert r.status_code == 422 and "por día" in r.json()["detail"]
 
 
 # ── 9. Hora argentina y 'Z' ───────────────────────────────────────────────────
+
 
 def test_fecha_ar_de_un_domingo_a_la_noche():
     # Domingo 20/9/2026 22:00 en Argentina = lunes 21/9 01:00 UTC.
@@ -111,15 +126,21 @@ def test_datetimes_salen_con_z(client):
 
 # ── 10. Republicar no pasa reclamos a otra persona ────────────────────────────
 
+
 def _res(bib, nombre):
-    return {"bib_number": bib, "full_name": nombre, "distance_km": 10.0,
-            "net_time_ns": 1_800_000_000_000, "position": 1, "status": "FINISHER"}
+    return {
+        "bib_number": bib,
+        "full_name": nombre,
+        "distance_km": 10.0,
+        "net_time_ns": 1_800_000_000_000,
+        "position": 1,
+        "status": "FINISHER",
+    }
 
 
 def _reclamar(client, code):
     h = make_user(client, email="ana@test.com", full_name="Ana Gomez")
-    r = client.post("/api/claim", headers=h,
-                    json={"code": code, "bib_number": "7", "last_name": "Gomez"})
+    r = client.post("/api/claim", headers=h, json={"code": code, "bib_number": "7", "last_name": "Gomez"})
     assert r.status_code == 200
     return h
 
@@ -149,26 +170,33 @@ def test_correccion_de_nombre_conserva_el_reclamo(client):
 
 # ── 13 + migración. Arranque por lifespan ─────────────────────────────────────
 
+
 def test_lifespan_corre_las_migraciones_y_agrega_granted_s(client):
     from cloud.db import engine
+
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE run_billing_payments"))
-        conn.execute(text(
-            "CREATE TABLE run_billing_payments (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
-            "mp_payment_id VARCHAR(64) NOT NULL UNIQUE, amount NUMERIC(12,2), status VARCHAR(20), "
-            "created_at DATETIME)"))
-        conn.execute(text("INSERT INTO run_billing_payments (user_id, mp_payment_id, status) "
-                          "VALUES (1, 'viejo', 'approved')"))
-    for _ in range(2):   # idempotente: dos arranques seguidos
+        conn.execute(
+            text(
+                "CREATE TABLE run_billing_payments (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
+                "mp_payment_id VARCHAR(64) NOT NULL UNIQUE, amount NUMERIC(12,2), status VARCHAR(20), "
+                "created_at DATETIME)"
+            )
+        )
+        conn.execute(
+            text("INSERT INTO run_billing_payments (user_id, mp_payment_id, status) VALUES (1, 'viejo', 'approved')")
+        )
+    for _ in range(2):  # idempotente: dos arranques seguidos
         with TestClient(run_app()) as c:
             assert c.get("/api/races").status_code == 200
     with engine.begin() as conn:
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(run_billing_payments)"))]
         filas = conn.execute(text("SELECT mp_payment_id, granted_s FROM run_billing_payments")).all()
     assert "granted_s" in cols
-    assert filas == [("viejo", None)]    # los datos existentes quedan intactos
+    assert filas == [("viejo", None)]  # los datos existentes quedan intactos
 
 
 def run_app():
     from cloud.main import app
+
     return app

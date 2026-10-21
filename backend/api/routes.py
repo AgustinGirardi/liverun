@@ -9,28 +9,53 @@ import os
 import sqlite3
 import shutil
 import tempfile
+import urllib.error
+import urllib.request
 import anyio
 from datetime import datetime, timezone
 from fastapi.responses import FileResponse
+from pydantic import BaseModel as _BaseModel
 from starlette.background import BackgroundTask
 
 from backend.core.database import get_db, AsyncSessionLocal, engine as db_engine, DB_PATH
 from backend.core import cloud_config
 from backend.services import email_service
 from backend.core.schemas import (
-    RunnerCreate, RunnerUpdate, RunnerOut,
-    RaceCreate, RaceUpdate, RaceOut,
-    RegistrationCreate, RegistrationOut, RegistrationStatusUpdate,
-    AssignBibRequest, AssignBibResponse,
-    BibLookupResponse, CaptureOut,
-    RaceResults, ResultRow, DNFRow,
-    WSEvent, WSEventType,
-    ImportResult, BulkDeleteRequest,
-    StartRaceRequest, AdjustStartRequest, CaptureRequest,
+    RunnerCreate,
+    RunnerUpdate,
+    RunnerOut,
+    RaceCreate,
+    RaceUpdate,
+    RaceOut,
+    RegistrationCreate,
+    RegistrationOut,
+    RegistrationStatusUpdate,
+    AssignBibRequest,
+    AssignBibResponse,
+    BibLookupResponse,
+    CaptureOut,
+    RaceResults,
+    ResultRow,
+    DNFRow,
+    WSEvent,
+    WSEventType,
+    ImportResult,
+    BulkDeleteRequest,
+    StartRaceRequest,
+    AdjustStartRequest,
+    CaptureRequest,
 )
 from backend.models.models import (
-    Runner, Race, Registration, TimestampCapture,
-    Split, CaptureStatus, Gender, RegistrationStatus, RaceStatus, RaceStart,
+    Runner,
+    Race,
+    Registration,
+    TimestampCapture,
+    Split,
+    CaptureStatus,
+    Gender,
+    RegistrationStatus,
+    RaceStatus,
+    RaceStart,
 )
 from backend.services.timing_engine import get_engine, manager, reset_engines, start_ns_para
 
@@ -39,25 +64,35 @@ router = APIRouter()
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _runner_out(r: Runner) -> RunnerOut:
     return RunnerOut(
-        id=r.id, first_name=r.first_name, last_name=r.last_name,
+        id=r.id,
+        first_name=r.first_name,
+        last_name=r.last_name,
         full_name=f"{r.first_name} {r.last_name}",
         email=r.email,
         dni=r.dni,
         birth_date=r.birth_date,
         gender=r.gender.value if r.gender else None,
-        category=r.category, club=r.club, created_at=r.created_at,
+        category=r.category,
+        club=r.club,
+        created_at=r.created_at,
     )
+
 
 def _source_id(race: Race) -> str:
     """Id con el que la carrera se publica en el portal (ver models.nuevo_cloud_source_id)."""
     return race.cloud_source_id or f"ct-race-{race.id}"
 
+
 def _reg_out(reg: Registration) -> RegistrationOut:
     return RegistrationOut(
-        id=reg.id, runner_id=reg.runner_id, race_id=reg.race_id,
-        bib_number=reg.bib_number, distance_km=reg.distance_km,
+        id=reg.id,
+        runner_id=reg.runner_id,
+        race_id=reg.race_id,
+        bib_number=reg.bib_number,
+        distance_km=reg.distance_km,
         status=reg.status.value if reg.status else "OK",
         runner=_runner_out(reg.runner),
         registered_at=reg.registered_at,
@@ -66,16 +101,18 @@ def _reg_out(reg: Registration) -> RegistrationOut:
 
 # ── Runners ───────────────────────────────────────────────────────────────────
 
+
 @router.get("/runners", response_model=list[RunnerOut], tags=["Runners"])
 async def list_runners(db: AsyncSession = Depends(get_db), search: Optional[str] = Query(None)):
     stmt = select(Runner).order_by(Runner.last_name, Runner.first_name)
     if search:
         stmt = stmt.where(
-            (Runner.first_name.ilike(f"%{search}%")) |
-            (Runner.last_name.ilike(f"%{search}%")) |
-            (Runner.dni.ilike(f"%{search}%"))
+            (Runner.first_name.ilike(f"%{search}%"))
+            | (Runner.last_name.ilike(f"%{search}%"))
+            | (Runner.dni.ilike(f"%{search}%"))
         )
     return [_runner_out(r) for r in (await db.execute(stmt)).scalars().all()]
+
 
 @router.post("/runners", response_model=RunnerOut, status_code=201, tags=["Runners"])
 async def create_runner(body: RunnerCreate, db: AsyncSession = Depends(get_db)):
@@ -84,6 +121,7 @@ async def create_runner(body: RunnerCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(runner)
     return _runner_out(runner)
+
 
 @router.patch("/runners/{runner_id}", response_model=RunnerOut, tags=["Runners"])
 async def update_runner(runner_id: int, body: RunnerUpdate, db: AsyncSession = Depends(get_db)):
@@ -96,14 +134,13 @@ async def update_runner(runner_id: int, body: RunnerUpdate, db: AsyncSession = D
     await db.refresh(runner)
     return _runner_out(runner)
 
+
 @router.delete("/runners/{runner_id}", status_code=204, tags=["Runners"])
 async def delete_runner(runner_id: int, db: AsyncSession = Depends(get_db)):
     runner = await db.get(Runner, runner_id)
     if not runner:
         raise HTTPException(404, "Runner not found")
-    reg_count = (await db.execute(
-        select(func.count()).where(Registration.runner_id == runner_id)
-    )).scalar_one()
+    reg_count = (await db.execute(select(func.count()).where(Registration.runner_id == runner_id))).scalar_one()
     if reg_count:
         raise HTTPException(
             409,
@@ -116,10 +153,12 @@ async def delete_runner(runner_id: int, db: AsyncSession = Depends(get_db)):
 
 # ── Races ─────────────────────────────────────────────────────────────────────
 
+
 @router.get("/races", response_model=list[RaceOut], tags=["Races"])
 async def list_races(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Race).order_by(Race.race_date.desc()))
     return result.scalars().all()
+
 
 @router.get("/races/{race_id}", response_model=RaceOut, tags=["Races"])
 async def get_race(race_id: int, db: AsyncSession = Depends(get_db)):
@@ -128,6 +167,7 @@ async def get_race(race_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(404, "Race not found")
     return race
 
+
 @router.post("/races", response_model=RaceOut, status_code=201, tags=["Races"])
 async def create_race(body: RaceCreate, db: AsyncSession = Depends(get_db)):
     race = Race(**body.model_dump())
@@ -135,6 +175,7 @@ async def create_race(body: RaceCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(race)
     return race
+
 
 @router.patch("/races/{race_id}", response_model=RaceOut, tags=["Races"])
 async def update_race(race_id: int, body: RaceUpdate, db: AsyncSession = Depends(get_db)):
@@ -147,9 +188,9 @@ async def update_race(race_id: int, body: RaceUpdate, db: AsyncSession = Depends
         # corregir") se permite siempre, aunque la carrera se haya corrido sin largada.
         if race.status == RaceStatus.PLANNED and not race.race_start_ns:
             raise HTTPException(400, "Para poner la carrera en curso registrá la largada desde Cronómetro.")
-        other = (await db.execute(
-            select(Race).where(Race.status == RaceStatus.ACTIVE, Race.id != race_id)
-        )).scalar_one_or_none()
+        other = (
+            await db.execute(select(Race).where(Race.status == RaceStatus.ACTIVE, Race.id != race_id))
+        ).scalar_one_or_none()
         if other:
             raise HTTPException(400, f'Ya hay una carrera activa: "{other.name}". Finalizala antes de activar otra.')
     for k, v in body.model_dump(exclude_unset=True).items():
@@ -157,6 +198,7 @@ async def update_race(race_id: int, body: RaceUpdate, db: AsyncSession = Depends
     await db.commit()
     await db.refresh(race)
     return race
+
 
 @router.post("/races/{race_id}/duplicate", response_model=RaceOut, status_code=201, tags=["Races"])
 async def duplicate_race(race_id: int, db: AsyncSession = Depends(get_db)):
@@ -176,17 +218,17 @@ async def duplicate_race(race_id: int, db: AsyncSession = Depends(get_db)):
     db.add(new_race)
     await db.flush()  # necesario para obtener new_race.id
 
-    regs = (await db.execute(
-        select(Registration).where(Registration.race_id == race_id)
-    )).scalars().all()
+    regs = (await db.execute(select(Registration).where(Registration.race_id == race_id))).scalars().all()
     for r in regs:
-        db.add(Registration(
-            runner_id=r.runner_id,
-            race_id=new_race.id,
-            bib_number=r.bib_number,
-            distance_km=r.distance_km,
-            status=RegistrationStatus.OK,
-        ))
+        db.add(
+            Registration(
+                runner_id=r.runner_id,
+                race_id=new_race.id,
+                bib_number=r.bib_number,
+                distance_km=r.distance_km,
+                status=RegistrationStatus.OK,
+            )
+        )
 
     await db.commit()
     await db.refresh(new_race)
@@ -231,6 +273,7 @@ async def delete_race(race_id: int, db: AsyncSession = Depends(get_db)):
 
 # ── Registrations ─────────────────────────────────────────────────────────────
 
+
 @router.get("/races/{race_id}/registrations", response_model=list[RegistrationOut], tags=["Registrations"])
 async def list_registrations(race_id: int, db: AsyncSession = Depends(get_db)):
     stmt = (
@@ -241,6 +284,7 @@ async def list_registrations(race_id: int, db: AsyncSession = Depends(get_db)):
     )
     return [_reg_out(r) for r in (await db.execute(stmt)).scalars().all()]
 
+
 @router.post("/races/{race_id}/registrations", response_model=RegistrationOut, status_code=201, tags=["Registrations"])
 async def create_registration(race_id: int, body: RegistrationCreate, db: AsyncSession = Depends(get_db)):
     race = await db.get(Race, race_id)
@@ -248,9 +292,11 @@ async def create_registration(race_id: int, body: RegistrationCreate, db: AsyncS
         raise HTTPException(404, "Race not found")
     if race.status == RaceStatus.FINISHED:
         raise HTTPException(409, "La carrera está finalizada. No se pueden agregar inscripciones.")
-    existing = (await db.execute(
-        select(Registration).where(Registration.race_id == race_id, Registration.bib_number == body.bib_number)
-    )).scalar_one_or_none()
+    existing = (
+        await db.execute(
+            select(Registration).where(Registration.race_id == race_id, Registration.bib_number == body.bib_number)
+        )
+    ).scalar_one_or_none()
     if existing:
         raise HTTPException(409, f"Dorsal {body.bib_number} ya está registrado en esta carrera")
     data = body.model_dump()
@@ -258,13 +304,18 @@ async def create_registration(race_id: int, body: RegistrationCreate, db: AsyncS
     reg = Registration(race_id=race_id, **data)
     db.add(reg)
     await db.commit()
-    reg = (await db.execute(
-        select(Registration).where(Registration.id == reg.id).options(selectinload(Registration.runner))
-    )).scalar_one()
+    reg = (
+        await db.execute(
+            select(Registration).where(Registration.id == reg.id).options(selectinload(Registration.runner))
+        )
+    ).scalar_one()
     return _reg_out(reg)
 
+
 @router.patch("/races/{race_id}/registrations/{reg_id}/status", response_model=RegistrationOut, tags=["Registrations"])
-async def update_registration_status(race_id: int, reg_id: int, body: RegistrationStatusUpdate, db: AsyncSession = Depends(get_db)):
+async def update_registration_status(
+    race_id: int, reg_id: int, body: RegistrationStatusUpdate, db: AsyncSession = Depends(get_db)
+):
     race = await db.get(Race, race_id)
     if race and race.status == RaceStatus.FINISHED:
         raise HTTPException(409, "La carrera está finalizada. No se pueden modificar inscripciones.")
@@ -281,6 +332,7 @@ async def update_registration_status(race_id: int, reg_id: int, body: Registrati
     await db.refresh(reg)
     return _reg_out(reg)
 
+
 @router.delete("/races/{race_id}/registrations/{reg_id}", status_code=204, tags=["Registrations"])
 async def delete_registration(race_id: int, reg_id: int, db: AsyncSession = Depends(get_db)):
     race = await db.get(Race, race_id)
@@ -293,22 +345,30 @@ async def delete_registration(race_id: int, reg_id: int, db: AsyncSession = Depe
     await db.delete(reg)
     await db.commit()
 
+
 @router.post("/races/{race_id}/registrations/bulk-delete", status_code=204, tags=["Registrations"])
 async def bulk_delete_registrations(race_id: int, body: BulkDeleteRequest, db: AsyncSession = Depends(get_db)):
-    valid = (await db.execute(
-        select(Registration.id).where(
-            Registration.id.in_(body.ids),
-            Registration.race_id == race_id,
+    valid = (
+        (
+            await db.execute(
+                select(Registration.id).where(
+                    Registration.id.in_(body.ids),
+                    Registration.race_id == race_id,
+                )
+            )
         )
-    )).scalars().all()
+        .scalars()
+        .all()
+    )
     if not valid:
         raise HTTPException(404, "No se encontraron inscripciones válidas")
     await db.execute(sa_delete(Split).where(Split.registration_id.in_(valid)))
     await db.execute(sa_delete(Registration).where(Registration.id.in_(valid)))
     await db.commit()
 
+
 def _parse_distancia(raw: Optional[str]) -> Optional[float]:
-    """"21,1" → 21.1, "10K" / "10 km" / "42.195km" → número. None si no se entiende."""
+    """ "21,1" → 21.1, "10K" / "10 km" / "42.195km" → número. None si no se entiende."""
     if not raw:
         return None
     t = raw.strip().lower().replace(" ", "")
@@ -340,10 +400,13 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
     fname = (file.filename or "").lower()
     if fname.endswith(".xls"):
         # openpyxl no lee el formato viejo de Excel (97-2003).
-        raise HTTPException(400, "El formato .xls (Excel 97-2003) no está soportado. "
-                                 "Abrilo en Excel y guardalo como .xlsx o .csv.")
+        raise HTTPException(
+            400, "El formato .xls (Excel 97-2003) no está soportado. Abrilo en Excel y guardalo como .xlsx o .csv."
+        )
     if fname.endswith(".xlsx"):
-        import openpyxl, io as _io
+        import openpyxl
+        import io as _io
+
         wb = openpyxl.load_workbook(_io.BytesIO(content), read_only=True, data_only=True)
         ws = wb.active
         headers = None
@@ -353,7 +416,9 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
                 continue
             rows.append(dict(zip(headers, [str(v).strip() if v is not None else "" for v in row])))
     else:
-        import csv, io as _io
+        import csv
+        import io as _io
+
         text = content.decode("utf-8-sig", errors="replace")
         reader = csv.DictReader(_io.StringIO(text))
         rows = [{k.strip().lower(): (v or "").strip() for k, v in r.items()} for r in reader]
@@ -368,9 +433,9 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
     created = skipped = 0
     seen_bibs: set[str] = set()
     for i, row in enumerate(rows, 1):
-        bib   = col(row, "dorsal", "bib", "bib_number", "numero", "nro")
+        bib = col(row, "dorsal", "bib", "bib_number", "numero", "nro")
         first = col(row, "nombre", "first_name", "name")
-        last  = col(row, "apellido", "last_name", "surname")
+        last = col(row, "apellido", "last_name", "surname")
 
         if not bib or not first or not last:
             errors.append(f"Fila {i}: faltan campos obligatorios (dorsal, nombre, apellido)")
@@ -382,20 +447,22 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
             errors.append(f"Fila {i}: dorsal {bib} duplicado dentro del archivo")
             continue
 
-        if (await db.execute(
-            select(Registration.id).where(Registration.race_id == race_id, Registration.bib_number == bib)
-        )).first():
+        if (
+            await db.execute(
+                select(Registration.id).where(Registration.race_id == race_id, Registration.bib_number == bib)
+            )
+        ).first():
             skipped += 1
             continue
 
         seen_bibs.add(bib)
 
-        category      = col(row, "categoria", "category", "cat")
-        club          = col(row, "club", "equipo", "team")
-        email         = col(row, "email", "correo", "mail", "e-mail")
-        dni           = col(row, "dni", "documento", "cedula")
-        gender_raw    = col(row, "genero", "gender", "sexo")
-        distance_raw  = col(row, "distancia", "distance", "distance_km", "km", "dist")
+        category = col(row, "categoria", "category", "cat")
+        club = col(row, "club", "equipo", "team")
+        email = col(row, "email", "correo", "mail", "e-mail")
+        dni = col(row, "dni", "documento", "cedula")
+        gender_raw = col(row, "genero", "gender", "sexo")
+        distance_raw = col(row, "distancia", "distance", "distance_km", "km", "dist")
         distance_km = _parse_distancia(distance_raw)
         if distance_raw and distance_km is None:
             warnings.append(f"Fila {i} (dorsal {bib}): distancia '{distance_raw}' no reconocida; quedó sin distancia")
@@ -408,26 +475,43 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
         # Reutilizar corredor existente por nombre o DNI
         existing_runner = None
         if dni:
-            existing_runner = (await db.execute(
-                select(Runner).where(func.lower(Runner.dni) == dni.lower()).order_by(Runner.id)
-            )).scalars().first()
+            existing_runner = (
+                (await db.execute(select(Runner).where(func.lower(Runner.dni) == dni.lower()).order_by(Runner.id)))
+                .scalars()
+                .first()
+            )
         if not existing_runner:
-            existing_runner = (await db.execute(
-                select(Runner).where(
-                    func.lower(Runner.first_name) == first.lower(),
-                    func.lower(Runner.last_name)  == last.lower(),
-                ).order_by(Runner.id)
-            )).scalars().first()
+            existing_runner = (
+                (
+                    await db.execute(
+                        select(Runner)
+                        .where(
+                            func.lower(Runner.first_name) == first.lower(),
+                            func.lower(Runner.last_name) == last.lower(),
+                        )
+                        .order_by(Runner.id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
 
         if existing_runner:
             runner = existing_runner
-            if gender_enum and not runner.gender:   runner.gender   = gender_enum
-            if category    and not runner.category: runner.category = category
-            if club        and not runner.club:     runner.club     = club
-            if dni         and not runner.dni:      runner.dni      = dni
-            if email       and not runner.email:    runner.email    = email
+            if gender_enum and not runner.gender:
+                runner.gender = gender_enum
+            if category and not runner.category:
+                runner.category = category
+            if club and not runner.club:
+                runner.club = club
+            if dni and not runner.dni:
+                runner.dni = dni
+            if email and not runner.email:
+                runner.email = email
         else:
-            runner = Runner(first_name=first, last_name=last, category=category, club=club, gender=gender_enum, dni=dni, email=email)
+            runner = Runner(
+                first_name=first, last_name=last, category=category, club=club, gender=gender_enum, dni=dni, email=email
+            )
             db.add(runner)
             await db.flush()
 
@@ -440,20 +524,24 @@ async def import_runners(race_id: int, file: UploadFile = File(...), db: AsyncSe
 
 # ── Timing ────────────────────────────────────────────────────────────────────
 
+
 async def _rechazar_llegadas_antes_de_largada(db: AsyncSession, race: Race, mensaje: str):
     """Ninguna llegada ya asignada puede quedar antes de su largada (tiempo negativo).
     Se llama con la largada ya cambiada en la sesión; si falla, deshace el cambio."""
-    asignadas = (await db.execute(
-        select(TimestampCapture.captured_ns, Registration.distance_km, Registration.bib_number)
-        .join(Split, Split.timestamp_id == TimestampCapture.id)
-        .join(Registration, Split.registration_id == Registration.id)
-        .where(TimestampCapture.race_id == race.id, TimestampCapture.status == CaptureStatus.ASSIGNED)
-    )).all()
+    asignadas = (
+        await db.execute(
+            select(TimestampCapture.captured_ns, Registration.distance_km, Registration.bib_number)
+            .join(Split, Split.timestamp_id == TimestampCapture.id)
+            .join(Registration, Split.registration_id == Registration.id)
+            .where(TimestampCapture.race_id == race.id, TimestampCapture.status == CaptureStatus.ASSIGNED)
+        )
+    ).all()
     for cap_ns, dist, bib in asignadas:
         st = start_ns_para(race, dist if dist is not None else race.distance_km)
         if st and cap_ns <= st:
             await db.rollback()
             raise HTTPException(400, mensaje.format(bib=bib))
+
 
 @router.post("/races/{race_id}/start", tags=["Timing"])
 async def start_race(race_id: int, body: Optional[StartRaceRequest] = None, db: AsyncSession = Depends(get_db)):
@@ -462,22 +550,27 @@ async def start_race(race_id: int, body: Optional[StartRaceRequest] = None, db: 
     El instante es el del click: la UI manda cuánto tardó el operador en
     confirmar (click_delay_ms) y se descuenta de la hora del servidor."""
     import time as _time
+
     now_ns = _time.time_ns()
     body = body or StartRaceRequest()
     start_ns = now_ns - body.click_delay_ms * 1_000_000
-    race  = await db.get(Race, race_id)
+    race = await db.get(Race, race_id)
     if not race:
         raise HTTPException(404, "Race not found")
     if race.status == RaceStatus.FINISHED:
         raise HTTPException(409, "La carrera está finalizada.")
     if body.distance_km is None:
         if race.race_start_ns:
-            raise HTTPException(400, "La carrera ya tiene una largada registrada. Si la hora está mal, usá «Corregir largada».")
+            raise HTTPException(
+                400, "La carrera ya tiene una largada registrada. Si la hora está mal, usá «Corregir largada»."
+            )
     elif any(round(s.distance_km, 3) == round(body.distance_km, 3) for s in race.starts):
-        raise HTTPException(400, f"La distancia {body.distance_km:g} km ya tiene largada. Si la hora está mal, usá «Corregir largada».")
-    other = (await db.execute(
-        select(Race).where(Race.status == RaceStatus.ACTIVE, Race.id != race_id)
-    )).scalars().first()
+        raise HTTPException(
+            400, f"La distancia {body.distance_km:g} km ya tiene largada. Si la hora está mal, usá «Corregir largada»."
+        )
+    other = (
+        (await db.execute(select(Race).where(Race.status == RaceStatus.ACTIVE, Race.id != race_id))).scalars().first()
+    )
     if other:
         raise HTTPException(400, f'Ya hay una carrera activa: "{other.name}". Finalizala antes de iniciar otra.')
     if body.distance_km is not None:
@@ -486,16 +579,31 @@ async def start_race(race_id: int, body: Optional[StartRaceRequest] = None, db: 
     # largada propia se miden desde ahí.
     if not race.race_start_ns:
         race.race_start_ns = start_ns
-    await _rechazar_llegadas_antes_de_largada(db, race, "El dorsal {bib} ya llegó antes de esta largada. Si la largada fue antes, usá «Corregir largada» con la hora real.")
+    await _rechazar_llegadas_antes_de_largada(
+        db,
+        race,
+        "El dorsal {bib} ya llegó antes de esta largada. Si la largada fue antes, usá «Corregir largada» con la hora real.",
+    )
     race.status = RaceStatus.ACTIVE
     await db.commit()
-    await manager.broadcast(WSEvent(
-        event=WSEventType.CAPTURE,
-        data={"type": "START", "race_start_ns": race.race_start_ns,
-              "start_ns": start_ns, "distance_km": body.distance_km},
-    ))
-    return {"race_start_ns": race.race_start_ns, "start_ns": start_ns,
-            "distance_km": body.distance_km, "message": "Largada registrada"}
+    await manager.broadcast(
+        WSEvent(
+            event=WSEventType.CAPTURE,
+            data={
+                "type": "START",
+                "race_start_ns": race.race_start_ns,
+                "start_ns": start_ns,
+                "distance_km": body.distance_km,
+            },
+        )
+    )
+    return {
+        "race_start_ns": race.race_start_ns,
+        "start_ns": start_ns,
+        "distance_km": body.distance_km,
+        "message": "Largada registrada",
+    }
+
 
 @router.post("/races/{race_id}/start/adjust", response_model=RaceOut, tags=["Timing"])
 async def adjust_start(race_id: int, body: AdjustStartRequest, db: AsyncSession = Depends(get_db)):
@@ -504,6 +612,7 @@ async def adjust_start(race_id: int, body: AdjustStartRequest, db: AsyncSession 
     Los tiempos netos no se guardan: se calculan contra la largada en cada
     lectura, así que corregirla recalcula todo lo ya asignado."""
     import time as _time
+
     race = await db.get(Race, race_id)
     if not race:
         raise HTTPException(404, "Race not found")
@@ -515,9 +624,11 @@ async def adjust_start(race_id: int, body: AdjustStartRequest, db: AsyncSession 
     if not race.race_start_ns:
         if body.distance_km is not None:
             raise HTTPException(400, "Cargá primero la hora de la largada general.")
-        other = (await db.execute(
-            select(Race).where(Race.status == RaceStatus.ACTIVE, Race.id != race_id)
-        )).scalars().first()
+        other = (
+            (await db.execute(select(Race).where(Race.status == RaceStatus.ACTIVE, Race.id != race_id)))
+            .scalars()
+            .first()
+        )
         if other:
             raise HTTPException(400, f'Ya hay una carrera activa: "{other.name}". Finalizala antes de iniciar otra.')
         race.status = RaceStatus.ACTIVE
@@ -531,12 +642,15 @@ async def adjust_start(race_id: int, body: AdjustStartRequest, db: AsyncSession 
         else:
             race.starts.append(RaceStart(distance_km=body.distance_km, start_ns=body.start_ns))
 
-    await _rechazar_llegadas_antes_de_largada(db, race, "Con esa hora, la llegada del dorsal {bib} quedaría antes de la largada. Revisá la hora.")
+    await _rechazar_llegadas_antes_de_largada(
+        db, race, "Con esa hora, la llegada del dorsal {bib} quedaría antes de la largada. Revisá la hora."
+    )
     await db.commit()
     await db.refresh(race)
     # Los clientes recargan la clasificación con los tiempos recalculados.
     await manager.broadcast(WSEvent(event=WSEventType.RESULTS_UPDATE, data={"race_id": race_id}))
     return race
+
 
 @router.post("/races/{race_id}/capture", response_model=CaptureOut, tags=["Timing"])
 async def manual_capture(race_id: int, body: Optional[CaptureRequest] = None, db: AsyncSession = Depends(get_db)):
@@ -546,12 +660,14 @@ async def manual_capture(race_id: int, body: Optional[CaptureRequest] = None, db
     except ValueError as e:
         raise HTTPException(409, str(e))
 
+
 @router.post("/races/{race_id}/captures/{capture_id}/assign", response_model=AssignBibResponse, tags=["Timing"])
 async def assign_bib(race_id: int, capture_id: int, body: AssignBibRequest, db: AsyncSession = Depends(get_db)):
     try:
         return await get_engine(race_id).assign_bib(db, capture_id, body.bib_number)
     except ValueError as e:
         raise HTTPException(400, str(e))
+
 
 @router.post("/races/{race_id}/captures/{capture_id}/undo", tags=["Timing"])
 async def undo_assign(race_id: int, capture_id: int, db: AsyncSession = Depends(get_db)):
@@ -560,12 +676,14 @@ async def undo_assign(race_id: int, capture_id: int, db: AsyncSession = Depends(
     except ValueError as e:
         raise HTTPException(400, str(e))
 
+
 @router.delete("/races/{race_id}/captures/{capture_id}", status_code=204, tags=["Timing"])
 async def discard_capture(race_id: int, capture_id: int, db: AsyncSession = Depends(get_db)):
     try:
         await get_engine(race_id).discard_capture(db, capture_id)
     except ValueError as e:
         raise HTTPException(400, str(e))
+
 
 @router.get("/races/{race_id}/captures", response_model=list[CaptureOut], tags=["Timing"])
 async def list_captures(race_id: int, status: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
@@ -578,12 +696,14 @@ async def list_captures(race_id: int, status: Optional[str] = Query(None), db: A
         stmt = stmt.where(TimestampCapture.status == status)
     return (await db.execute(stmt)).scalars().all()
 
+
 @router.get("/races/{race_id}/bib-lookup", response_model=BibLookupResponse, tags=["Timing"])
 async def bib_lookup(race_id: int, bib: str = Query(...), db: AsyncSession = Depends(get_db)):
     return await get_engine(race_id).bib_lookup(db, bib)
 
 
 # ── Results ───────────────────────────────────────────────────────────────────
+
 
 @router.get("/races/{race_id}/results", response_model=RaceResults, tags=["Results"])
 async def get_results(race_id: int, db: AsyncSession = Depends(get_db)):
@@ -599,30 +719,31 @@ async def get_results(race_id: int, db: AsyncSession = Depends(get_db)):
         .join(Runner, Registration.runner_id == Runner.id)
         .where(
             TimestampCapture.race_id == race_id,
-            TimestampCapture.status  == CaptureStatus.ASSIGNED,
-            Registration.status      == RegistrationStatus.OK,
+            TimestampCapture.status == CaptureStatus.ASSIGNED,
+            Registration.status == RegistrationStatus.OK,
         )
         .order_by(TimestampCapture.captured_ns)
     )
     rows = (await db.execute(stmt)).all()
 
     # DNS / DNF / DQ
-    dnf_rows = (await db.execute(
-        select(Registration, Runner)
-        .join(Runner, Registration.runner_id == Runner.id)
-        .where(
-            Registration.race_id == race_id,
-            Registration.status  != RegistrationStatus.OK,
+    dnf_rows = (
+        await db.execute(
+            select(Registration, Runner)
+            .join(Runner, Registration.runner_id == Runner.id)
+            .where(
+                Registration.race_id == race_id,
+                Registration.status != RegistrationStatus.OK,
+            )
+            .order_by(Registration.bib_number)
         )
-        .order_by(Registration.bib_number)
-    )).all()
+    ).all()
 
-    total_registered = (await db.execute(
-        select(func.count()).where(Registration.race_id == race_id)
-    )).scalar_one()
+    total_registered = (await db.execute(select(func.count()).where(Registration.race_id == race_id))).scalar_one()
 
     # Group finishers by distance and assign per-group positions
     from collections import defaultdict
+
     by_dist: dict[float, list] = defaultdict(list)
     for split, capture, registration, runner in rows:
         dist_key = registration.distance_km if registration.distance_km is not None else (race.distance_km or 0.0)
@@ -633,18 +754,20 @@ async def get_results(race_id: int, db: AsyncSession = Depends(get_db)):
         # Cada distancia se mide desde su propia largada (o la general).
         start_ns = start_ns_para(race, dist_key if dist_key != 0.0 else None)
         for pos_i, (split, capture, registration, runner) in enumerate(by_dist[dist_key]):
-            results.append(ResultRow(
-                position=pos_i + 1,
-                bib_number=registration.bib_number,
-                runner=_runner_out(runner),
-                capture_id=capture.id,
-                finish_time_ns=capture.captured_ns,
-                net_time_ns=(capture.captured_ns - start_ns) if start_ns else None,
-                gross_time_ns=(capture.captured_ns - race.race_start_ns) if race.race_start_ns else None,
-                category=runner.category,
-                club=runner.club,
-                distance_km=dist_key if dist_key != 0.0 else None,
-            ))
+            results.append(
+                ResultRow(
+                    position=pos_i + 1,
+                    bib_number=registration.bib_number,
+                    runner=_runner_out(runner),
+                    capture_id=capture.id,
+                    finish_time_ns=capture.captured_ns,
+                    net_time_ns=(capture.captured_ns - start_ns) if start_ns else None,
+                    gross_time_ns=(capture.captured_ns - race.race_start_ns) if race.race_start_ns else None,
+                    category=runner.category,
+                    club=runner.club,
+                    distance_km=dist_key if dist_key != 0.0 else None,
+                )
+            )
 
     # Misma distancia que los finishers (con el fallback a la de la carrera):
     # si no, al republicar un DNF/DNS cambia de distancia en el portal y el
@@ -672,16 +795,19 @@ async def get_results(race_id: int, db: AsyncSession = Depends(get_db)):
         distances=distances,
     )
 
+
 @router.get("/races/{race_id}/export/csv", tags=["Results"])
 async def export_csv(race_id: int, db: AsyncSession = Depends(get_db)):
     from fastapi.responses import StreamingResponse
-    import io, csv
+    import io
+    import csv
 
     data = await get_results(race_id, db)
 
     def fmt(ns):
         # Duraciones (neto / bruto). None = sin largada: celda vacía.
-        if ns is None: return ""
+        if ns is None:
+            return ""
         ms = ns // 1_000_000
         h, r = divmod(ms, 3_600_000)
         m, r = divmod(r, 60_000)
@@ -690,30 +816,63 @@ async def export_csv(race_id: int, db: AsyncSession = Depends(get_db)):
 
     def hora(ns):
         # finish_time_ns es un instante (epoch), no una duración: va como hora del día.
-        if not ns: return ""
+        if not ns:
+            return ""
         t = datetime.fromtimestamp(ns / 1_000_000_000)
         return t.strftime("%H:%M:%S.") + f"{t.microsecond // 10_000:02d}"
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Pos", "Distancia", "Dorsal", "Nombre", "DNI", "Categoria", "Club", "Tiempo Neto", "Tiempo Bruto", "Hora Llegada"])
+    writer.writerow(
+        [
+            "Pos",
+            "Distancia",
+            "Dorsal",
+            "Nombre",
+            "DNI",
+            "Categoria",
+            "Club",
+            "Tiempo Neto",
+            "Tiempo Bruto",
+            "Hora Llegada",
+        ]
+    )
     for row in data.results:
         dist_label = f"{row.distance_km} km" if row.distance_km else ""
-        writer.writerow([
-            row.position, dist_label, row.bib_number, row.runner.full_name, row.runner.dni or "",
-            row.category or "", row.club or "", fmt(row.net_time_ns), fmt(row.gross_time_ns),
-            hora(row.finish_time_ns),
-        ])
+        writer.writerow(
+            [
+                row.position,
+                dist_label,
+                row.bib_number,
+                row.runner.full_name,
+                row.runner.dni or "",
+                row.category or "",
+                row.club or "",
+                fmt(row.net_time_ns),
+                fmt(row.gross_time_ns),
+                hora(row.finish_time_ns),
+            ]
+        )
     if data.dnf_list:
         writer.writerow([])
         writer.writerow(["-- DNS / DNF / DQ --"])
         for row in data.dnf_list:
             dist_label = f"{row.distance_km} km" if row.distance_km else ""
             # Mismas columnas que el encabezado; el estado va en la columna "Pos".
-            writer.writerow([
-                row.status, dist_label, row.bib_number, row.runner.full_name, row.runner.dni or "",
-                row.category or "", row.club or "", "", "", "",
-            ])
+            writer.writerow(
+                [
+                    row.status,
+                    dist_label,
+                    row.bib_number,
+                    row.runner.full_name,
+                    row.runner.dni or "",
+                    row.category or "",
+                    row.club or "",
+                    "",
+                    "",
+                    "",
+                ]
+            )
 
     output.seek(0)
     return StreamingResponse(
@@ -724,6 +883,7 @@ async def export_csv(race_id: int, db: AsyncSession = Depends(get_db)):
 
 
 # ── Backup / Restore ──────────────────────────────────────────────────────────
+
 
 @router.get("/backup", tags=["Backup"])
 async def backup_db():
@@ -807,6 +967,7 @@ async def restore_db(file: UploadFile = File(...)):
     # la app no falla entre la restauración y el reinicio.
     try:
         from backend.core.database import init_db
+
         await init_db()
     except Exception:
         pass
@@ -814,10 +975,6 @@ async def restore_db(file: UploadFile = File(...)):
 
 
 # ── Cloud (portal público) ────────────────────────────────────────────────────
-
-from pydantic import BaseModel as _BaseModel
-import urllib.request
-import urllib.error
 
 
 class CloudConfigIn(_BaseModel):
@@ -880,9 +1037,7 @@ async def account_login(body: AccountLoginIn):
 @router.post("/account/register", tags=["Cuenta"])
 async def account_register(body: AccountLoginIn):
     try:
-        s = await anyio.to_thread.run_sync(
-            account_mod.register, body.email.strip(), body.password, body.full_name
-        )
+        s = await anyio.to_thread.run_sync(account_mod.register, body.email.strip(), body.password, body.full_name)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"email": s["email"], "full_name": s["full_name"]}
@@ -902,6 +1057,7 @@ async def account_google_start():
     url = account_mod.google_auth_url(redirect)
     try:
         import webbrowser
+
         webbrowser.open(url)
     except Exception:
         pass
@@ -909,8 +1065,9 @@ async def account_google_start():
 
 
 @router.get("/account/google/callback", response_class=HTMLResponse, tags=["Cuenta"])
-async def account_google_callback(token: Optional[str] = None, email: Optional[str] = None,
-                                  error: Optional[str] = None):
+async def account_google_callback(
+    token: Optional[str] = None, email: Optional[str] = None, error: Optional[str] = None
+):
     """Recibe el token del portal tras el login con Google y guarda la sesión.
     Devuelve una página simple que le dice al usuario que vuelva a ChronoTrack."""
     ok = False
@@ -920,21 +1077,24 @@ async def account_google_callback(token: Optional[str] = None, email: Optional[s
             ok = True
         except ValueError:
             ok = False
-    msg = ("¡Listo! Ya iniciaste sesión.<br>Podés cerrar esta pestaña y volver a ChronoTrack."
-           if ok else
-           "No se pudo completar el inicio de sesión.<br>Volvé a ChronoTrack e intentá de nuevo.")
+    msg = (
+        "¡Listo! Ya iniciaste sesión.<br>Podés cerrar esta pestaña y volver a ChronoTrack."
+        if ok
+        else "No se pudo completar el inicio de sesión.<br>Volvé a ChronoTrack e intentá de nuevo."
+    )
     color = "#00b483" if ok else "#e5484d"
     return f"""<!doctype html><meta charset="utf-8"><title>ChronoTrack</title>
 <body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
 background:#0d0f10;color:#e8eaeb;font-family:Arial,sans-serif;text-align:center">
-<div><div style="font-size:42px;margin-bottom:12px">{'✓' if ok else '✕'}</div>
+<div><div style="font-size:42px;margin-bottom:12px">{"✓" if ok else "✕"}</div>
 <div style="font-size:17px;font-weight:700;color:{color};line-height:1.6">{msg}</div></div>
 </body>"""
 
 
 def _email_hash(email):
     """sha256 del email normalizado (privacy-preserving). DEBE coincidir byte a byte
-    con cloud/main.py::_email_hash — si cambia uno, cambiar el otro."""
+    con cloud/security.py::email_hash; backend/tests/test_email_hash_contrato.py
+    lo verifica (el .exe no incluye cloud/, por eso no se importa de ahí)."""
     e = (email or "").strip().lower()
     if not e:
         return None
@@ -957,18 +1117,23 @@ async def _publish_event(race: Race, db: AsyncSession, cfg: dict) -> dict:
 
     No viaja ningún dato personal: sólo nombre, fecha, lugar, distancias
     ofrecidas, cupo, cuántos se anotaron y dónde inscribirse."""
-    dists = sorted({
-        d for (d,) in (await db.execute(
-            select(Registration.distance_km).where(
-                Registration.race_id == race.id, Registration.distance_km != None)  # noqa: E711
-            .distinct()
-        )).all()
-    })
+    dists = sorted(
+        {
+            d
+            for (d,) in (
+                await db.execute(
+                    select(Registration.distance_km)
+                    .where(Registration.race_id == race.id, Registration.distance_km != None)  # noqa: E711
+                    .distinct()
+                )
+            ).all()
+        }
+    )
     if not dists and race.distance_km:
         dists = [race.distance_km]
-    inscriptos = (await db.execute(
-        select(func.count()).select_from(Registration).where(Registration.race_id == race.id)
-    )).scalar_one()
+    inscriptos = (
+        await db.execute(select(func.count()).select_from(Registration).where(Registration.race_id == race.id))
+    ).scalar_one()
 
     payload = {
         "source_id": _source_id(race),
@@ -985,7 +1150,9 @@ async def _publish_event(race: Race, db: AsyncSession, cfg: dict) -> dict:
 
     def _post():
         req = urllib.request.Request(
-            url, data=body, method="POST",
+            url,
+            data=body,
+            method="POST",
             headers={"Content-Type": "application/json", "X-API-Key": cfg["api_key"]},
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -1045,39 +1212,46 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
     if sin_largada:
         dists = sorted({f"{r.distance_km:g} km" for r in sin_largada if r.distance_km})
         donde = f" ({', '.join(dists)})" if dists else ""
-        raise HTTPException(409, f"Hay {len(sin_largada)} llegada(s) sin largada registrada{donde}. "
-                                 "Registrá o corregí la largada en Cronómetro antes de publicar.")
+        raise HTTPException(
+            409,
+            f"Hay {len(sin_largada)} llegada(s) sin largada registrada{donde}. "
+            "Registrá o corregí la largada en Cronómetro antes de publicar.",
+        )
 
     def _clean_name(n: str) -> str:
         return " ".join((n or "").split())  # colapsa espacios dobles / extremos
 
     results = []
     for row in data.results:
-        results.append({
-            "bib_number": row.bib_number,
-            "full_name": _clean_name(row.runner.full_name),
-            "category": row.category,
-            "club": row.club,
-            "distance_km": row.distance_km,
-            "net_time_ns": row.net_time_ns,
-            "finish_time_ns": row.finish_time_ns,
-            "position": row.position,
-            "status": "FINISHER",
-            "email_hash": _email_hash(row.runner.email),
-        })
+        results.append(
+            {
+                "bib_number": row.bib_number,
+                "full_name": _clean_name(row.runner.full_name),
+                "category": row.category,
+                "club": row.club,
+                "distance_km": row.distance_km,
+                "net_time_ns": row.net_time_ns,
+                "finish_time_ns": row.finish_time_ns,
+                "position": row.position,
+                "status": "FINISHER",
+                "email_hash": _email_hash(row.runner.email),
+            }
+        )
     for row in data.dnf_list:
-        results.append({
-            "bib_number": row.bib_number,
-            "full_name": _clean_name(row.runner.full_name),
-            "category": row.category,
-            "club": row.club,
-            "distance_km": row.distance_km,
-            "net_time_ns": None,
-            "finish_time_ns": None,
-            "position": None,
-            "status": row.status,
-            "email_hash": _email_hash(row.runner.email),
-        })
+        results.append(
+            {
+                "bib_number": row.bib_number,
+                "full_name": _clean_name(row.runner.full_name),
+                "category": row.category,
+                "club": row.club,
+                "distance_km": row.distance_km,
+                "net_time_ns": None,
+                "finish_time_ns": None,
+                "position": None,
+                "status": row.status,
+                "email_hash": _email_hash(row.runner.email),
+            }
+        )
 
     payload = {
         "source_id": _source_id(race_obj),
@@ -1093,7 +1267,9 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
 
     def _post():
         req = urllib.request.Request(
-            url, data=body, method="POST",
+            url,
+            data=body,
+            method="POST",
             headers={"Content-Type": "application/json", "X-API-Key": cfg["api_key"]},
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -1126,6 +1302,7 @@ async def publish_race(race_id: int, db: AsyncSession = Depends(get_db)):
 
 # ── Email (envío de resultados) ───────────────────────────────────────────────
 
+
 class EmailConfigIn(_BaseModel):
     provider: Optional[str] = None
     api_key: Optional[str] = None
@@ -1152,8 +1329,10 @@ async def get_email_config():
 @router.put("/email/config", tags=["Email"])
 async def set_email_config(body: EmailConfigIn):
     cfg = email_service.save_config(
-        provider=body.provider, api_key=body.api_key,
-        from_email=body.from_email, from_name=body.from_name,
+        provider=body.provider,
+        api_key=body.api_key,
+        from_email=body.from_email,
+        from_name=body.from_name,
     )
     return {
         "provider": cfg["provider"],
@@ -1171,8 +1350,8 @@ async def send_test_email(body: EmailTestIn):
         raise HTTPException(400, "Configurá primero el proveedor de email (API key y remitente).")
     html = (
         '<div style="font-family:Arial,sans-serif;color:#13202b">'
-        '<h2>✅ ChronoTrack — email de prueba</h2>'
-        '<p>Si recibís este mensaje, el envío de emails está configurado correctamente.</p></div>'
+        "<h2>✅ ChronoTrack — email de prueba</h2>"
+        "<p>Si recibís este mensaje, el envío de emails está configurado correctamente.</p></div>"
     )
     ok, err = await anyio.to_thread.run_sync(
         lambda: email_service.send_email(body.to, "Prueba", "ChronoTrack — prueba de envío", html, cfg)
@@ -1205,11 +1384,17 @@ async def send_results_email(race_id: int, db: AsyncSession = Depends(get_db)):
             no_email += 1
             continue
         html = email_service.build_result_email(
-            runner_name=name, race_name=race.name, race_date=race_date,
-            location=race.location, distance_km=row.distance_km,
-            net_time_ns=row.net_time_ns, finish_time_ns=row.finish_time_ns,
-            position=row.position, category=row.category,
-            portal_url=portal_url, race_code=None,
+            runner_name=name,
+            race_name=race.name,
+            race_date=race_date,
+            location=race.location,
+            distance_km=row.distance_km,
+            net_time_ns=row.net_time_ns,
+            finish_time_ns=row.finish_time_ns,
+            position=row.position,
+            category=row.category,
+            portal_url=portal_url,
+            race_code=None,
         )
         subject = f"Tu resultado en {race.name}"
         ok, err = await anyio.to_thread.run_sync(
@@ -1231,6 +1416,7 @@ async def send_results_email(race_id: int, db: AsyncSession = Depends(get_db)):
 
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 
+
 @router.websocket("/ws/races/{race_id}/timing")
 async def timing_websocket(race_id: int, ws: WebSocket):
     await manager.connect(ws)
@@ -1247,8 +1433,9 @@ async def timing_websocket(race_id: int, ws: WebSocket):
             async with AsyncSessionLocal() as db:
                 try:
                     if action == "capture":
-                        await engine.capture(db, device=msg.get("device", "operator-1"),
-                                             delay_ms=int(msg.get("delay_ms") or 0))
+                        await engine.capture(
+                            db, device=msg.get("device", "operator-1"), delay_ms=int(msg.get("delay_ms") or 0)
+                        )
 
                     elif action == "assign":
                         await engine.assign_bib(
@@ -1265,11 +1452,16 @@ async def timing_websocket(race_id: int, ws: WebSocket):
 
                 except ValueError as e:
                     await db.rollback()
-                    await ws.send_text(WSEvent(event=WSEventType.ERROR, data={
-                        "message": str(e),
-                        "action": action,
-                        "capture_id": msg.get("capture_id"),
-                    }).model_dump_json())
+                    await ws.send_text(
+                        WSEvent(
+                            event=WSEventType.ERROR,
+                            data={
+                                "message": str(e),
+                                "action": action,
+                                "capture_id": msg.get("capture_id"),
+                            },
+                        ).model_dump_json()
+                    )
                 except Exception:
                     await db.rollback()
                     raise

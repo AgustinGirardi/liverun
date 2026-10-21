@@ -30,11 +30,13 @@ def _enable_foreign_keys(dbapi_connection, _record):
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
+
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:
@@ -44,8 +46,10 @@ async def get_db():
             await session.rollback()
             raise
 
+
 async def init_db():
     from backend.models.models import Base
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 

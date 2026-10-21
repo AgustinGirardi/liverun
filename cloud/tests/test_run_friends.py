@@ -1,4 +1,5 @@
 """Amistades y ranking de ChronoTrack Run."""
+
 from datetime import datetime
 
 from cloud.tests.conftest import make_user
@@ -62,10 +63,16 @@ def test_busqueda_con_estado_de_relacion(client):
 
 
 def _activity(client, headers, uuid, dist):
-    return client.post("/api/run/activities", json={
-        "client_uuid": uuid, "started_at": datetime.now().isoformat(),
-        "duration_s": 1800, "distance_m": dist,
-    }, headers=headers)
+    return client.post(
+        "/api/run/activities",
+        json={
+            "client_uuid": uuid,
+            "started_at": datetime.now().isoformat(),
+            "duration_s": 1800,
+            "distance_m": dist,
+        },
+        headers=headers,
+    )
 
 
 def test_ranking_solo_amigos_aceptados(client):

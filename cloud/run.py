@@ -3,6 +3,7 @@
 Cuenta unificada con el portal: el mismo PortalUser que reclama resultados
 registra acá sus salidas. Auth con los endpoints existentes /api/auth/*.
 """
+
 import json
 import os
 import re
@@ -72,6 +73,7 @@ def avatar_dir() -> Path:
 # verano desde 2009. Así no sumamos dependencias.
 try:
     from zoneinfo import ZoneInfo
+
     TZ_AR = ZoneInfo("America/Argentina/Buenos_Aires")
 except Exception:
     TZ_AR = timezone(timedelta(hours=-3), "ART")
@@ -104,6 +106,7 @@ def iso_utc(dt: Optional[datetime]) -> Optional[str]:
 
 # ── Lógica pura (testeable sin DB) ────────────────────────────────────────────
 
+
 def week_start(d: date) -> date:
     """Lunes de la semana de `d` (semana lunes–domingo)."""
     return d - timedelta(days=d.weekday())
@@ -112,21 +115,19 @@ def week_start(d: date) -> date:
 TRIAL_DAYS = 182  # ~6 meses de prueba gratis desde el alta
 
 
-def access_status(is_admin: bool, created_at: Optional[datetime],
-                  premium_until: Optional[datetime], now: datetime) -> dict:
+def access_status(
+    is_admin: bool, created_at: Optional[datetime], premium_until: Optional[datetime], now: datetime
+) -> dict:
     """Fuente de verdad del acceso premium, sin importar cómo se pagó.
     admin = ilimitado; si no, vale el premium pagado o la prueba gratis."""
     if is_admin:
         return {"access": True, "plan": "admin", "since": None, "until": None, "trial_ends_at": None}
     trial_end = (created_at + timedelta(days=TRIAL_DAYS)) if created_at else None
     if premium_until and premium_until > now:
-        return {"access": True, "plan": "premium", "until": iso_utc(premium_until),
-                "trial_ends_at": iso_utc(trial_end)}
+        return {"access": True, "plan": "premium", "until": iso_utc(premium_until), "trial_ends_at": iso_utc(trial_end)}
     if trial_end and trial_end > now:
-        return {"access": True, "plan": "trial", "until": iso_utc(trial_end),
-                "trial_ends_at": iso_utc(trial_end)}
-    return {"access": False, "plan": "expired", "until": None,
-            "trial_ends_at": iso_utc(trial_end)}
+        return {"access": True, "plan": "trial", "until": iso_utc(trial_end), "trial_ends_at": iso_utc(trial_end)}
+    return {"access": False, "plan": "expired", "until": None, "trial_ends_at": iso_utc(trial_end)}
 
 
 def user_has_access(user: PortalUser, now: Optional[datetime] = None) -> bool:
@@ -161,6 +162,7 @@ def _as_naive_utc(dt: datetime) -> datetime:
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class ProfileUpdate(BaseModel):
     username: Optional[str] = None
     weekly_goal: Optional[int] = Field(None, ge=1, le=7)
@@ -181,13 +183,13 @@ class ActivityIn(BaseModel):
 
 # Topes de una salida. El ranking mundial tiene premios: antes se aceptaba
 # duration_s=1 con 400 km y started_at en el futuro.
-ACT_MAX_KM = 100             # por actividad: cubre una ultra de 100 km
+ACT_MAX_KM = 100  # por actividad: cubre una ultra de 100 km
 ACT_MAX_HORAS = 48
 ACT_MIN_DURACION_S = 60
-ACT_RITMO_MIN_S_KM = 150     # 2:30 min/km: más rápido que un récord mundial
-ACT_TOLERANCIA_FUTURO = timedelta(minutes=10)   # relojes de teléfono desfasados
+ACT_RITMO_MIN_S_KM = 150  # 2:30 min/km: más rápido que un récord mundial
+ACT_TOLERANCIA_FUTURO = timedelta(minutes=10)  # relojes de teléfono desfasados
 ACT_ANTIGUEDAD_MAX = timedelta(days=365)
-ACT_TOPE_DIARIO_KM = 150     # suma de un mismo día (hora argentina)
+ACT_TOPE_DIARIO_KM = 150  # suma de un mismo día (hora argentina)
 
 
 def validar_actividad(body: "ActivityIn", now: datetime) -> Optional[str]:
@@ -219,6 +221,7 @@ class FriendAcceptIn(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _activity_dict(a: Activity, full: bool = False) -> dict:
     out = {
         "id": a.id,
@@ -235,8 +238,7 @@ def _activity_dict(a: Activity, full: bool = False) -> dict:
 
 
 def _user_public(u: PortalUser) -> dict:
-    return {"username": u.username, "full_name": u.full_name,
-            "avatar_url": avatar_absoluto(u.avatar_url)}
+    return {"username": u.username, "full_name": u.full_name, "avatar_url": avatar_absoluto(u.avatar_url)}
 
 
 def _friend_ids(user_id: int, db: Session) -> set[int]:
@@ -251,10 +253,10 @@ def _friend_ids(user_id: int, db: Session) -> set[int]:
 
 # ── Perfil ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/profile")
 def get_profile(user: PortalUser = Depends(current_user)):
-    acc = access_status(bool(user.is_admin), user.created_at, user.premium_until,
-                        ahora_utc())
+    acc = access_status(bool(user.is_admin), user.created_at, user.premium_until, ahora_utc())
     return {
         "email": user.email,
         "email_verified": bool(user.email_verified_at),
@@ -274,6 +276,7 @@ def get_profile(user: PortalUser = Depends(current_user)):
 
 # ── Admin (solo cuentas marcadas is_admin) ────────────────────────────────────
 
+
 def require_admin(user: PortalUser = Depends(current_user)) -> PortalUser:
     if not user.is_admin:
         raise HTTPException(403, "Acceso solo para administradores")
@@ -289,16 +292,22 @@ class GrantIn(BaseModel):
 def _admin_user_dict(u: PortalUser, now: datetime) -> dict:
     acc = access_status(bool(u.is_admin), u.created_at, u.premium_until, now)
     return {
-        "id": u.id, "email": u.email, "full_name": u.full_name, "username": u.username,
-        "is_admin": bool(u.is_admin), "plan": acc["plan"], "access": acc["access"],
+        "id": u.id,
+        "email": u.email,
+        "full_name": u.full_name,
+        "username": u.username,
+        "is_admin": bool(u.is_admin),
+        "plan": acc["plan"],
+        "access": acc["access"],
         "premium_until": iso_utc(u.premium_until),
         "created_at": iso_utc(u.created_at),
     }
 
 
 @router.get("/admin/users")
-def admin_list_users(q: str = "", limit: int = 50,
-                     admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_list_users(
+    q: str = "", limit: int = 50, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)
+):
     now = ahora_utc()
     stmt = select(PortalUser).order_by(PortalUser.created_at.desc())
     ql = (q or "").strip().lower()
@@ -316,8 +325,7 @@ def admin_list_users(q: str = "", limit: int = 50,
 
 
 @router.post("/admin/users/{user_id}/grant")
-def admin_grant(user_id: int, body: GrantIn,
-                admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_grant(user_id: int, body: GrantIn, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     """Da, extiende o quita premium manualmente (sin cobro). Para regalos,
     soporte o tu propia cuenta. unlimited = 100 años; revoke = sin premium."""
     target = db.get(PortalUser, user_id)
@@ -388,16 +396,20 @@ class RedeemIn(BaseModel):
 
 def _coupon_dict(c: Coupon) -> dict:
     return {
-        "id": c.id, "code": c.code, "kind": c.kind, "months": c.months,
-        "percent_off": c.percent_off, "max_redemptions": c.max_redemptions,
-        "redeemed_count": c.redeemed_count, "active": bool(c.active),
+        "id": c.id,
+        "code": c.code,
+        "kind": c.kind,
+        "months": c.months,
+        "percent_off": c.percent_off,
+        "max_redemptions": c.max_redemptions,
+        "redeemed_count": c.redeemed_count,
+        "active": bool(c.active),
         "expires_at": iso_utc(c.expires_at),
     }
 
 
 @router.post("/admin/coupons")
-def admin_create_coupon(body: CouponCreate,
-                        admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_create_coupon(body: CouponCreate, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     code = body.code.strip().upper()
     if not COUPON_RE.match(code):
         raise HTTPException(400, "El código debe tener 8-32 caracteres (letras y números)")
@@ -410,10 +422,12 @@ def admin_create_coupon(body: CouponCreate,
     if db.scalar(select(Coupon).where(Coupon.code == code)):
         raise HTTPException(409, "Ya existe un cupón con ese código")
     c = Coupon(
-        code=code, kind=body.kind,
+        code=code,
+        kind=body.kind,
         months=body.months if body.kind == "free_months" else None,
         percent_off=body.percent_off if body.kind == "discount" else None,
-        max_redemptions=body.max_redemptions, expires_at=body.expires_at,
+        max_redemptions=body.max_redemptions,
+        expires_at=body.expires_at,
     )
     db.add(c)
     db.commit()
@@ -427,8 +441,7 @@ def admin_list_coupons(admin: PortalUser = Depends(require_admin), db: Session =
 
 
 @router.post("/admin/coupons/{coupon_id}/toggle")
-def admin_toggle_coupon(coupon_id: int,
-                        admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_toggle_coupon(coupon_id: int, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     c = db.get(Coupon, coupon_id)
     if not c:
         raise HTTPException(404, "Cupón no encontrado")
@@ -438,8 +451,9 @@ def admin_toggle_coupon(coupon_id: int,
 
 
 @router.post("/coupons/redeem")
-def redeem_coupon(body: RedeemIn, request: Request,
-                  user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def redeem_coupon(
+    body: RedeemIn, request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)
+):
     """Canjea un cupón. free_months suma premium al instante; discount deja el
     descuento pendiente para el próximo pago."""
     rate_limit(request, "redeem", limit=20, window=60.0)
@@ -449,10 +463,12 @@ def redeem_coupon(body: RedeemIn, request: Request,
     code = (body.code or "").strip().upper()
     now = ahora_utc()
     c = db.scalar(select(Coupon).where(Coupon.code == code))
-    already = bool(c and db.scalar(
-        select(CouponRedemption).where(CouponRedemption.coupon_id == c.id,
-                                       CouponRedemption.user_id == user.id)
-    ))
+    already = bool(
+        c
+        and db.scalar(
+            select(CouponRedemption).where(CouponRedemption.coupon_id == c.id, CouponRedemption.user_id == user.id)
+        )
+    )
     err = coupon_redeemable(c, already, now)
     if err:
         raise HTTPException(400, err)
@@ -464,9 +480,10 @@ def redeem_coupon(body: RedeemIn, request: Request,
     # IntegrityError de duplicado (ese lo maneja el try/except del commit → 400).
     claimed = db.execute(
         update(Coupon)
-        .where(Coupon.id == c.id,
-               or_(Coupon.max_redemptions.is_(None),
-                   func.coalesce(Coupon.redeemed_count, 0) < Coupon.max_redemptions))
+        .where(
+            Coupon.id == c.id,
+            or_(Coupon.max_redemptions.is_(None), func.coalesce(Coupon.redeemed_count, 0) < Coupon.max_redemptions),
+        )
         .values(redeemed_count=func.coalesce(Coupon.redeemed_count, 0) + 1)
     )
     if claimed.rowcount == 0:
@@ -481,8 +498,7 @@ def redeem_coupon(body: RedeemIn, request: Request,
         base = user.premium_until if (user.premium_until and user.premium_until > now) else now
         user.premium_until = base + timedelta(days=30 * meses)
         msg = f"¡Listo! Sumaste {meses} {'mes' if meses == 1 else 'meses'} de premium."
-        result = {"kind": "free_months", "months": meses,
-                  "premium_until": iso_utc(user.premium_until)}
+        result = {"kind": "free_months", "months": meses, "premium_until": iso_utc(user.premium_until)}
     else:
         user.pending_discount_percent = c.percent_off
         msg = f"¡Listo! Tenés {c.percent_off}% de descuento para tu próxima suscripción."
@@ -518,8 +534,12 @@ def update_profile(body: ProfileUpdate, user: PortalUser = Depends(current_user)
 
 
 @router.post("/profile/avatar")
-def upload_avatar(request: Request, file: UploadFile = File(...),
-                  user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def upload_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    user: PortalUser = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     """Sube la foto de perfil (la app la achica antes de mandarla). Reemplaza
     la default de Google; queda servida en /avatars/<id>.<ext>."""
     rate_limit(request, "run_avatar", limit=10, window=60.0)
@@ -547,13 +567,13 @@ def upload_avatar(request: Request, file: UploadFile = File(...),
 
 # ── Actividades ───────────────────────────────────────────────────────────────
 
+
 @router.post("/activities")
-def create_activity(body: ActivityIn, request: Request,
-                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def create_activity(
+    body: ActivityIn, request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)
+):
     rate_limit(request, "run_activity", limit=60, window=60.0)
-    existing = db.scalar(select(Activity).where(
-        Activity.user_id == user.id, Activity.client_uuid == body.client_uuid
-    ))
+    existing = db.scalar(select(Activity).where(Activity.user_id == user.id, Activity.client_uuid == body.client_uuid))
     if existing:
         # Reintento de la cola de sincronización: idempotente, no duplica.
         return {"duplicated": True, **_activity_dict(existing)}
@@ -563,11 +583,16 @@ def create_activity(body: ActivityIn, request: Request,
         raise HTTPException(422, err)
     started = _as_naive_utc(body.started_at)
     desde = inicio_dia_ar_utc(fecha_ar(started))
-    ya_del_dia = db.scalar(select(func.coalesce(func.sum(Activity.distance_m), 0.0)).where(
-        Activity.user_id == user.id,
-        Activity.started_at >= desde,
-        Activity.started_at < desde + timedelta(days=1),
-    )) or 0.0
+    ya_del_dia = (
+        db.scalar(
+            select(func.coalesce(func.sum(Activity.distance_m), 0.0)).where(
+                Activity.user_id == user.id,
+                Activity.started_at >= desde,
+                Activity.started_at < desde + timedelta(days=1),
+            )
+        )
+        or 0.0
+    )
     if ya_del_dia + body.distance_m > ACT_TOPE_DIARIO_KM * 1000:
         raise HTTPException(422, f"Superaste el máximo de {ACT_TOPE_DIARIO_KM} km por día.")
 
@@ -591,27 +616,30 @@ def create_activity(body: ActivityIn, request: Request,
     except IntegrityError:
         # Dos reintentos simultáneos: el segundo pierde contra el unique y devuelve el primero.
         db.rollback()
-        existing = db.scalar(select(Activity).where(
-            Activity.user_id == user.id, Activity.client_uuid == body.client_uuid
-        ))
+        existing = db.scalar(
+            select(Activity).where(Activity.user_id == user.id, Activity.client_uuid == body.client_uuid)
+        )
         return {"duplicated": True, **_activity_dict(existing)}
     return {"duplicated": False, **_activity_dict(act)}
 
 
 @router.get("/activities")
-def list_activities(limit: int = 30, offset: int = 0,
-                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def list_activities(
+    limit: int = 30, offset: int = 0, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)
+):
     limit = max(1, min(limit, 100))
     acts = db.scalars(
-        select(Activity).where(Activity.user_id == user.id)
-        .order_by(Activity.started_at.desc()).limit(limit).offset(max(0, offset))
+        select(Activity)
+        .where(Activity.user_id == user.id)
+        .order_by(Activity.started_at.desc())
+        .limit(limit)
+        .offset(max(0, offset))
     ).all()
     return [_activity_dict(a) for a in acts]
 
 
 @router.get("/activities/{activity_id}")
-def activity_detail(activity_id: int,
-                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def activity_detail(activity_id: int, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     act = db.get(Activity, activity_id)
     if not act or act.user_id != user.id:
         raise HTTPException(404, "Actividad no encontrada")
@@ -619,8 +647,7 @@ def activity_detail(activity_id: int,
 
 
 @router.delete("/activities/{activity_id}")
-def delete_activity(activity_id: int,
-                    user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def delete_activity(activity_id: int, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     """Elimina una salida propia (sale del historial, la racha y los rankings)."""
     act = db.get(Activity, activity_id)
     if not act or act.user_id != user.id:
@@ -631,6 +658,7 @@ def delete_activity(activity_id: int,
 
 
 # ── Resumen (pestaña Inicio): racha + semana + mes ────────────────────────────
+
 
 @router.get("/summary")
 def summary(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
@@ -662,25 +690,29 @@ def summary(user: PortalUser = Depends(current_user), db: Session = Depends(get_
 
 # ── Amigos ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/friends/search")
-def search_friends(q: str, request: Request,
-                   user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def search_friends(q: str, request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     rate_limit(request, "run_search", limit=30, window=60.0)
     q = (q or "").strip().lower()
     if len(q) < 3:
         return []
     users = db.scalars(
-        select(PortalUser).where(
+        select(PortalUser)
+        .where(
             PortalUser.username.is_not(None),
             PortalUser.username.like(f"%{q}%"),
             PortalUser.id != user.id,
-        ).limit(20)
+        )
+        .limit(20)
     ).all()
     friends = _friend_ids(user.id, db)
-    pending = db.scalars(select(Friendship).where(
-        ((Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id))
-        & (Friendship.status == "pending")
-    )).all()
+    pending = db.scalars(
+        select(Friendship).where(
+            ((Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id))
+            & (Friendship.status == "pending")
+        )
+    ).all()
     pending_ids = {f.addressee_id for f in pending} | {f.requester_id for f in pending}
     out = []
     for u in users:
@@ -690,8 +722,9 @@ def search_friends(q: str, request: Request,
 
 
 @router.post("/friends/request")
-def request_friend(body: FriendRequestIn, request: Request,
-                   user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def request_friend(
+    body: FriendRequestIn, request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)
+):
     rate_limit(request, "run_friend", limit=30, window=60.0)
     if not user.username:
         raise HTTPException(400, "Primero elegí tu username en el perfil")
@@ -701,10 +734,12 @@ def request_friend(body: FriendRequestIn, request: Request,
     if target.id == user.id:
         raise HTTPException(400, "No podés agregarte a vos mismo")
 
-    existing = db.scalar(select(Friendship).where(
-        ((Friendship.requester_id == user.id) & (Friendship.addressee_id == target.id))
-        | ((Friendship.requester_id == target.id) & (Friendship.addressee_id == user.id))
-    ))
+    existing = db.scalar(
+        select(Friendship).where(
+            ((Friendship.requester_id == user.id) & (Friendship.addressee_id == target.id))
+            | ((Friendship.requester_id == target.id) & (Friendship.addressee_id == user.id))
+        )
+    )
     if existing:
         if existing.status == "accepted":
             raise HTTPException(409, "Ya son amigos")
@@ -722,8 +757,7 @@ def request_friend(body: FriendRequestIn, request: Request,
 
 
 @router.post("/friends/accept")
-def accept_friend(body: FriendAcceptIn,
-                  user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def accept_friend(body: FriendAcceptIn, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     fr = db.get(Friendship, body.friendship_id)
     if not fr or fr.addressee_id != user.id or fr.status != "pending":
         raise HTTPException(404, "Solicitud no encontrada")
@@ -736,9 +770,9 @@ def accept_friend(body: FriendAcceptIn,
 
 @router.get("/friends")
 def list_friends(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
-    rows = db.scalars(select(Friendship).where(
-        (Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id)
-    )).all()
+    rows = db.scalars(
+        select(Friendship).where((Friendship.requester_id == user.id) | (Friendship.addressee_id == user.id))
+    ).all()
     friends, incoming, outgoing = [], [], []
     for f in rows:
         other = db.get(PortalUser, f.addressee_id if f.requester_id == user.id else f.requester_id)
@@ -763,8 +797,12 @@ def _offset_sqlite(momento_utc: datetime) -> str:
 
 
 @router.get("/ranking")
-def ranking(period: str = "week", scope: str = "friends",
-            user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def ranking(
+    period: str = "week",
+    scope: str = "friends",
+    user: PortalUser = Depends(current_user),
+    db: Session = Depends(get_db),
+):
     """Km y días corridos en la semana o el mes calendario en curso.
     scope=friends: el usuario y sus amigos aceptados.
     scope=global: top 50 de todos los corredores (el usuario aparece igual,
@@ -819,10 +857,12 @@ def ranking(period: str = "week", scope: str = "friends",
         return {"period": period, "scope": scope, "since": since.isoformat(), "entries": entries}
 
     ids = _friend_ids(user.id, db) | {user.id}
-    acts = db.scalars(select(Activity).where(
-        Activity.user_id.in_(ids),
-        Activity.started_at >= since_dt,
-    )).all()
+    acts = db.scalars(
+        select(Activity).where(
+            Activity.user_id.in_(ids),
+            Activity.started_at >= since_dt,
+        )
+    ).all()
 
     by_user: dict[int, list[Activity]] = {}
     for a in acts:
@@ -832,12 +872,14 @@ def ranking(period: str = "week", scope: str = "friends",
     for uid in ids:
         u = db.get(PortalUser, uid)
         user_acts = by_user.get(uid, [])
-        entries.append(entry(
-            u,
-            sum(a.distance_m for a in user_acts) / 1000.0,
-            len({fecha_ar(a.started_at) for a in user_acts}),
-            len(user_acts),
-        ))
+        entries.append(
+            entry(
+                u,
+                sum(a.distance_m for a in user_acts) / 1000.0,
+                len({fecha_ar(a.started_at) for a in user_acts}),
+                len(user_acts),
+            )
+        )
     entries.sort(key=lambda e: e["km"], reverse=True)
     for pos, e in enumerate(entries, start=1):
         e["position"] = pos

@@ -1,15 +1,21 @@
 """Re-publicar una carrera no debe hacerle perder al corredor sus resultados reclamados."""
+
 from cloud.tests.conftest import publish_race
 
 RESULT = {
-    "bib_number": "7", "full_name": "Ana Gomez", "distance_km": 10.0,
-    "net_time_ns": 1_800_000_000_000, "position": 1, "status": "FINISHER",
+    "bib_number": "7",
+    "full_name": "Ana Gomez",
+    "distance_km": 10.0,
+    "net_time_ns": 1_800_000_000_000,
+    "position": 1,
+    "status": "FINISHER",
 }
 
 
 def _register_and_claim(client, code):
-    r = client.post("/api/auth/register", json={
-        "email": "ana@mail.com", "password": "supersecreta", "full_name": "Ana Gomez"})
+    r = client.post(
+        "/api/auth/register", json={"email": "ana@mail.com", "password": "supersecreta", "full_name": "Ana Gomez"}
+    )
     token = r.json()["token"]
     c = client.post(
         "/api/claim",

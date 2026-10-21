@@ -7,6 +7,7 @@ nunca se envía al navegador (la UI sólo recibe una versión enmascarada).
 Para cambiar de proveedor (p. ej. Resend con dominio propio), basta con agregar
 otra rama en `send_email`. El resto del sistema no cambia.
 """
+
 import os
 import json
 import urllib.request
@@ -45,10 +46,14 @@ def load_config() -> dict:
 
 def save_config(provider=None, api_key=None, from_email=None, from_name=None) -> dict:
     cur = load_config()
-    if provider:   cur["provider"]   = provider.strip()
-    if api_key and api_key.strip():       cur["api_key"]    = api_key.strip()
-    if from_email is not None and from_email.strip():  cur["from_email"] = from_email.strip()
-    if from_name is not None and from_name.strip():    cur["from_name"]  = from_name.strip()
+    if provider:
+        cur["provider"] = provider.strip()
+    if api_key and api_key.strip():
+        cur["api_key"] = api_key.strip()
+    if from_email is not None and from_email.strip():
+        cur["from_email"] = from_email.strip()
+    if from_name is not None and from_name.strip():
+        cur["from_name"] = from_name.strip()
     _CONFIG_PATH.write_text(json.dumps(cur, indent=2), encoding="utf-8")
     return cur
 
@@ -114,10 +119,22 @@ def _send_brevo(to_email, to_name, subject, html, cfg):
         return False, f"No se pudo conectar al proveedor de email: {e.reason}"
 
 
-def build_result_email(*, runner_name, race_name, race_date, location,
-                       distance_km, net_time_ns, finish_time_ns, position,
-                       category, portal_url=None, race_code=None):
+def build_result_email(
+    *,
+    runner_name,
+    race_name,
+    race_date,
+    location,
+    distance_km,
+    net_time_ns,
+    finish_time_ns,
+    position,
+    category,
+    portal_url=None,
+    race_code=None,
+):
     """Arma el HTML del email de resultado de un corredor."""
+
     def fmt_ns(ns):
         if not ns:
             return "—"
@@ -133,6 +150,7 @@ def build_result_email(*, runner_name, race_name, race_date, location,
         time_str, time_label = fmt_ns(net_time_ns), "Tiempo"
     elif finish_time_ns:
         from datetime import datetime
+
         t = datetime.fromtimestamp(finish_time_ns / 1_000_000_000)
         time_str = t.strftime("%H:%M:%S.") + f"{t.microsecond // 10_000:02d}"
         time_label = "Hora de llegada"
@@ -144,13 +162,16 @@ def build_result_email(*, runner_name, race_name, race_date, location,
     link = ""
     if portal_url:
         url = portal_url.rstrip("/")
-        note = (f'En el portal buscá tu nombre o el código <b>{race_code}</b>.'
-                if race_code else 'En el portal buscá tu nombre para ver tu detalle y certificado.')
+        note = (
+            f"En el portal buscá tu nombre o el código <b>{race_code}</b>."
+            if race_code
+            else "En el portal buscá tu nombre para ver tu detalle y certificado."
+        )
         link = (
             f'<tr><td style="padding-top:18px">'
             f'<a href="{url}" style="background:#00b483;color:#04130d;text-decoration:none;'
             f'padding:12px 22px;border-radius:8px;font-weight:700;display:inline-block">'
-            f'Ver mis resultados y certificado →</a>'
+            f"Ver mis resultados y certificado →</a>"
             f'<div style="color:#8a9299;font-size:12px;margin-top:8px">{note}</div></td></tr>'
         )
 
@@ -174,7 +195,7 @@ def build_result_email(*, runner_name, race_name, race_date, location,
         <td style="width:10px"></td>
         <td style="background:#1c2023;border:1px solid #262b2e;border-radius:10px;padding:16px;text-align:center;width:50%">
           <div style="color:#eef1f2;font-size:26px;font-weight:800">{pos}</div>
-          <div style="color:#5b646a;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:4px">Posición{(' · ' + category) if category else ''}</div>
+          <div style="color:#5b646a;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-top:4px">Posición{(" · " + category) if category else ""}</div>
         </td>
       </tr>
       {link}

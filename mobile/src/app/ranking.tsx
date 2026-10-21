@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, Share, StyleSheet,
   TextInput, View,
@@ -74,7 +74,7 @@ export default function RankingScreen() {
   const [results, setResults] = useState<SearchedUser[]>([]);
   const [searching, setSearching] = useState(false);
   // Podio colapsable: se achica al hacer scroll de la lista.
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [scrollY] = useState(() => new Animated.Value(0));
   const [podiumH, setPodiumH] = useState(0);
   const [listH, setListH] = useState(0);
   const [contentH, setContentH] = useState(0);
@@ -96,7 +96,8 @@ export default function RankingScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   // Al cambiar de scope/período: reseteo el colapso del podio (se re-mide solo).
-  useEffect(() => { scrollY.setValue(0); setPodiumH(0); }, [scope, period, scrollY]);
+  function cambiarScope(s: RankingScope) { setScope(s); scrollY.setValue(0); setPodiumH(0); }
+  function cambiarPeriodo(p: Period) { setPeriod(p); scrollY.setValue(0); setPodiumH(0); }
 
   async function runSearch(q: string) {
     setQuery(q);
@@ -279,7 +280,7 @@ export default function RankingScreen() {
           {([{ key: 'friends', label: '👥 Amigos' }, { key: 'global', label: '🌎 Mundial' }] as const).map((o) => {
             const on = scope === o.key;
             return (
-              <Pressable key={o.key} onPress={() => setScope(o.key)} style={styles.scopeTab} hitSlop={8}>
+              <Pressable key={o.key} onPress={() => cambiarScope(o.key)} style={styles.scopeTab} hitSlop={8}>
                 <ThemedText style={[styles.scopeLabel, { color: on ? theme.text : theme.textSecondary }]}>
                   {o.label}
                 </ThemedText>
@@ -292,7 +293,7 @@ export default function RankingScreen() {
           <Segmented
             options={[{ key: 'week', label: 'Semana' }, { key: 'month', label: 'Mes' }]}
             value={period}
-            onChange={setPeriod}
+            onChange={cambiarPeriodo}
           />
           <Pressable
             onPress={() => setOrderBy((o) => (o === 'km' ? 'days_run' : 'km'))}

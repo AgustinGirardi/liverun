@@ -1,5 +1,6 @@
 """/api/health: lo que Render consulta para saber si el portal está vivo.
 Toca la base (un SELECT 1) pero no lista carreras, así no crece con los datos."""
+
 from pathlib import Path
 
 

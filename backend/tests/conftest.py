@@ -18,6 +18,7 @@ from backend.services.timing_engine import reset_engines  # noqa: E402
 @pytest.fixture(autouse=True)
 def _fresh_db():
     """Cada test arranca con tablas limpias y sin engines de timing en memoria."""
+
     async def reset():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
@@ -25,6 +26,7 @@ def _fresh_db():
         # Las conexiones del pool quedan atadas a este event loop (que muere acá);
         # se descartan para que el loop del TestClient cree las suyas.
         await engine.dispose()
+
     asyncio.run(reset())
     reset_engines()
     yield
@@ -49,9 +51,14 @@ def make_race(client, name="Carrera Test", **extra):
 
 
 def register(client, race_id, runner_id, bib="7", distance_km=10.0):
-    r = client.post(f"/api/v1/races/{race_id}/registrations", json={
-        "runner_id": runner_id, "race_id": race_id,
-        "bib_number": bib, "distance_km": distance_km,
-    })
+    r = client.post(
+        f"/api/v1/races/{race_id}/registrations",
+        json={
+            "runner_id": runner_id,
+            "race_id": race_id,
+            "bib_number": bib,
+            "distance_km": distance_km,
+        },
+    )
     assert r.status_code == 201, r.text
     return r.json()

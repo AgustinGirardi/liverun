@@ -1,5 +1,5 @@
 """Login con Google: state firmado, vinculación de cuentas y callback."""
-import pytest
+
 from sqlalchemy import select
 
 import cloud.google_auth as ga
@@ -8,6 +8,7 @@ from cloud.tests.conftest import make_user
 
 
 # ── state ─────────────────────────────────────────────────────────────────────
+
 
 def test_state_roundtrip():
     s = ga.make_state("liverun://auth")
@@ -60,6 +61,7 @@ def test_redirect_loopback_escritorio_permitido():
 
 # ── upsert ────────────────────────────────────────────────────────────────────
 
+
 def test_upsert_crea_usuario_nuevo(db):
     u = ga.upsert_google_user(db, sub="g-123", email="Nuevo@Test.com", name="Nuevo Runner", picture=None)
     assert u.email == "nuevo@test.com"
@@ -84,6 +86,7 @@ def test_upsert_segundo_login_encuentra_por_google_id(db):
 
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
+
 
 def test_start_redirige_a_google(client, monkeypatch):
     monkeypatch.setattr(ga, "GOOGLE_CLIENT_ID", "cid")
@@ -112,9 +115,16 @@ def test_start_rechaza_redirect_invalido(client, monkeypatch):
 
 
 def test_callback_feliz_devuelve_token_al_deep_link(client, monkeypatch):
-    monkeypatch.setattr(ga, "exchange_code", lambda code: {
-        "sub": "g-55", "email": "ana@test.com", "email_verified": True, "name": "Ana",
-    })
+    monkeypatch.setattr(
+        ga,
+        "exchange_code",
+        lambda code: {
+            "sub": "g-55",
+            "email": "ana@test.com",
+            "email_verified": True,
+            "name": "Ana",
+        },
+    )
     state = ga.make_state("liverun://auth")
     r = client.get(
         "/api/run/auth/google/callback",

@@ -1,0 +1,86 @@
+name: CI
+
+# Verifica cada push y cada PR: tests, lint y tipos de las tres piezas, más el
+# build del frontend y la auditoría de dependencias de Python. Un push a main
+# despliega el portal en Render: esta CI avisa si la suite está en rojo, pero
+# Render todavía no espera a que termine (ver PENDIENTES.md).
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (portal + escritorio)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"   # el mismo que PYTHON_VERSION en render.yaml
+          cache: pip
+          cache-dependency-path: |
+            cloud/requirements.lock
+            requirements.lock
+            requirements-dev.txt
+      - name: Instalar dependencias (los locks, no los pisos)
+        run: pip install -r cloud/requirements.lock -r requirements.lock -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Formato
+        run: ruff format --check .
+      - name: Tests
+        run: python -m pytest cloud/tests backend/tests -q
+      - name: Vulnerabilidades en las dependencias fijadas
+        run: |
+          pipx run pip-audit==2.10.1 --no-deps --disable-pip -r cloud/requirements.lock
+          pipx run pip-audit==2.10.1 --no-deps --disable-pip -r requirements.lock
+
+  mobile:
+    name: Móvil (Expo)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - name: Tests
+        run: npm test -- --ci
+      - name: Lint
+        run: npm run lint
+      - name: Tipos
+        run: npx tsc --noEmit
+
+  frontend:
+    name: Escritorio (frontend React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4   # el build lee ../version.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build

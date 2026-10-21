@@ -1,4 +1,5 @@
 """Avatar de perfil y ranking global de ChronoTrack Run."""
+
 import io
 from datetime import datetime
 
@@ -38,10 +39,16 @@ def test_avatar_rechaza_formato_y_tamano(client):
 
 
 def _activity(client, headers, uuid, dist):
-    return client.post("/api/run/activities", json={
-        "client_uuid": uuid, "started_at": datetime.now().isoformat(),
-        "duration_s": 1800, "distance_m": dist,
-    }, headers=headers)
+    return client.post(
+        "/api/run/activities",
+        json={
+            "client_uuid": uuid,
+            "started_at": datetime.now().isoformat(),
+            "duration_s": 1800,
+            "distance_m": dist,
+        },
+        headers=headers,
+    )
 
 
 def test_ranking_global_incluye_a_todos_y_ordena(client):
@@ -96,7 +103,7 @@ def test_avatar_se_guarda_relativo_y_se_sirve_absoluto(client, db):
 def test_migracion_pasa_avatares_viejos_a_relativo(client, db):
     """La migración recorta el host de las filas ya guardadas y no toca la foto
     de Google, que es una URL externa legítima."""
-    from cloud.main import _migrar_avatares_a_relativo
+    from cloud.migraciones import _migrar_avatares_a_relativo
 
     make_user(client, email="viejo@test.com")
     make_user(client, email="google@test.com")

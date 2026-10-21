@@ -26,7 +26,7 @@ Lo que quedó abierto después de rescatar `backup/hardening-local-7-commits` so
 
 ## 4. Menor
 
-- [ ] **Avisos de lint preexistentes:** 28 en móvil y 2 en el escritorio, casi todos `set-state-in-effect`.
+- [x] ~~**Avisos de lint preexistentes:** 28 en móvil y 2 en el escritorio.~~ Cerrados el 21/10: ambos lints corren con `--max-warnings 0` y las reglas `react-hooks/refs` y `set-state-in-effect` volvieron a error en `mobile/eslint.config.js`.
 - [ ] **Portal:** listas largas de resultados sin virtualizar. Medir antes de tocar.
 - [ ] **Móvil:** `index.tsx` y `perfil.tsx` usan `ScrollView` + `.map()` sin virtualizar; revisar si crecen.
 
@@ -46,3 +46,18 @@ Orden para Agustín:
 - [ ] **Borrar `origin/arreglos-revision`** (ya está en `main`) tras el push.
 - [ ] **Tags de archivo** `archivo/backup-hardening-local` y `archivo/web-pulido-movil`: existen solo en local. Decidir si se pushean (el repo es público).
 - [ ] **Rate limit con más de un worker:** escribir el backend Redis en `cloud/deps.py` (`_BACKENDS`) recién al escalar; el aviso del log avisa si se olvida.
+
+## 6. Auditoría del 21/10 (plan `docs/plans/2026-10-21-aplicar-las-mejoras-de-la-auditoria-2026-10-21-liv.md`)
+
+Hecho en código: CI (`.github/workflows/ci.yml`), `npm audit fix` en el escritorio (0 vulnerabilidades), locks de Python y `requirements-dev.txt`, test de contrato del `email_hash`, `cloud/main.py` partido en routers, `App.jsx` partido en `views/` y `components/` con Vitest, `ruff`, restos de la plantilla de Expo fuera, lint en cero y documentación ordenada en `docs/`.
+
+**Nada de esto se pusheó.** Para el push siguen valiendo los pasos de la sección 5 (snapshot del disco de Render primero).
+
+- [ ] **Primera corrida de la CI en GitHub.** Todo lo que corre la CI se verificó a mano en local, pero el workflow nunca corrió en Actions. Mirar la primera corrida después del push y, si anda, activar la protección de `main` (Settings → Branches → exigir los tres jobs).
+- [ ] **Que Render espere a la CI.** `render.yaml` sigue con `autoDeploy: true`: un push a `main` despliega aunque la CI esté en rojo. Verificar en la doc de Blueprint de Render si existe `autoDeployTrigger: checksPass` y, si existe, usarlo en lugar de `autoDeploy`. No se pudo verificar (falló la consulta a la doc).
+- [ ] **Verificación manual del cronómetro del escritorio.** `App.jsx` se partió en 30 archivos con movimiento literal, y build, lint y los 36 tests de Vitest pasan, pero no hay e2e. Antes de usarlo en una carrera: `python launcher.py`, largar, capturar, asignar dorsal, deshacer, descartar, cortar el backend unos segundos para ver el contador "sin guardar", e imprimir un certificado.
+- [ ] **Verificación en dispositivo de lo que tocó el lint del móvil** (se suma a la sección 1): `FadeIn` y `Ring` (el valor animado ahora vive en `useState`), el reseteo del podio al cambiar alcance o período en `ranking.tsx`, y el splash.
+- [ ] **Migrar Expo 54 → 58.** Plan en `docs/plans/2026-10-21-migrar-expo-54-a-58.md`. Para bajar las 71 vulnerabilidades de `mobile`; bloquea una decisión sobre Expo Go en iOS.
+- [ ] **`eas-update.yml` en Node 20.** La CI ya usa Node 22. Subirlo, y pensar si la OTA debería esperar a la CI (hoy un push con `mobile/` en rojo igual publica).
+- [ ] **`backend/api/routes.py`** (1278 líneas, 52 funciones) quedó afuera: mismo tratamiento que `cloud/main.py`, en su propio plan.
+- [ ] **Formateo de `ruff`.** Entró junto con el resto en un solo commit: `git blame` marca ese commit en las líneas que solo cambiaron de formato. Si molesta, rehacerlo como commit aparte y listarlo en `.git-blame-ignore-revs`.

@@ -1,6 +1,7 @@
 """API keys de publicación por organizador: emisión, rotación, revocación y
 propiedad de las carreras. La CT_PUBLISH_KEY global sigue valiendo hasta que
 el admin la rota (la app de escritorio ya instalada no se queda afuera)."""
+
 import hashlib
 
 from sqlalchemy import select
@@ -8,8 +9,14 @@ from sqlalchemy import select
 from cloud.models import PortalUser, PublishedRace
 from cloud.tests.conftest import PUBLISH_KEY, make_user, publish_race
 
-PAYLOAD = {"source_id": "ct-org-1", "name": "Carrera A", "location": "Córdoba",
-           "race_date": "2026-05-01", "distances": [10.0], "results": []}
+PAYLOAD = {
+    "source_id": "ct-org-1",
+    "name": "Carrera A",
+    "location": "Córdoba",
+    "race_date": "2026-05-01",
+    "distances": [10.0],
+    "results": [],
+}
 EVENTO = {"source_id": "ct-ev-1", "name": "Evento A", "distances": [10.0]}
 
 
@@ -41,6 +48,7 @@ def _listar(client, h):
 
 # ── Emisión y administración ─────────────────────────────────────────────────
 
+
 def test_solo_admin_administra_las_keys(client, db):
     assert client.get("/api/run/admin/publish-keys").status_code == 401
     h = make_user(client)
@@ -56,7 +64,7 @@ def test_crear_devuelve_la_key_una_sola_vez(client, db):
     assert len(listado) == 1
     fila = listado[0]
     assert fila["name"] == "Club Norte" and fila["prefix"] == nueva["key"][:11]
-    assert nueva["key"] not in str(listado)          # el listado nunca trae el secreto
+    assert nueva["key"] not in str(listado)  # el listado nunca trae el secreto
     assert fila["revoked_at"] is None and fila["is_legacy"] is False
 
 
@@ -88,6 +96,7 @@ def test_last_used_at_se_actualiza_al_publicar(client, db):
 
 # ── Propiedad entre organizadores ────────────────────────────────────────────
 
+
 def test_un_organizador_no_pisa_ni_borra_las_carreras_de_otro(client, db):
     h = _admin(client, db)
     a, b = _crear(client, h, "A")["key"], _crear(client, h, "B")["key"]
@@ -111,6 +120,7 @@ def test_un_organizador_no_pisa_el_evento_de_otro(client, db):
 
 # ── Rotación y revocación ────────────────────────────────────────────────────
 
+
 def test_rotar_invalida_la_vieja_y_conserva_las_carreras(client, db):
     h = _admin(client, db)
     nueva = _crear(client, h)
@@ -121,9 +131,9 @@ def test_rotar_invalida_la_vieja_y_conserva_las_carreras(client, db):
     key2 = rot.json()["key"]
     assert key2 != vieja
     assert _publicar(client, vieja).status_code == 403
-    assert _publicar(client, key2).status_code == 200          # sigue siendo la dueña
+    assert _publicar(client, key2).status_code == 200  # sigue siendo la dueña
     otra = _crear(client, h, "Otro")["key"]
-    assert _publicar(client, otra).status_code == 403          # y nadie más entra
+    assert _publicar(client, otra).status_code == 403  # y nadie más entra
     assert _listar(client, h)[0]["rotated_at"] is not None
 
 
@@ -154,6 +164,7 @@ def test_rotar_o_revocar_una_inexistente_da_404(client, db):
 
 # ── La key global (CT_PUBLISH_KEY) ───────────────────────────────────────────
 
+
 def test_la_key_global_sigue_publicando_y_aparece_como_legacy(client, db):
     h = _admin(client, db)
     assert _publicar(client, PUBLISH_KEY).status_code == 200
@@ -163,7 +174,7 @@ def test_la_key_global_sigue_publicando_y_aparece_como_legacy(client, db):
 
 def test_rotar_la_legacy_deja_sin_efecto_a_la_global_y_conserva_las_carreras(client, db):
     h = _admin(client, db)
-    publish_race(client)                                        # crea la fila legacy y la carrera ct-race-1
+    publish_race(client)  # crea la fila legacy y la carrera ct-race-1
     legacy = _listar(client, h)[0]
     nueva = client.post(f"/api/run/admin/publish-keys/{legacy['id']}/rotate", headers=h).json()["key"]
     assert _publicar(client, PUBLISH_KEY, {**PAYLOAD, "source_id": "ct-x"}).status_code == 403
@@ -177,14 +188,15 @@ def test_revocar_la_legacy_bloquea_tambien_a_la_global(client, db):
     legacy = _listar(client, h)[0]
     client.post(f"/api/run/admin/publish-keys/{legacy['id']}/revoke", headers=h)
     assert _publicar(client, PUBLISH_KEY).status_code == 403
-    assert len(_listar(client, h)) == 1                         # no se recrea
+    assert len(_listar(client, h)) == 1  # no se recrea
 
 
 def test_las_carreras_previas_a_la_tabla_siguen_siendo_de_la_global(client, db):
     """Una carrera publicada antes de existir publish_keys tiene el hash de la
     global como dueño: la fila legacy, creada después, la reconoce."""
-    race = PublishedRace(source_id="vieja", code="VIEJA1", name="Vieja",
-                         owner_key_hash=hashlib.sha256(PUBLISH_KEY.encode()).hexdigest())
+    race = PublishedRace(
+        source_id="vieja", code="VIEJA1", name="Vieja", owner_key_hash=hashlib.sha256(PUBLISH_KEY.encode()).hexdigest()
+    )
     db.add(race)
     db.commit()
     assert _publicar(client, PUBLISH_KEY, {**PAYLOAD, "source_id": "vieja"}).status_code == 200
@@ -192,5 +204,6 @@ def test_las_carreras_previas_a_la_tabla_siguen_siendo_de_la_global(client, db):
 
 def test_init_db_es_idempotente(client):
     from cloud.db import init_db
+
     init_db()
     init_db()

@@ -12,7 +12,8 @@ os.environ["CT_PUBLISH_KEY"] = "test-publish-key"
 from fastapi.testclient import TestClient  # noqa: E402
 from cloud.db import Base, engine, SessionLocal  # noqa: E402
 from cloud import models  # noqa: E402,F401  registra los modelos
-from cloud.main import app, _RATE  # noqa: E402
+from cloud.deps import _RATE  # noqa: E402
+from cloud.main import app  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +76,7 @@ def verificar_email(client, email="runner@test.com"):
     from sqlalchemy import select
     from cloud.models import PortalUser
     from cloud.security import make_mail_token, make_token
+
     s = SessionLocal()
     try:
         u = s.scalar(select(PortalUser).where(PortalUser.email == email.strip().lower()))
@@ -83,7 +85,6 @@ def verificar_email(client, email="runner@test.com"):
         sesion = make_token(u.id, iat=max(int(time.time()), u.tokens_valid_from or 0))
     finally:
         s.close()
-    r = client.post("/api/auth/verify", json={"token": token},
-                    headers={"Authorization": f"Bearer {sesion}"})
+    r = client.post("/api/auth/verify", json={"token": token}, headers={"Authorization": f"Bearer {sesion}"})
     assert r.status_code == 200, r.text
     return r.json()

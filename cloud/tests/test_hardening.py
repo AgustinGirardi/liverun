@@ -3,6 +3,7 @@
 Cada test acá corresponde a un hallazgo concreto: si alguno vuelve a fallar,
 es que se reintrodujo la vulnerabilidad, no que cambió un detalle de estilo.
 """
+
 import hashlib
 
 from sqlalchemy import select
@@ -16,14 +17,21 @@ def _h(email):
 
 
 def _resultado(name="Juan Perez", bib="1", email=None):
-    r = {"bib_number": bib, "full_name": name, "distance_km": 10.0,
-         "net_time_ns": 1_800_000_000_000, "position": 1, "status": "FINISHER"}
+    r = {
+        "bib_number": bib,
+        "full_name": name,
+        "distance_km": 10.0,
+        "net_time_ns": 1_800_000_000_000,
+        "position": 1,
+        "status": "FINISHER",
+    }
     if email:
         r["email_hash"] = _h(email)
     return r
 
 
 # ── ALTO-1: propiedad de la carrera y key del organizador ────────────────────
+
 
 def test_publicar_graba_el_dueno_de_la_carrera(client, db):
     publish_race(client, source_id="ct-1", results=[_resultado()])
@@ -51,6 +59,7 @@ def test_no_se_puede_pisar_la_carrera_de_otro_organizador(client, db):
 
 # ── BAJO-4: header no-ASCII devuelve 403, no un 500 ──────────────────────────
 
+
 def test_api_key_no_ascii_da_403_y_no_rompe(client):
     payload = {"source_id": "ct-x", "name": "X", "distances": [10.0], "results": []}
     # En bytes: httpx no deja mandar un str no-ASCII, pero por la red llega así
@@ -60,6 +69,7 @@ def test_api_key_no_ascii_da_403_y_no_rompe(client):
 
 
 # ── MEDIO-2: comodines escapados en la búsqueda pública ──────────────────────
+
 
 def test_busqueda_no_interpreta_comodines_del_usuario(client):
     publish_race(client, source_id="ct-1", results=[_resultado(name="Juan Perez")])
@@ -72,6 +82,7 @@ def test_busqueda_no_interpreta_comodines_del_usuario(client):
 
 
 # ── MEDIO-4: el apellido tiene que ser una palabra completa ──────────────────
+
 
 def test_no_se_puede_reclamar_un_resultado_con_una_letra(client):
     pub = publish_race(client, source_id="ct-1", results=[_resultado(name="Juan Perez")])
@@ -92,19 +103,24 @@ def test_no_se_puede_reclamar_un_resultado_con_una_letra(client):
 
 # ── MEDIO-5: email_hash validado y autolink con coincidencia de nombre ───────
 
+
 def test_email_hash_tiene_que_ser_sha256_hex(client):
-    payload = {"source_id": "ct-1", "name": "X", "distances": [10.0],
-               "results": [dict(_resultado(), email_hash="no-es-un-hash")]}
+    payload = {
+        "source_id": "ct-1",
+        "name": "X",
+        "distances": [10.0],
+        "results": [dict(_resultado(), email_hash="no-es-un-hash")],
+    }
     r = client.post("/api/publish", json=payload, headers={"X-API-Key": PUBLISH_KEY})
     assert r.status_code == 422
 
 
 def test_autolink_exige_que_el_nombre_coincida(client):
     # Un resultado ajeno marcado con el email_hash de la víctima.
-    publish_race(client, source_id="ct-1", results=[
-        _resultado(name="Persona Inventada", email="victima@test.com")])
-    r = client.post("/api/auth/register", json={
-        "email": "victima@test.com", "password": "supersecreta", "full_name": "Ana Gomez"})
+    publish_race(client, source_id="ct-1", results=[_resultado(name="Persona Inventada", email="victima@test.com")])
+    r = client.post(
+        "/api/auth/register", json={"email": "victima@test.com", "password": "supersecreta", "full_name": "Ana Gomez"}
+    )
     # Aun con el email verificado, el nombre tiene que coincidir.
     assert verificar_email(client, "victima@test.com")["linked"] == 0
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {r.json()['token']}"})
@@ -112,14 +128,15 @@ def test_autolink_exige_que_el_nombre_coincida(client):
 
 
 def test_autolink_sigue_funcionando_con_el_nombre_correcto(client):
-    publish_race(client, source_id="ct-1", results=[
-        _resultado(name="Ana Gomez", email="ana@test.com")])
-    client.post("/api/auth/register", json={
-        "email": "ana@test.com", "password": "supersecreta", "full_name": "Ana Gomez"})
+    publish_race(client, source_id="ct-1", results=[_resultado(name="Ana Gomez", email="ana@test.com")])
+    client.post(
+        "/api/auth/register", json={"email": "ana@test.com", "password": "supersecreta", "full_name": "Ana Gomez"}
+    )
     assert verificar_email(client, "ana@test.com")["linked"] == 1
 
 
 # ── MEDIO-1: el login no dice si el email existe ─────────────────────────────
+
 
 def test_login_no_distingue_email_inexistente_de_password_incorrecta(client):
     make_user(client, email="existe@test.com", password="secreta123")
@@ -130,6 +147,7 @@ def test_login_no_distingue_email_inexistente_de_password_incorrecta(client):
 
 
 # ── BAJO-2: cabeceras defensivas ─────────────────────────────────────────────
+
 
 def test_csp_presente_y_sin_unsafe_eval(client):
     csp = client.get("/api/races").headers["content-security-policy"]

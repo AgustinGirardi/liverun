@@ -1,5 +1,6 @@
 """Config del portal en el escritorio: la variable CT_PUBLISH_KEY de la PC pisa
 la clave guardada, y la UI tiene que poder avisarlo (key_from_env)."""
+
 import pytest
 
 from backend.core import cloud_config

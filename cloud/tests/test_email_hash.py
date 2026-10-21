@@ -10,21 +10,28 @@ def test_published_result_has_email_hash_column():
 
 def test_migration_adds_column_to_existing_table():
     # Simula una tabla vieja sin email_hash, luego corre la migración.
-    from cloud.main import _ensure_email_hash_column
+    from cloud.migraciones import _ensure_email_hash_column
+
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS published_results"))
-        conn.execute(text(
-            "CREATE TABLE published_results ("
-            "id INTEGER PRIMARY KEY, race_id INTEGER, bib_number VARCHAR, "
-            "full_name VARCHAR, category VARCHAR, club VARCHAR, distance_km FLOAT, "
-            "net_time_ns BIGINT, finish_time_ns BIGINT, position INTEGER, status VARCHAR)"
-        ))
+        conn.execute(
+            text(
+                "CREATE TABLE published_results ("
+                "id INTEGER PRIMARY KEY, race_id INTEGER, bib_number VARCHAR, "
+                "full_name VARCHAR, category VARCHAR, club VARCHAR, distance_km FLOAT, "
+                "net_time_ns BIGINT, finish_time_ns BIGINT, position INTEGER, status VARCHAR)"
+            )
+        )
     _ensure_email_hash_column()  # idempotente
     _ensure_email_hash_column()  # segunda llamada no debe romper
     insp = inspect(engine)
     cols = {c["name"] for c in insp.get_columns("published_results")}
     assert "email_hash" in cols
     with engine.connect() as conn:
-        idxs = [r[0] for r in conn.execute(text(
-            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='published_results'"))]
+        idxs = [
+            r[0]
+            for r in conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='published_results'")
+            )
+        ]
     assert "ix_published_results_email_hash" in idxs

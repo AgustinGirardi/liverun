@@ -1,0 +1,16 @@
+# Configuración de herramientas de Python. No define un paquete: el proyecto se
+# instala con los requirements (ver README).
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv", "build", "dist", "frontend", "mobile", "**/*.md"]
+
+[tool.ruff.lint]
+# Reglas por defecto de ruff: errores de pyflakes (F) y de pycodestyle (E4, E7, E9).
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Los tests fijan variables de entorno ANTES de importar la app, y los registran
+# con imports "sin uso" (modelos) a propósito.
+"**/conftest.py" = ["E402", "F401"]

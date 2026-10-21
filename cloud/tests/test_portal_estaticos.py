@@ -1,5 +1,6 @@
 """Archivos del portal: caché explícita, CSP sin scripts en línea y lo que
 necesita la tabla de una carrera."""
+
 from pathlib import Path
 
 from cloud.tests.conftest import publish_race
@@ -37,8 +38,19 @@ def test_index_no_tiene_handlers_en_linea(client):
 
 
 def test_detalle_de_carrera_trae_result_id(client):
-    publish_race(client, results=[{"bib_number": "7", "full_name": "Ana Gómez", "distance_km": 10.0,
-                                   "net_time_ns": 1_800_000_000_000, "position": 1, "status": "FINISHER"}])
+    publish_race(
+        client,
+        results=[
+            {
+                "bib_number": "7",
+                "full_name": "Ana Gómez",
+                "distance_km": 10.0,
+                "net_time_ns": 1_800_000_000_000,
+                "position": 1,
+                "status": "FINISHER",
+            }
+        ],
+    )
     code = client.get("/api/races").json()[0]["code"]
     res = client.get(f"/api/races/{code}").json()["results"][0]
     assert isinstance(res["result_id"], int)
@@ -53,13 +65,14 @@ def test_index_tiene_open_graph(client):
 
 
 def _hex(valor):
-    return [int(valor[i:i + 2], 16) for i in (1, 3, 5)]
+    return [int(valor[i : i + 2], 16) for i in (1, 3, 5)]
 
 
 def _luminancia(hex_color):
     def canal(c):
         v = c / 255
         return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
     r, g, b = (canal(c) for c in _hex(hex_color))
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
@@ -71,6 +84,7 @@ def _contraste(a, b):
 
 def _tokens(css, selector):
     import re
+
     bloque = css.split(selector + " {", 1)[1].split("}", 1)[0]
     return dict(re.findall(r"--([\w-]+):\s*(#[0-9A-Fa-f]{6})", bloque))
 
@@ -105,8 +119,11 @@ def test_csp_no_permite_estilos_en_linea(client):
 def test_el_portal_no_escribe_style_en_el_html():
     """Un style="" en el markup lo bloquea la CSP. Las medidas dinámicas viajan
     en data-* y las aplica `iniciarMedidas` por CSSOM (permitido)."""
-    culpables = [str(p.relative_to(_STATIC)) for p in _STATIC.rglob("*")
-                 if p.suffix in (".html", ".js") and 'style="' in p.read_text(encoding="utf-8")]
+    culpables = [
+        str(p.relative_to(_STATIC))
+        for p in _STATIC.rglob("*")
+        if p.suffix in (".html", ".js") and 'style="' in p.read_text(encoding="utf-8")
+    ]
     assert culpables == []
 
 

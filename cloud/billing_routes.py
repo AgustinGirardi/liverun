@@ -1,4 +1,5 @@
 """Endpoints de cobro (Mercado Pago) para ChronoTrack Run."""
+
 import hashlib
 import hmac
 import os
@@ -123,8 +124,7 @@ def _reintentar(notif_type, data_id) -> JSONResponse:
     base bloqueada) se tragaba con 200 y un pago aprobado quedaba sin premium
     para siempre. Reintentar es seguro: apply_payment es idempotente por
     mp_payment_id y sync_preapproval solo copia el estado."""
-    print(f"[MP] error procesando {notif_type}/{data_id}; MP va a reintentar\n"
-          f"{traceback.format_exc()}", flush=True)
+    print(f"[MP] error procesando {notif_type}/{data_id}; MP va a reintentar\n{traceback.format_exc()}", flush=True)
     return JSONResponse({"received": False}, status_code=500)
 
 
@@ -168,8 +168,11 @@ def webhook(request: Request, body: dict = Depends(_cuerpo_json), db: Session = 
             billing.apply_authorized_payment(str(payment_id), db)
         except Exception:
             return _reintentar(notif_type, payment_id)
-    elif notif_type in ("subscription_preapproval", "preapproval") \
-            and payment_id and _ID_PREAPPROVAL.match(str(payment_id)):
+    elif (
+        notif_type in ("subscription_preapproval", "preapproval")
+        and payment_id
+        and _ID_PREAPPROVAL.match(str(payment_id))
+    ):
         # Altas y bajas de la suscripción. Sin esto el estado local se queda
         # en "pending" para siempre y no nos enteramos de una cancelación.
         try:

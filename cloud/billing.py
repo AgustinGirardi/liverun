@@ -10,6 +10,7 @@ Flujo:
 Config (env): CT_MP_ACCESS_TOKEN (credencial del vendedor), CT_PREMIUM_PRICE
 (monto mensual), CT_PREMIUM_CURRENCY (default ARS), CT_PUBLIC_URL.
 """
+
 import json
 import math
 import os
@@ -33,7 +34,7 @@ FIXED_PRICE_ARS = os.environ.get("CT_PREMIUM_PRICE")  # si está, ignora el dól
 CURRENCY = os.environ.get("CT_PREMIUM_CURRENCY", "ARS")
 # Qué dólar usar para convertir: oficial | blue | tarjeta | cripto (dolarapi.com).
 RATE_SOURCE = os.environ.get("CT_USD_RATE_SOURCE", "oficial")
-MANUAL_RATE = os.environ.get("CT_USD_RATE")           # override manual del tipo de cambio
+MANUAL_RATE = os.environ.get("CT_USD_RATE")  # override manual del tipo de cambio
 RATE_FALLBACK = float(os.environ.get("CT_USD_RATE_FALLBACK", "1100"))
 PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
 MP_API = "https://api.mercadopago.com"
@@ -49,9 +50,7 @@ def is_configured() -> bool:
 def _fetch_usd_ars_rate() -> float:
     """Cotización de venta del dólar elegido, desde dolarapi.com (Argentina)."""
     src = RATE_SOURCE if RATE_SOURCE in ("oficial", "blue", "tarjeta", "cripto", "mayorista") else "oficial"
-    req = urllib.request.Request(
-        f"https://dolarapi.com/v1/dolares/{src}", headers={"User-Agent": "LiveRun"}
-    )
+    req = urllib.request.Request(f"https://dolarapi.com/v1/dolares/{src}", headers={"User-Agent": "LiveRun"})
     with urllib.request.urlopen(req, timeout=10) as resp:
         return float(json.loads(resp.read())["venta"])
 
@@ -82,10 +81,10 @@ def usd_ars_rate(strict: bool = False) -> float:
         return r
     except Exception:
         if _rate_cache["rate"]:
-            return _rate_cache["rate"]      # último conocido: real, aunque viejo
+            return _rate_cache["rate"]  # último conocido: real, aunque viejo
         if strict:
             raise RateUnavailable("Sin cotización del dólar para fijar el precio")
-        return RATE_FALLBACK                # solo para mostrar, nunca para cobrar
+        return RATE_FALLBACK  # solo para mostrar, nunca para cobrar
 
 
 def base_price_ars(strict: bool = False) -> float:
@@ -109,8 +108,7 @@ class MPError(Exception):
     """Error de la API de Mercado Pago, con el mensaje que ellos devuelven."""
 
 
-def mp_request(method: str, path: str, body: Optional[dict] = None,
-               idempotency_key: Optional[str] = None) -> dict:
+def mp_request(method: str, path: str, body: Optional[dict] = None, idempotency_key: Optional[str] = None) -> dict:
     """Llamada a la API de Mercado Pago. Se monkeypatchea en tests."""
     data = json.dumps(body).encode() if body is not None else None
     headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}", "Content-Type": "application/json"}
@@ -119,7 +117,10 @@ def mp_request(method: str, path: str, body: Optional[dict] = None,
         # con la misma clave en una sola operación.
         headers["X-Idempotency-Key"] = idempotency_key
     req = urllib.request.Request(
-        MP_API + path, data=data, method=method, headers=headers,
+        MP_API + path,
+        data=data,
+        method=method,
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
@@ -144,9 +145,11 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
     # Una segunda suscripción autorizada es un segundo débito mensual sobre la
     # misma persona, y no tenemos endpoint de reembolso. Las 'pending' no
     # bloquean: son checkouts abandonados que el usuario puede reintentar.
-    ya = db.scalar(select(BillingSubscription).where(
-        BillingSubscription.user_id == user.id,
-        BillingSubscription.status == "authorized"))
+    ya = db.scalar(
+        select(BillingSubscription).where(
+            BillingSubscription.user_id == user.id, BillingSubscription.status == "authorized"
+        )
+    )
     if ya:
         raise SubscriptionExists("Ya tenés una suscripción activa")
 
@@ -177,8 +180,7 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
         "status": "pending",
     }
     hoy = datetime.now(timezone.utc).date().isoformat()
-    res = mp_request("POST", "/preapproval", payload,
-                     idempotency_key=f"sub-{user.id}-{amount}-{hoy}")
+    res = mp_request("POST", "/preapproval", payload, idempotency_key=f"sub-{user.id}-{amount}-{hoy}")
     pre_id = str(res.get("id") or "")
     # En modo prueba MP devuelve sandbox_init_point (checkout de sandbox); en
     # producción solo init_point. Preferimos el de sandbox cuando existe para
@@ -191,8 +193,7 @@ def create_subscription(user: PortalUser, db: Session) -> dict:
     if not sub:
         db.add(BillingSubscription(user_id=user.id, mp_preapproval_id=pre_id, status="pending"))
         db.commit()
-    return {"init_point": init_point, "amount": amount, "currency": CURRENCY,
-            "sandbox": bool(sandbox)}
+    return {"init_point": init_point, "amount": amount, "currency": CURRENCY, "sandbox": bool(sandbox)}
 
 
 # Cuánto suma cada cobro mensual y cuánto margen damos por encima del próximo
@@ -256,8 +257,11 @@ def _user_for_payment(payment: dict, db: Session) -> Optional[PortalUser]:
         if u:
             creado_pago = _parse_fecha_mp(payment.get("date_created"))
             if creado_pago and u.created_at and u.created_at > creado_pago + timedelta(minutes=5):
-                print(f"[MP] pago con external_reference={ext} anterior a la cuenta: "
-                      "id de usuario reutilizado, no se acredita", flush=True)
+                print(
+                    f"[MP] pago con external_reference={ext} anterior a la cuenta: "
+                    "id de usuario reutilizado, no se acredita",
+                    flush=True,
+                )
                 return None
             return u
     return None
@@ -296,8 +300,7 @@ def _pago_invalido(payment: dict, db: Session) -> Optional[str]:
     if monto <= 0:
         return f"monto {monto} no positivo"
     pre_id = _preapproval_de(payment)
-    if pre_id and db.scalar(select(BillingSubscription).where(
-            BillingSubscription.mp_preapproval_id == pre_id)):
+    if pre_id and db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == pre_id)):
         return None
     piso = base_price_ars() * 0.5
     if monto < piso:
@@ -316,8 +319,11 @@ def _revertir_pago(previo: BillingPayment, estado: str, db: Session) -> dict:
         user.premium_until = user.premium_until - dias
     previo.status = estado
     db.commit()
-    print(f"[MP] pago {previo.mp_payment_id} {estado}: se revocan {dias.days} días "
-          f"de premium al usuario {previo.user_id}", flush=True)
+    print(
+        f"[MP] pago {previo.mp_payment_id} {estado}: se revocan {dias.days} días "
+        f"de premium al usuario {previo.user_id}",
+        flush=True,
+    )
     return {"status": "revocado"}
 
 
@@ -365,16 +371,19 @@ def apply_payment(payment_id: str, db: Session, preapproval_id: Optional[str] = 
     # regalados), pero nunca menos de 30+5 desde hoy: el margen cubre los meses
     # de 31 días y los reintentos de cobro de MP, y no se acumula mes a mes
     # porque el próximo cobro vuelve a medir desde el vencimiento.
-    nuevo = max(base + timedelta(days=DIAS_POR_COBRO),
-                now + timedelta(days=DIAS_POR_COBRO + DIAS_DE_GRACIA))
+    nuevo = max(base + timedelta(days=DIAS_POR_COBRO), now + timedelta(days=DIAS_POR_COBRO + DIAS_DE_GRACIA))
     user.premium_until = nuevo
     tenia_descuento = user.pending_discount_percent
     user.pending_discount_percent = None  # el descuento ya se usó en este cobro
-    db.add(BillingPayment(
-        user_id=user.id, mp_payment_id=str(payment_id),
-        amount=payment.get("transaction_amount"), status=status,
-        granted_s=int((nuevo - base).total_seconds()),
-    ))
+    db.add(
+        BillingPayment(
+            user_id=user.id,
+            mp_payment_id=str(payment_id),
+            amount=payment.get("transaction_amount"),
+            status=status,
+            granted_s=int((nuevo - base).total_seconds()),
+        )
+    )
     try:
         db.commit()
     except IntegrityError:
@@ -402,8 +411,7 @@ def apply_authorized_payment(authorized_id: str, db: Session) -> dict:
     pay_id = pago.get("id") if isinstance(pago, dict) else None
     pay_id = pay_id or data.get("payment_id")
     if not pay_id or not str(pay_id).isdigit():
-        print(f"[MP] authorized_payment {authorized_id} todavía sin pago "
-              f"(estado {data.get('status')!r})", flush=True)
+        print(f"[MP] authorized_payment {authorized_id} todavía sin pago (estado {data.get('status')!r})", flush=True)
         return {"status": "sin_pago"}
     pre = data.get("preapproval_id")
     return apply_payment(str(pay_id), db, preapproval_id=str(pre) if pre else None)
@@ -421,10 +429,11 @@ def _restaurar_precio_de_lista(payment: dict, db: Session, user: PortalUser) -> 
     """
     pre_id = _preapproval_de(payment)
     if not pre_id:
-        sub = db.scalar(select(BillingSubscription)
-                        .where(BillingSubscription.user_id == user.id,
-                               BillingSubscription.status != "cancelled")
-                        .order_by(BillingSubscription.id.desc()))
+        sub = db.scalar(
+            select(BillingSubscription)
+            .where(BillingSubscription.user_id == user.id, BillingSubscription.status != "cancelled")
+            .order_by(BillingSubscription.id.desc())
+        )
         pre_id = sub.mp_preapproval_id if sub else None
     if not pre_id:
         return
@@ -434,8 +443,9 @@ def _restaurar_precio_de_lista(payment: dict, db: Session, user: PortalUser) -> 
         print(f"[MP] sin cotización para restaurar el precio de {pre_id}", flush=True)
         return
     try:
-        mp_request("PUT", f"/preapproval/{pre_id}",
-                   {"auto_recurring": {"transaction_amount": lista, "currency_id": CURRENCY}})
+        mp_request(
+            "PUT", f"/preapproval/{pre_id}", {"auto_recurring": {"transaction_amount": lista, "currency_id": CURRENCY}}
+        )
     except Exception as e:
         print(f"[MP] no se pudo restaurar el precio de lista en {pre_id}: {e}", flush=True)
 
@@ -451,8 +461,7 @@ def sync_preapproval(pre_id: str, db: Session) -> dict:
     status = str(data.get("status") or "").lower()
     if status not in ("pending", "authorized", "paused", "cancelled"):
         return {"status": "desconocido"}
-    sub = db.scalar(select(BillingSubscription).where(
-        BillingSubscription.mp_preapproval_id == str(pre_id)))
+    sub = db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == str(pre_id)))
     if not sub:
         return {"status": "sin_suscripcion"}
     sub.status = status

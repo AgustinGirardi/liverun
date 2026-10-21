@@ -63,17 +63,17 @@ Son las partes donde el problema real obligó a algo menos obvio:
 
 ## Correrlo
 
-Requiere Python 3.12+ y Node 20+.
+Requiere Python 3.12+ y Node 22+.
 
 ```bash
 # ── Portal (cloud/) ──
 python -m venv .venv && .venv/Scripts/activate     # Linux/macOS: source .venv/bin/activate
-pip install -r cloud/requirements.txt
+pip install -r cloud/requirements.lock
 cp .env.example .env                                # completá CT_CLOUD_SECRET y CT_PUBLISH_KEY
 uvicorn cloud.main:app --reload --port 8002         # http://localhost:8002
 
 # ── App de escritorio ──
-pip install -r requirements.txt
+pip install -r requirements.lock
 cd frontend && npm install && npm run build && cd ..
 python launcher.py
 
@@ -84,11 +84,35 @@ cd mobile && npm install && npx expo start
 ### Tests
 
 ```bash
-python -m pytest cloud/tests backend/tests -q      # 330 tests
-cd mobile && npm test
+pip install -r requirements-dev.txt                 # pytest, httpx y ruff (una vez)
+python -m pytest cloud/tests backend/tests -q       # portal + escritorio: 342 tests
+cd frontend && npm test                             # lógica del cronómetro y la captura de llegadas: 36 tests
+cd mobile && npm test                               # lógica de la app: 73 tests
 ```
 
-El despliegue del portal en Render está documentado paso a paso en
+### Lint y tipos
+
+La CI (`.github/workflows/ci.yml`) corre todo esto en cada push y en cada PR, con cero avisos permitidos:
+
+```bash
+ruff check . && ruff format --check .               # Python (config en pyproject.toml)
+cd frontend && npm run lint                         # React del escritorio
+cd mobile && npm run lint && npx tsc --noEmit       # app móvil: lint y tipos
+```
+
+### Dependencias de Python
+
+Los `requirements*.txt` son los pisos que se editan a mano; los `.lock` son lo que se instala (en Render y en la CI), con todas las versiones fijadas. Para regenerarlos después de cambiar un piso:
+
+```bash
+uv pip compile cloud/requirements.txt --universal --python-version 3.12 -o cloud/requirements.lock
+uv pip compile requirements.txt -c cloud/requirements.lock --universal --python-version 3.12 -o requirements.lock
+```
+
+`pytest`, `httpx` y `ruff` viven aparte, en `requirements-dev.txt`, para que no se instalen en producción. Para auditar vulnerabilidades: `pipx run pip-audit --no-deps --disable-pip -r cloud/requirements.lock`.
+
+El resto de la documentación está indexada en [docs/README.md](docs/README.md). El
+despliegue del portal en Render está documentado paso a paso en
 [DEPLOY.md](DEPLOY.md), incluido el blueprint (`render.yaml`) y la migración a
 un dominio propio.
 

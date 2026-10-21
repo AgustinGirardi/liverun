@@ -1,5 +1,6 @@
 """Cobro con Mercado Pago: precio con descuento, alta de suscripción, webhook
 de pago (idempotente) y extensión de premium. Las llamadas a MP se mockean."""
+
 from datetime import datetime
 
 from sqlalchemy import select
@@ -10,6 +11,7 @@ from cloud.tests.conftest import make_user
 
 
 # ── Precio puro ───────────────────────────────────────────────────────────────
+
 
 def test_precio_al_dolar_del_dia(monkeypatch):
     # USD 2.00 a un dólar de 1000 → 2000 ARS (redondeado a la decena).
@@ -38,23 +40,28 @@ def test_rate_usa_fallback_si_la_api_falla(monkeypatch):
     monkeypatch.setattr(billing, "MANUAL_RATE", None)
     monkeypatch.setattr(billing, "RATE_FALLBACK", 1234.0)
     billing._rate_cache["rate"] = 0.0
+
     def boom():
         raise RuntimeError("sin red")
+
     monkeypatch.setattr(billing, "_fetch_usd_ars_rate", boom)
     assert billing.usd_ars_rate() == 1234.0
 
 
 # ── Alta de suscripción ───────────────────────────────────────────────────────
 
+
 def test_subscribe_devuelve_init_point_y_guarda(client, db, monkeypatch):
     monkeypatch.setattr(billing, "MP_ACCESS_TOKEN", "tok")
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
     monkeypatch.setattr(billing, "usd_ars_rate", lambda strict=False: 1000.0)  # sin red
     calls = {}
+
     def fake(method, path, body=None, **kw):
         calls["body"] = body
         calls["idem"] = kw.get("idempotency_key")
         return {"id": "PRE-123", "init_point": "https://mp/checkout/PRE-123"}
+
     monkeypatch.setattr(billing, "mp_request", fake)
 
     h = make_user(client, email="pagador@test.com")
@@ -75,19 +82,27 @@ def test_subscribe_sin_config_da_503(client, monkeypatch):
 
 # ── Webhook de pago ───────────────────────────────────────────────────────────
 
+
 def _setup_payment(monkeypatch, user_id, status="approved", amount=2000.0):
     # Precio fijo: sin esto la validación del monto consultaría el dólar en red.
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", "2000")
+
     def fake(method, path, body=None, **kw):
         if path.startswith("/v1/payments/"):
-            return {"id": path.rsplit("/", 1)[1], "status": status, "currency_id": "ARS",
-                    "external_reference": str(user_id), "transaction_amount": amount}
+            return {
+                "id": path.rsplit("/", 1)[1],
+                "status": status,
+                "currency_id": "ARS",
+                "external_reference": str(user_id),
+                "transaction_amount": amount,
+            }
         return {}
+
     monkeypatch.setattr(billing, "mp_request", fake)
 
 
 def test_webhook_pago_aprobado_extiende_premium(client, db, monkeypatch):
-    h = make_user(client, email="p1@test.com")
+    make_user(client, email="p1@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p1@test.com"))
     assert u.premium_until is None
     _setup_payment(monkeypatch, u.id)
@@ -100,7 +115,7 @@ def test_webhook_pago_aprobado_extiende_premium(client, db, monkeypatch):
 
 
 def test_webhook_es_idempotente(client, db, monkeypatch):
-    h = make_user(client, email="p2@test.com")
+    make_user(client, email="p2@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p2@test.com"))
     _setup_payment(monkeypatch, u.id)
     client.post("/api/run/billing/webhook?type=payment&data.id=90002")
@@ -123,7 +138,7 @@ def test_webhook_ignora_id_no_numerico(client, monkeypatch):
 
 
 def test_webhook_pago_rechazado_no_da_premium(client, db, monkeypatch):
-    h = make_user(client, email="p3@test.com")
+    make_user(client, email="p3@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p3@test.com"))
     _setup_payment(monkeypatch, u.id, status="rejected")
     client.post("/api/run/billing/webhook?type=payment&data.id=90003")
@@ -132,7 +147,7 @@ def test_webhook_pago_rechazado_no_da_premium(client, db, monkeypatch):
 
 
 def test_webhook_consume_descuento_pendiente(client, db, monkeypatch):
-    h = make_user(client, email="p4@test.com")
+    make_user(client, email="p4@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p4@test.com"))
     u.pending_discount_percent = 30
     db.commit()
@@ -153,6 +168,7 @@ def test_webhook_otro_topic_se_ignora(client, db, monkeypatch):
 
 # ── Ciclo de vida de la suscripción ───────────────────────────────────────────
 
+
 def test_webhook_preapproval_sincroniza_estado(client, db, monkeypatch):
     """Un aviso de preapproval actualiza el estado local. Sin esto la fila se
     queda en 'pending' para siempre y una baja hecha desde MP es invisible."""
@@ -160,10 +176,8 @@ def test_webhook_preapproval_sincroniza_estado(client, db, monkeypatch):
     u = db.scalar(select(PortalUser).where(PortalUser.email == "p5@test.com"))
     db.add(BillingSubscription(user_id=u.id, mp_preapproval_id="PRE-77", status="pending"))
     db.commit()
-    sub = db.scalar(select(BillingSubscription).where(
-        BillingSubscription.mp_preapproval_id == "PRE-77"))
-    monkeypatch.setattr(billing, "mp_request",
-                        lambda method, path, body=None, **kw: {"status": "authorized"})
+    sub = db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == "PRE-77"))
+    monkeypatch.setattr(billing, "mp_request", lambda method, path, body=None, **kw: {"status": "authorized"})
 
     client.post("/api/run/billing/webhook?type=subscription_preapproval&data.id=PRE-77")
     db.refresh(sub)
@@ -193,7 +207,7 @@ def test_subscribe_rechaza_si_ya_hay_una_autorizada(client, db, monkeypatch):
 
     r = client.post("/api/run/billing/subscribe", headers=h)
     assert r.status_code == 409
-    assert calls == []          # ni se le pide a MP
+    assert calls == []  # ni se le pide a MP
 
 
 def test_subscribe_falla_si_no_hay_cotizacion(client, monkeypatch):
@@ -203,8 +217,10 @@ def test_subscribe_falla_si_no_hay_cotizacion(client, monkeypatch):
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", None)
     monkeypatch.setattr(billing, "MANUAL_RATE", None)
     billing._rate_cache["rate"] = 0.0
+
     def boom():
         raise RuntimeError("sin red")
+
     monkeypatch.setattr(billing, "_fetch_usd_ars_rate", boom)
     calls = []
     monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
@@ -225,18 +241,29 @@ def test_descuento_vuelve_al_precio_de_lista_tras_el_primer_cobro(client, db, mo
     db.commit()
     monkeypatch.setattr(billing, "FIXED_PRICE_ARS", "2000")
     puts = []
+
     def fake(method, path, body=None, **kw):
         if path.startswith("/v1/payments/"):
-            return {"id": "90050", "status": "approved", "currency_id": "ARS",
-                    "external_reference": str(u.id), "transaction_amount": 1000.0}
+            return {
+                "id": "90050",
+                "status": "approved",
+                "currency_id": "ARS",
+                "external_reference": str(u.id),
+                "transaction_amount": 1000.0,
+            }
         puts.append((method, path, body))
         return {}
+
     monkeypatch.setattr(billing, "mp_request", fake)
 
     client.post("/api/run/billing/webhook?type=payment&data.id=90050")
-    assert puts == [("PUT", "/preapproval/PRE-CUP",
-                     {"auto_recurring": {"transaction_amount": 2000.0,
-                                         "currency_id": billing.CURRENCY}})]
+    assert puts == [
+        (
+            "PUT",
+            "/preapproval/PRE-CUP",
+            {"auto_recurring": {"transaction_amount": 2000.0, "currency_id": billing.CURRENCY}},
+        )
+    ]
 
 
 def test_pago_sin_usuario_cancela_el_preapproval_zombi(client, db, monkeypatch):
@@ -244,12 +271,19 @@ def test_pago_sin_usuario_cancela_el_preapproval_zombi(client, db, monkeypatch):
     primer cobro que no podemos atribuir lo damos de baja: cobra una vez, no
     todos los meses para siempre."""
     puts = []
+
     def fake(method, path, body=None, **kw):
         if path.startswith("/v1/payments/"):
-            return {"id": "90060", "status": "approved", "external_reference": "999999",
-                    "preapproval_id": "PRE-ZOMBI", "transaction_amount": 1000.0}
+            return {
+                "id": "90060",
+                "status": "approved",
+                "external_reference": "999999",
+                "preapproval_id": "PRE-ZOMBI",
+                "transaction_amount": 1000.0,
+            }
         puts.append((method, path, body))
         return {}
+
     monkeypatch.setattr(billing, "mp_request", fake)
 
     client.post("/api/run/billing/webhook?type=payment&data.id=90060")
@@ -258,15 +292,19 @@ def test_pago_sin_usuario_cancela_el_preapproval_zombi(client, db, monkeypatch):
 
 # ── Firma del webhook ─────────────────────────────────────────────────────────
 
+
 def test_webhook_rechaza_firma_invalida(client, monkeypatch):
     """Con el secreto configurado, un aviso mal firmado no gasta ni la consulta."""
     import cloud.billing_routes as br
+
     monkeypatch.setattr(br, "MP_WEBHOOK_SECRET", "shh")
     calls = []
     monkeypatch.setattr(billing, "mp_request", lambda *a, **k: calls.append(a) or {})
 
-    r = client.post("/api/run/billing/webhook?type=payment&data.id=90070",
-                    headers={"x-signature": "ts=1,v1=deadbeef", "x-request-id": "req-1"})
+    r = client.post(
+        "/api/run/billing/webhook?type=payment&data.id=90070",
+        headers={"x-signature": "ts=1,v1=deadbeef", "x-request-id": "req-1"},
+    )
     assert r.json() == {"received": True, "ignored": "firma"}
     assert calls == []
 
@@ -277,19 +315,20 @@ def test_firma_valida_con_id_alfanumerico_en_minusculas(client, db, monkeypatch)
     import hashlib
     import hmac as _hmac
     import cloud.billing_routes as br
+
     monkeypatch.setattr(br, "MP_WEBHOOK_SECRET", "shh")
     make_user(client, email="firmapre@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "firmapre@test.com"))
     db.add(BillingSubscription(user_id=u.id, mp_preapproval_id="PRE-AbC9", status="pending"))
     db.commit()
-    sub = db.scalar(select(BillingSubscription).where(
-        BillingSubscription.mp_preapproval_id == "PRE-AbC9"))
-    monkeypatch.setattr(billing, "mp_request",
-                        lambda method, path, body=None, **kw: {"status": "authorized"})
+    sub = db.scalar(select(BillingSubscription).where(BillingSubscription.mp_preapproval_id == "PRE-AbC9"))
+    monkeypatch.setattr(billing, "mp_request", lambda method, path, body=None, **kw: {"status": "authorized"})
     v1 = _hmac.new(b"shh", b"id:pre-abc9;request-id:req-5;ts:999;", hashlib.sha256).hexdigest()
 
-    client.post("/api/run/billing/webhook?type=subscription_preapproval&data.id=PRE-AbC9",
-                headers={"x-signature": f"ts=999,v1={v1}", "x-request-id": "req-5"})
+    client.post(
+        "/api/run/billing/webhook?type=subscription_preapproval&data.id=PRE-AbC9",
+        headers={"x-signature": f"ts=999,v1={v1}", "x-request-id": "req-5"},
+    )
     db.refresh(sub)
     assert sub.status == "authorized"
 
@@ -298,13 +337,16 @@ def test_webhook_acepta_firma_valida(client, db, monkeypatch):
     import hashlib
     import hmac as _hmac
     import cloud.billing_routes as br
+
     monkeypatch.setattr(br, "MP_WEBHOOK_SECRET", "shh")
     make_user(client, email="firmado@test.com")
     u = db.scalar(select(PortalUser).where(PortalUser.email == "firmado@test.com"))
     _setup_payment(monkeypatch, u.id)
     v1 = _hmac.new(b"shh", b"id:90071;request-id:req-9;ts:12345;", hashlib.sha256).hexdigest()
 
-    client.post("/api/run/billing/webhook?type=payment&data.id=90071",
-                headers={"x-signature": f"ts=12345,v1={v1}", "x-request-id": "req-9"})
+    client.post(
+        "/api/run/billing/webhook?type=payment&data.id=90071",
+        headers={"x-signature": f"ts=12345,v1={v1}", "x-request-id": "req-9"},
+    )
     db.refresh(u)
     assert u.premium_until is not None

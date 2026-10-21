@@ -1,4 +1,5 @@
 """Hash de contraseñas (PBKDF2) y tokens firmados (HMAC). Sin dependencias externas."""
+
 import os
 import time
 import hmac
@@ -26,6 +27,15 @@ def verify_password(password: str, stored: str) -> bool:
         return hmac.compare_digest(dk, expected)
     except Exception:
         return False
+
+
+def email_hash(email: str) -> str:
+    """sha256 del email normalizado: lo que el portal guarda en vez del email.
+
+    El escritorio calcula el mismo hash (backend/api/routes.py::_email_hash) sin
+    importar este módulo; backend/tests/test_email_hash_contrato.py exige que
+    den lo mismo."""
+    return hashlib.sha256(("chronotrack-v1:" + (email or "").strip().lower()).encode()).hexdigest()
 
 
 def make_token(user_id: int, iat: int = 0) -> str:
@@ -91,8 +101,7 @@ def _firma_mail(b64: str, huella: str) -> str:
     return hmac.new(SECRET.encode(), f"mail|{b64}|{huella}".encode(), hashlib.sha256).hexdigest()
 
 
-def make_mail_token(proposito: str, user_id: int, email: str,
-                    password_hash: str = "", now: float = 0) -> str:
+def make_mail_token(proposito: str, user_id: int, email: str, password_hash: str = "", now: float = 0) -> str:
     base = now or time.time()
     datos = {"p": proposito, "u": user_id, "e": email, "x": int(base + MAIL_TTL[proposito])}
     b64 = base64.urlsafe_b64encode(json.dumps(datos).encode()).decode().rstrip("=")
@@ -113,8 +122,9 @@ def mail_token_uid(token: str):
         return None
 
 
-def verify_mail_token(token: str, proposito: str, user_id: int, email: str,
-                      password_hash: str = "", now: float = 0) -> bool:
+def verify_mail_token(
+    token: str, proposito: str, user_id: int, email: str, password_hash: str = "", now: float = 0
+) -> bool:
     """True si el token es de este propósito, de esta cuenta con este email,
     no venció y (reset) la contraseña no cambió desde que se emitió."""
     try:
@@ -122,7 +132,11 @@ def verify_mail_token(token: str, proposito: str, user_id: int, email: str,
         good = _firma_mail(b64, _huella(proposito, password_hash))
         if not hmac.compare_digest(good, sig):
             return False
-        return (datos["p"] == proposito and int(datos["u"]) == user_id
-                and datos["e"] == email and int(datos["x"]) >= (now or time.time()))
+        return (
+            datos["p"] == proposito
+            and int(datos["u"]) == user_id
+            and datos["e"] == email
+            and int(datos["x"]) >= (now or time.time())
+        )
     except Exception:
         return False

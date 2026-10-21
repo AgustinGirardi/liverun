@@ -40,7 +40,7 @@ Esto es lo que más condiciona las decisiones de diseño, y lo que un análisis 
 
 Mint de marca (`#00e5a0`) sobre superficies oscuras que nunca son negro puro. En tema claro el mint no llega a contraste como texto, así que baja a un teal profundo (`#00795C`); el mint se reserva para rellenos grandes que llevan su propio texto encima. Los tres tokens están en `mobile/src/constants/theme.ts`, y `mobile/src/constants/__tests__/theme.test.ts` verifica su contraste.
 
-La voz de display es la del brief de "Pista nocturna" (`HANDOFF.md`): `ui-rounded` con peso 800 y numerales tabulares, igual en escritorio, portal y móvil. Se evaluó Barlow Condensed para el móvil y se descartó para no romper la marca compartida.
+La voz de display es la del brief de "Pista nocturna" (`historico/HANDOFF.md`): `ui-rounded` con peso 800 y numerales tabulares, igual en escritorio, portal y móvil. Se evaluó Barlow Condensed para el móvil y se descartó para no romper la marca compartida.
 
 El portal web comparte la familia de tokens con la app, para que un organizador que salta del navegador al teléfono vea el mismo producto.
 

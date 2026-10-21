@@ -6,9 +6,9 @@ nunca se envía al navegador (la UI sólo recibe una versión enmascarada).
 Las variables de entorno CT_CLOUD_URL / CT_PUBLISH_KEY tienen prioridad si están
 definidas (útil para despliegues controlados).
 """
+
 import os
 import json
-from pathlib import Path
 
 from backend.core.database import DB_PATH
 

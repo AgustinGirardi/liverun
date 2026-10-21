@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, type ViewProps } from 'react-native';
 
 import { useReducedMotion } from '@/hooks/use-reduced-motion';
@@ -16,7 +16,7 @@ export function FadeIn({
   children,
   ...rest
 }: ViewProps & { delay?: number; offset?: number; duration?: number }) {
-  const t = useRef(new Animated.Value(0)).current;
+  const [t] = useState(() => new Animated.Value(0));
   const reduced = useReducedMotion();
 
   useEffect(() => {

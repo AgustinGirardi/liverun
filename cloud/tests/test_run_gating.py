@@ -1,4 +1,5 @@
 """Muro premium: el ranking mundial requiere acceso; el de amigos es gratis."""
+
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select

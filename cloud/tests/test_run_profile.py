@@ -1,4 +1,5 @@
 """Perfil de ChronoTrack Run: username, meta semanal."""
+
 from cloud.tests.conftest import make_user
 
 

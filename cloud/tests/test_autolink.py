@@ -9,18 +9,30 @@ def _h(email):
 
 def _publish_with_email(client, email, bib="1", name="Juan Perez", source_id="ct-race-1"):
     from cloud.tests.conftest import publish_race
-    publish_race(client, source_id=source_id, results=[{
-        "bib_number": bib, "full_name": name, "distance_km": 10.0,
-        "net_time_ns": 1_800_000_000_000, "position": 1,
-        "status": "FINISHER", "email_hash": _h(email),
-    }])
+
+    publish_race(
+        client,
+        source_id=source_id,
+        results=[
+            {
+                "bib_number": bib,
+                "full_name": name,
+                "distance_km": 10.0,
+                "net_time_ns": 1_800_000_000_000,
+                "position": 1,
+                "status": "FINISHER",
+                "email_hash": _h(email),
+            }
+        ],
+    )
 
 
 def test_verify_autolinks_matching_results(client):
     # El registro ya no vincula (email sin verificar): vincula la verificación.
     _publish_with_email(client, "juan@mail.com")
-    r = client.post("/api/auth/register", json={
-        "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    r = client.post(
+        "/api/auth/register", json={"email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"}
+    )
     assert r.status_code == 200
     assert r.json()["linked"] == 0
     token = r.json()["token"]
@@ -32,8 +44,9 @@ def test_verify_autolinks_matching_results(client):
 
 def test_register_sin_verificar_no_vincula(client):
     _publish_with_email(client, "juan@mail.com")
-    r = client.post("/api/auth/register", json={
-        "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    r = client.post(
+        "/api/auth/register", json={"email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"}
+    )
     token = r.json()["token"]
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {token}"})
     assert me.json()["results"] == []
@@ -44,8 +57,9 @@ def test_register_sin_verificar_no_vincula(client):
 
 def test_register_does_not_link_other_emails(client):
     _publish_with_email(client, "otro@mail.com")
-    r = client.post("/api/auth/register", json={
-        "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    r = client.post(
+        "/api/auth/register", json={"email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"}
+    )
     token = r.json()["token"]
     assert verificar_email(client, "juan@mail.com")["linked"] == 0
     me = client.get("/api/me/results", headers={"Authorization": f"Bearer {token}"})
@@ -54,8 +68,9 @@ def test_register_does_not_link_other_emails(client):
 
 def test_login_links_results_published_after_register(client):
     # Cuenta creada (y verificada) antes de que exista el resultado
-    client.post("/api/auth/register", json={
-        "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    client.post(
+        "/api/auth/register", json={"email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"}
+    )
     verificar_email(client, "juan@mail.com")
     _publish_with_email(client, "juan@mail.com")  # se publica después
     r = client.post("/api/auth/login", json={"email": "juan@mail.com", "password": "supersecreta"})
@@ -66,8 +81,9 @@ def test_login_links_results_published_after_register(client):
 
 def test_autolink_is_idempotent(client):
     _publish_with_email(client, "juan@mail.com")
-    client.post("/api/auth/register", json={
-        "email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"})
+    client.post(
+        "/api/auth/register", json={"email": "juan@mail.com", "password": "supersecreta", "full_name": "Juan Perez"}
+    )
     assert verificar_email(client, "juan@mail.com")["linked"] == 1
     r = client.post("/api/auth/login", json={"email": "juan@mail.com", "password": "supersecreta"})
     assert r.json()["linked"] == 0

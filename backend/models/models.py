@@ -1,7 +1,16 @@
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Float, Date,
-    ForeignKey, Enum, UniqueConstraint, Index,
-    func, DateTime
+    Column,
+    Integer,
+    BigInteger,
+    String,
+    Float,
+    Date,
+    ForeignKey,
+    Enum,
+    UniqueConstraint,
+    Index,
+    func,
+    DateTime,
 )
 from sqlalchemy.orm import relationship, DeclarativeBase
 import enum
@@ -18,121 +27,135 @@ def nuevo_cloud_source_id() -> str:
     siga actualizando lo que ya está en producción."""
     return "ct-" + uuid.uuid4().hex
 
+
 class Base(DeclarativeBase):
     pass
+
 
 class RaceStatus(str, enum.Enum):
     PLANNED = "PLANNED"
     ACTIVE = "ACTIVE"
     FINISHED = "FINISHED"
 
+
 class CaptureStatus(str, enum.Enum):
     PENDING = "PENDING"
     ASSIGNED = "ASSIGNED"
     DISCARDED = "DISCARDED"
+
 
 class Gender(str, enum.Enum):
     M = "M"
     F = "F"
     X = "X"
 
+
 class RegistrationStatus(str, enum.Enum):
-    OK  = "OK"
-    DNS = "DNS"   # Did Not Start
-    DNF = "DNF"   # Did Not Finish
-    DQ  = "DQ"    # Disqualified
+    OK = "OK"
+    DNS = "DNS"  # Did Not Start
+    DNF = "DNF"  # Did Not Finish
+    DQ = "DQ"  # Disqualified
+
 
 class Runner(Base):
     __tablename__ = "runners"
-    id         = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     first_name = Column(String(100), nullable=False)
-    last_name  = Column(String(100), nullable=False)
-    email      = Column(String(200), nullable=True)
-    dni        = Column(String(20),  nullable=True)
-    birth_date = Column(Date,        nullable=True)
-    gender     = Column(Enum(Gender), nullable=True)
-    category   = Column(String(20),  nullable=True)
-    club       = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=False)
+    email = Column(String(200), nullable=True)
+    dni = Column(String(20), nullable=True)
+    birth_date = Column(Date, nullable=True)
+    gender = Column(Enum(Gender), nullable=True)
+    category = Column(String(20), nullable=True)
+    club = Column(String(100), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     registrations = relationship("Registration", back_populates="runner")
 
+
 class Race(Base):
     __tablename__ = "races"
-    id             = Column(Integer, primary_key=True, autoincrement=True)
-    name           = Column(String(200), nullable=False)
-    location       = Column(String(200), nullable=True)
-    race_date      = Column(Date, nullable=True)
-    distance_km    = Column(Float, nullable=True)
-    status         = Column(Enum(RaceStatus), default=RaceStatus.PLANNED)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False)
+    location = Column(String(200), nullable=True)
+    race_date = Column(Date, nullable=True)
+    distance_km = Column(Float, nullable=True)
+    status = Column(Enum(RaceStatus), default=RaceStatus.PLANNED)
     # Largada general. Si una distancia tiene su propia largada (race_starts),
     # manda esa; si no, se usa ésta.
-    race_start_ns  = Column(BigInteger, nullable=True)
+    race_start_ns = Column(BigInteger, nullable=True)
     cloud_source_id = Column(String(64), nullable=True, default=nuevo_cloud_source_id)
     # Calendario público: si la carrera todavía no se corrió, se publica en el
     # portal como evento con estos dos datos (el cupo y dónde inscribirse).
     registration_url = Column(String(400), nullable=True)
-    capacity         = Column(Integer, nullable=True)
+    capacity = Column(Integer, nullable=True)
     # Estado de publicación en el portal (UTC): se completa sólo si el portal aceptó.
-    published_at     = Column(DateTime, nullable=True)
-    published_code   = Column(String(40), nullable=True)
-    created_at     = Column(DateTime, server_default=func.now())
-    registrations  = relationship("Registration", back_populates="race")
-    captures       = relationship("TimestampCapture", back_populates="race")
+    published_at = Column(DateTime, nullable=True)
+    published_code = Column(String(40), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    registrations = relationship("Registration", back_populates="race")
+    captures = relationship("TimestampCapture", back_populates="race")
     # selectin: RaceOut las serializa, y en async no se puede cargar perezosamente.
-    starts         = relationship(
-        "RaceStart", back_populates="race", lazy="selectin",
-        cascade="all, delete-orphan", passive_deletes=True,
+    starts = relationship(
+        "RaceStart",
+        back_populates="race",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
         order_by="RaceStart.distance_km",
     )
 
 
 class RaceStart(Base):
     """Largada propia de una distancia (ej. la de 21K a las 7:30 y la de 10K a las 8:00)."""
+
     __tablename__ = "race_starts"
-    id          = Column(Integer, primary_key=True, autoincrement=True)
-    race_id     = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    race_id = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
     distance_km = Column(Float, nullable=False)
-    start_ns    = Column(BigInteger, nullable=False)
-    race        = relationship("Race", back_populates="starts")
-    __table_args__ = (
-        UniqueConstraint("race_id", "distance_km", name="uq_race_start_dist"),
-    )
+    start_ns = Column(BigInteger, nullable=False)
+    race = relationship("Race", back_populates="starts")
+    __table_args__ = (UniqueConstraint("race_id", "distance_km", name="uq_race_start_dist"),)
+
 
 class Registration(Base):
     __tablename__ = "registrations"
-    id           = Column(Integer, primary_key=True, autoincrement=True)
-    runner_id    = Column(Integer, ForeignKey("runners.id", ondelete="RESTRICT"), nullable=False)
-    race_id      = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
-    bib_number   = Column(String(20), nullable=False)
-    distance_km  = Column(Float, nullable=True)
-    status       = Column(Enum(RegistrationStatus), nullable=False, default=RegistrationStatus.OK, server_default="OK")
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    runner_id = Column(Integer, ForeignKey("runners.id", ondelete="RESTRICT"), nullable=False)
+    race_id = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
+    bib_number = Column(String(20), nullable=False)
+    distance_km = Column(Float, nullable=True)
+    status = Column(Enum(RegistrationStatus), nullable=False, default=RegistrationStatus.OK, server_default="OK")
     registered_at = Column(DateTime, server_default=func.now())
-    runner       = relationship("Runner", back_populates="registrations")
-    race         = relationship("Race", back_populates="registrations")
-    splits       = relationship("Split", back_populates="registration")
+    runner = relationship("Runner", back_populates="registrations")
+    race = relationship("Race", back_populates="registrations")
+    splits = relationship("Split", back_populates="registration")
     __table_args__ = (
         UniqueConstraint("race_id", "bib_number", name="uq_race_bib"),
         Index("ix_registration_bib", "race_id", "bib_number"),
     )
 
+
 class TimestampCapture(Base):
     __tablename__ = "timestamp_captures"
-    id             = Column(Integer, primary_key=True, autoincrement=True)
-    race_id        = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
-    captured_ns    = Column(BigInteger, nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    race_id = Column(Integer, ForeignKey("races.id", ondelete="CASCADE"), nullable=False)
+    captured_ns = Column(BigInteger, nullable=False)
     sequence_order = Column(Integer, nullable=False)
     capture_device = Column(String(100), nullable=True, default="operator-1")
-    status         = Column(Enum(CaptureStatus), default=CaptureStatus.PENDING)
-    created_at     = Column(DateTime, server_default=func.now())
-    race           = relationship("Race", back_populates="captures")
-    split          = relationship("Split", back_populates="timestamp_capture", uselist=False)
+    status = Column(Enum(CaptureStatus), default=CaptureStatus.PENDING)
+    created_at = Column(DateTime, server_default=func.now())
+    race = relationship("Race", back_populates="captures")
+    split = relationship("Split", back_populates="timestamp_capture", uselist=False)
+
 
 class Split(Base):
     __tablename__ = "splits"
-    id              = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp_id    = Column(Integer, ForeignKey("timestamp_captures.id", ondelete="RESTRICT"), nullable=False, unique=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp_id = Column(
+        Integer, ForeignKey("timestamp_captures.id", ondelete="RESTRICT"), nullable=False, unique=True
+    )
     registration_id = Column(Integer, ForeignKey("registrations.id", ondelete="RESTRICT"), nullable=False)
-    assigned_by     = Column(String(100), nullable=True, default="operator-1")
-    assigned_at     = Column(DateTime, server_default=func.now())
+    assigned_by = Column(String(100), nullable=True, default="operator-1")
+    assigned_at = Column(DateTime, server_default=func.now())
     timestamp_capture = relationship("TimestampCapture", back_populates="split")
-    registration      = relationship("Registration", back_populates="splits")
+    registration = relationship("Registration", back_populates="splits")

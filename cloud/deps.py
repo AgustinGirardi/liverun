@@ -1,5 +1,6 @@
 """Dependencias compartidas entre el portal (main.py) y la API móvil (run.py):
 rate limiting por IP y autenticación por token."""
+
 import ipaddress
 import logging
 import os
@@ -16,6 +17,9 @@ from cloud.security import verify_token
 
 log = logging.getLogger("cloud.deps")
 
+# URL pública del portal: la usan CORS (main.py) y los links de los mails (auth.py).
+PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
+
 # ── Rate limiting: backend intercambiable ────────────────────────────────────
 # Por defecto en memoria (proceso único en Render starter). Con más de un worker
 # cada proceso tendría su propio contador y el tope real se multiplicaría: ahí
@@ -23,8 +27,8 @@ log = logging.getLogger("cloud.deps")
 # CT_RATE_LIMIT_BACKEND. Un backend solo implementa `permitir`.
 _RATE: dict[str, list[float]] = defaultdict(list)
 _LAST_SWEEP = [0.0]
-_SWEEP_EVERY = 300.0   # barrer como mucho cada 5 min
-_STALE_AFTER = 600.0   # una IP sin actividad en 10 min se olvida
+_SWEEP_EVERY = 300.0  # barrer como mucho cada 5 min
+_STALE_AFTER = 600.0  # una IP sin actividad en 10 min se olvida
 
 
 class Limitador(Protocol):
@@ -55,8 +59,7 @@ _BACKENDS: dict[str, type] = {"memoria": LimitadorEnMemoria}
 def crear_limitador(nombre: Optional[str]) -> Limitador:
     nombre = (nombre or "memoria").strip().lower()
     if nombre not in _BACKENDS:
-        raise RuntimeError(
-            f"CT_RATE_LIMIT_BACKEND={nombre!r} no existe. Opciones: {', '.join(sorted(_BACKENDS))}.")
+        raise RuntimeError(f"CT_RATE_LIMIT_BACKEND={nombre!r} no existe. Opciones: {', '.join(sorted(_BACKENDS))}.")
     return _BACKENDS[nombre]()
 
 
@@ -74,9 +77,11 @@ def aviso_multiworker(backend: str, workers: Optional[str]) -> Optional[str]:
         return None
     if backend != "memoria" or n <= 1:
         return None
-    return (f"Hay {n} workers con el rate limit en memoria: cada proceso cuenta por separado "
-            "y el tope real se multiplica. Registrá un backend compartido (Redis) en "
-            "cloud/deps.py y elegilo con CT_RATE_LIMIT_BACKEND.")
+    return (
+        f"Hay {n} workers con el rate limit en memoria: cada proceso cuenta por separado "
+        "y el tope real se multiplica. Registrá un backend compartido (Redis) en "
+        "cloud/deps.py y elegilo con CT_RATE_LIMIT_BACKEND."
+    )
 
 
 def avisar_si_multiworker() -> None:
@@ -88,12 +93,28 @@ def avisar_si_multiworker() -> None:
 # Rangos publicados de Cloudflare (https://www.cloudflare.com/ips/). Solo se
 # usan para decidir si CF-Connecting-IP es creíble; no filtran tráfico.
 _CF_CIDRS = (
-    "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
-    "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
-    "197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
-    "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
-    "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
-    "2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+    "173.245.48.0/20",
+    "103.21.244.0/22",
+    "103.22.200.0/22",
+    "103.31.4.0/22",
+    "141.101.64.0/18",
+    "108.162.192.0/18",
+    "190.93.240.0/20",
+    "188.114.96.0/20",
+    "197.234.240.0/22",
+    "198.41.128.0/17",
+    "162.158.0.0/15",
+    "104.16.0.0/13",
+    "104.24.0.0/14",
+    "172.64.0.0/13",
+    "131.0.72.0/22",
+    "2400:cb00::/32",
+    "2606:4700::/32",
+    "2803:f800::/32",
+    "2405:b500::/32",
+    "2405:8100::/32",
+    "2a06:98c0::/29",
+    "2c0f:f248::/32",
 )
 _CF_NETS = tuple(ipaddress.ip_network(c) for c in _CF_CIDRS)
 

@@ -1,4 +1,5 @@
 """Flujo básico de cronometraje: largada → captura → asignación → resultados."""
+
 from backend.tests.conftest import make_runner, make_race, register
 
 
@@ -37,12 +38,11 @@ def test_assign_same_bib_twice_rejected(client):
     c1 = client.post(f"/api/v1/races/{race['id']}/capture").json()
     c2 = client.post(f"/api/v1/races/{race['id']}/capture").json()
 
-    assert client.post(
-        f"/api/v1/races/{race['id']}/captures/{c1['id']}/assign", json={"bib_number": "7"}
-    ).status_code == 200
-    r = client.post(
-        f"/api/v1/races/{race['id']}/captures/{c2['id']}/assign", json={"bib_number": "7"}
+    assert (
+        client.post(f"/api/v1/races/{race['id']}/captures/{c1['id']}/assign", json={"bib_number": "7"}).status_code
+        == 200
     )
+    r = client.post(f"/api/v1/races/{race['id']}/captures/{c2['id']}/assign", json={"bib_number": "7"})
     assert r.status_code == 400
 
 

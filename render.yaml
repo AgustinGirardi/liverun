@@ -16,7 +16,7 @@ services:
     plan: starter            # El disco persistente requiere plan pago (~US$7/mes).
     region: ohio             # Cambiá a la región más cercana si querés (oregon, frankfurt, singapore).
     branch: main
-    buildCommand: pip install -r cloud/requirements.txt
+    buildCommand: pip install -r cloud/requirements.lock
     startCommand: uvicorn cloud.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     autoDeploy: true         # Re-deploya en cada push a main…

@@ -1,5 +1,6 @@
 """Verificación de email y "olvidé mi contraseña": mails, tokens, endpoints,
 reglas de Google/admin/autolink y la migración de la columna nueva."""
+
 import base64
 import hashlib
 import json
@@ -11,7 +12,7 @@ from sqlalchemy import create_engine, select, text
 
 import cloud.google_auth as ga
 from cloud import mailer
-from cloud.main import _ensure_admins, _ensure_run_columns
+from cloud.migraciones import _ensure_admins, _ensure_run_columns
 from cloud.models import PortalUser
 from cloud.security import make_mail_token
 from cloud.tests.conftest import make_user, publish_race, verificar_email
@@ -46,15 +47,15 @@ def _registrar(client, email="ana@test.com", password="secreta123", full_name="A
 
 # ── Registro y verificación ───────────────────────────────────────────────────
 
+
 def test_registro_manda_mail_de_verificacion(client, mails):
     token = _registrar(client, full_name="<b>Ana</b> Gomez")
     assert len(mails) == 1
     para, asunto, texto, html, link = mails[0]
     assert para == "ana@test.com"
     assert "/?verificar=" in link and link in texto
-    assert "<b>" not in html and "&lt;b&gt;" in html   # nombre escapado
-    r = client.post("/api/auth/verify", json={"token": _token_del_link(link, "verificar")},
-                    headers=_auth(token))
+    assert "<b>" not in html and "&lt;b&gt;" in html  # nombre escapado
+    r = client.post("/api/auth/verify", json={"token": _token_del_link(link, "verificar")}, headers=_auth(token))
     assert r.status_code == 200 and r.json()["email_verified"] is True
 
 
@@ -109,8 +110,7 @@ def test_verify_token_manipulado(client, db, mails):
     datos = json.loads(base64.urlsafe_b64decode(b64 + "=" * (-len(b64) % 4)))
     datos["u"], datos["e"] = beto.id, beto.email
     b64_malo = base64.urlsafe_b64encode(json.dumps(datos).encode()).decode().rstrip("=")
-    for malo in (f"{b64_malo}.{sig}", tok[:-1] + ("0" if tok[-1] != "0" else "1"),
-                 "basura", "", "a.b.c", tok + "á"):
+    for malo in (f"{b64_malo}.{sig}", tok[:-1] + ("0" if tok[-1] != "0" else "1"), "basura", "", "a.b.c", tok + "á"):
         assert client.post("/api/auth/verify", json={"token": malo}).status_code == 400
     assert _usuario(db, "beto@test.com").email_verified_at is None
 
@@ -161,6 +161,7 @@ def test_reenviar_verificacion_ya_verificado_y_sin_sesion(client, mails):
 
 # ── Olvidé mi contraseña ──────────────────────────────────────────────────────
 
+
 def test_forgot_no_filtra_si_la_cuenta_existe(client, mails):
     _registrar(client)
     mails.clear()
@@ -209,21 +210,19 @@ def test_reset_de_un_solo_uso(client, mails):
 def test_reset_vencido_y_contrasenia_corta(client, db, mails):
     _registrar(client)
     u = _usuario(db, "ana@test.com")
-    viejo = make_mail_token("reset", u.id, u.email, password_hash=u.password_hash,
-                            now=time.time() - 3601)
-    assert client.post("/api/auth/password/reset",
-                       json={"token": viejo, "new_password": "nuevaclave1"}).status_code == 400
+    viejo = make_mail_token("reset", u.id, u.email, password_hash=u.password_hash, now=time.time() - 3601)
+    assert (
+        client.post("/api/auth/password/reset", json={"token": viejo, "new_password": "nuevaclave1"}).status_code == 400
+    )
     tok = _link_de_reset(client, mails)
-    assert client.post("/api/auth/password/reset",
-                       json={"token": tok, "new_password": "corta"}).status_code == 422
+    assert client.post("/api/auth/password/reset", json={"token": tok, "new_password": "corta"}).status_code == 422
 
 
 def test_reset_cierra_otras_sesiones_y_marca_verificado(client, db, mails):
     viejo = _registrar(client)
     assert _usuario(db, "ana@test.com").email_verified_at is None
     tok = _link_de_reset(client, mails)
-    nuevo = client.post("/api/auth/password/reset",
-                        json={"token": tok, "new_password": "nuevaclave1"}).json()["token"]
+    nuevo = client.post("/api/auth/password/reset", json={"token": tok, "new_password": "nuevaclave1"}).json()["token"]
     assert client.get("/api/run/profile", headers=_auth(viejo)).status_code == 401
     prof = client.get("/api/run/profile", headers=_auth(nuevo))
     assert prof.status_code == 200 and prof.json()["email_verified"] is True
@@ -233,12 +232,14 @@ def test_reset_desde_cuenta_solo_google(client, db, mails):
     """Quien entró siempre con Google puede elegir una contraseña con el reset."""
     ga.upsert_google_user(db, sub="g-1", email="gg@test.com", name=None, picture=None)
     tok = _link_de_reset(client, mails, email="gg@test.com")
-    assert client.post("/api/auth/password/reset",
-                       json={"token": tok, "new_password": "nuevaclave1"}).status_code == 200
+    assert (
+        client.post("/api/auth/password/reset", json={"token": tok, "new_password": "nuevaclave1"}).status_code == 200
+    )
     assert client.post("/api/auth/login", json={"email": "gg@test.com", "password": "nuevaclave1"}).status_code == 200
 
 
 # ── Google sobre cuentas existentes ───────────────────────────────────────────
+
 
 def test_google_sobre_cuenta_verificada_no_rota_la_contrasenia(client, db, mails):
     token = _registrar(client)
@@ -264,12 +265,13 @@ def test_alta_por_google_nace_verificada(db):
 
 # ── Admins ────────────────────────────────────────────────────────────────────
 
+
 def test_admin_se_promueve_con_email_verificado_sin_google(client, db, monkeypatch, mails):
     monkeypatch.setenv("CT_ADMIN_EMAILS", "jefe@test.com")
     make_user(client, email="jefe@test.com")
     _ensure_admins()
     assert not _usuario(db, "jefe@test.com").is_admin
-    verificar_email(client, "jefe@test.com")        # la verificación ya lo promueve
+    verificar_email(client, "jefe@test.com")  # la verificación ya lo promueve
     assert _usuario(db, "jefe@test.com").is_admin
     # Y el arranque lo mantiene (o lo promueve si se agregó después a la lista).
     u = _usuario(db, "jefe@test.com")
@@ -295,15 +297,26 @@ def test_admin_sin_verificar_se_revoca(client, db, monkeypatch, mails):
 
 # ── Autolink ──────────────────────────────────────────────────────────────────
 
+
 def _h(email):
     return hashlib.sha256(("chronotrack-v1:" + email).encode()).hexdigest()
 
 
 def test_autolink_solo_con_email_verificado(client, mails):
-    publish_race(client, results=[{
-        "bib_number": "1", "full_name": "Ana Gomez", "distance_km": 10.0,
-        "net_time_ns": 1_800_000_000_000, "position": 1,
-        "status": "FINISHER", "email_hash": _h("ana@test.com")}])
+    publish_race(
+        client,
+        results=[
+            {
+                "bib_number": "1",
+                "full_name": "Ana Gomez",
+                "distance_km": 10.0,
+                "net_time_ns": 1_800_000_000_000,
+                "position": 1,
+                "status": "FINISHER",
+                "email_hash": _h("ana@test.com"),
+            }
+        ],
+    )
     token = _registrar(client)
     assert client.post("/api/me/autolink", headers=_auth(token)).json()["linked"] == 0
     assert client.get("/api/me/results", headers=_auth(token)).json()["results"] == []
@@ -312,6 +325,7 @@ def test_autolink_solo_con_email_verificado(client, mails):
 
 
 # ── Mailer ────────────────────────────────────────────────────────────────────
+
 
 def test_mailer_sin_smtp_loguea_y_no_falla(monkeypatch, caplog):
     monkeypatch.delenv("CT_SMTP_HOST", raising=False)
@@ -331,7 +345,7 @@ def test_mailer_en_produccion_no_loguea_el_link(monkeypatch, caplog):
 
 def test_mailer_error_de_smtp_no_propaga(monkeypatch):
     monkeypatch.setenv("CT_SMTP_HOST", "127.0.0.1")
-    monkeypatch.setenv("CT_SMTP_PORT", "1")   # nadie escucha: falla la conexión
+    monkeypatch.setenv("CT_SMTP_PORT", "1")  # nadie escucha: falla la conexión
     assert mailer.enviar("a@test.com", "A", "t", "<p>h</p>") is False
 
 
@@ -341,13 +355,27 @@ def test_mailer_usa_starttls_y_login(monkeypatch):
     class SMTPFalso:
         def __init__(self, host, port, timeout):
             llamadas.append(("conectar", host, port, timeout))
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def ehlo(self): pass
-        def has_extn(self, n): return n == "starttls"
-        def starttls(self, context): llamadas.append(("starttls",))
-        def login(self, u, p): llamadas.append(("login", u, p))
-        def send_message(self, msg): llamadas.append(("enviar", msg["To"], msg["From"]))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def ehlo(self):
+            pass
+
+        def has_extn(self, n):
+            return n == "starttls"
+
+        def starttls(self, context):
+            llamadas.append(("starttls",))
+
+        def login(self, u, p):
+            llamadas.append(("login", u, p))
+
+        def send_message(self, msg):
+            llamadas.append(("enviar", msg["To"], msg["From"]))
 
     monkeypatch.setattr(mailer.smtplib, "SMTP", SMTPFalso)
     monkeypatch.setenv("CT_SMTP_HOST", "smtp.test")
@@ -356,29 +384,42 @@ def test_mailer_usa_starttls_y_login(monkeypatch):
     monkeypatch.setenv("CT_SMTP_PASSWORD", "clave")
     monkeypatch.setenv("CT_SMTP_FROM", "LiveRun <no-responder@test.com>")
     assert mailer.enviar("a@test.com", "A", "t", "<p>h</p>") is True
-    assert llamadas == [("conectar", "smtp.test", 587, 10), ("starttls",),
-                        ("login", "u@test.com", "clave"),
-                        ("enviar", "a@test.com", "LiveRun <no-responder@test.com>")]
+    assert llamadas == [
+        ("conectar", "smtp.test", 587, 10),
+        ("starttls",),
+        ("login", "u@test.com", "clave"),
+        ("enviar", "a@test.com", "LiveRun <no-responder@test.com>"),
+    ]
 
 
 # ── Migración ─────────────────────────────────────────────────────────────────
 
+
 def test_migracion_idempotente_con_base_vieja(tmp_path, monkeypatch):
     import cloud.db
+
     eng = create_engine(f"sqlite:///{tmp_path / 'vieja.db'}")
     with eng.begin() as c:
-        c.execute(text("CREATE TABLE portal_users (id INTEGER PRIMARY KEY, email VARCHAR(255) NOT NULL UNIQUE, "
-                       "password_hash VARCHAR(255) NOT NULL, full_name VARCHAR(200), created_at DATETIME, "
-                       "google_id VARCHAR(64))"))
-        c.execute(text("INSERT INTO portal_users (email, password_hash, google_id) VALUES "
-                       "('g@test.com', 'x', 'g-1'), ('p@test.com', 'x', NULL)"))
+        c.execute(
+            text(
+                "CREATE TABLE portal_users (id INTEGER PRIMARY KEY, email VARCHAR(255) NOT NULL UNIQUE, "
+                "password_hash VARCHAR(255) NOT NULL, full_name VARCHAR(200), created_at DATETIME, "
+                "google_id VARCHAR(64))"
+            )
+        )
+        c.execute(
+            text(
+                "INSERT INTO portal_users (email, password_hash, google_id) VALUES "
+                "('g@test.com', 'x', 'g-1'), ('p@test.com', 'x', NULL)"
+            )
+        )
     monkeypatch.setattr(cloud.db, "engine", eng)
     _ensure_run_columns()
     with eng.connect() as c:
         filas = dict(c.execute(text("SELECT email, email_verified_at FROM portal_users")).all())
     assert filas["g@test.com"] is not None
     assert filas["p@test.com"] is None
-    _ensure_run_columns()   # segunda vez: no falla ni pisa nada
+    _ensure_run_columns()  # segunda vez: no falla ni pisa nada
     with eng.connect() as c:
         cols = [r[1] for r in c.execute(text("PRAGMA table_info(portal_users)"))]
         filas2 = dict(c.execute(text("SELECT email, email_verified_at FROM portal_users")).all())

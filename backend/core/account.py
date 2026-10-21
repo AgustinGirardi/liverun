@@ -6,11 +6,11 @@ La sesión (token del portal) se guarda en un JSON junto a la base, igual que
 la config de la nube. El token nunca se expone al navegador: el SPA solo ve
 email y nombre.
 """
+
 import json
 import os
 import urllib.parse
 import urllib.request
-from pathlib import Path
 
 from backend.core.database import DB_PATH
 
@@ -28,6 +28,7 @@ def portal_base() -> str:
         return env.rstrip("/")
     try:
         from backend.core.cloud_config import load_config
+
         url = (load_config().get("url") or "").rstrip("/")
         # El default local de publicación (127.0.0.1:8055) no sirve para cuentas.
         if url and "127.0.0.1:8055" not in url and "localhost:8055" not in url:
@@ -81,8 +82,7 @@ def public_session() -> dict | None:
     s = load_session()
     if not s:
         return None
-    return {"email": s.get("email"), "full_name": s.get("full_name"),
-            "portal": portal_base()}
+    return {"email": s.get("email"), "full_name": s.get("full_name"), "portal": portal_base()}
 
 
 def login(email: str, password: str) -> dict:
@@ -91,8 +91,7 @@ def login(email: str, password: str) -> dict:
 
 
 def register(email: str, password: str, full_name: str | None) -> dict:
-    d = _request("POST", "/api/auth/register",
-                 {"email": email, "password": password, "full_name": full_name})
+    d = _request("POST", "/api/auth/register", {"email": email, "password": password, "full_name": full_name})
     return save_session(d["token"], d.get("email", email), d.get("full_name"))
 
 

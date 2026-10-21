@@ -1,4 +1,5 @@
 """Integridad referencial: SQLite necesita PRAGMA foreign_keys=ON en CADA conexión."""
+
 import asyncio
 
 from sqlalchemy import text
@@ -13,6 +14,7 @@ def test_foreign_keys_enabled_on_every_connection():
             value = (await s.execute(text("PRAGMA foreign_keys"))).scalar()
         await engine.dispose()
         return value
+
     assert asyncio.run(check()) == 1
 
 

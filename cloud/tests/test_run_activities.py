@@ -1,4 +1,5 @@
 """Actividades de ChronoTrack Run: creación, dedupe por client_uuid, listado y detalle."""
+
 from datetime import datetime, timedelta
 
 from cloud.tests.conftest import make_user

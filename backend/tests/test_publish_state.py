@@ -1,4 +1,5 @@
 """Estado de publicación persistente: published_at / published_code de la carrera."""
+
 import json
 import urllib.error
 
@@ -23,18 +24,16 @@ class _FakeResp:
 
 
 def _portal_ok(monkeypatch):
-    monkeypatch.setattr(routes.cloud_config, "load_config",
-                        lambda: {"url": "http://portal.test", "api_key": "k"})
-    monkeypatch.setattr(routes.urllib.request, "urlopen",
-                        lambda req, timeout=30: _FakeResp({"code": "ABC123"}))
+    monkeypatch.setattr(routes.cloud_config, "load_config", lambda: {"url": "http://portal.test", "api_key": "k"})
+    monkeypatch.setattr(routes.urllib.request, "urlopen", lambda req, timeout=30: _FakeResp({"code": "ABC123"}))
 
 
 def _portal_down(monkeypatch):
-    monkeypatch.setattr(routes.cloud_config, "load_config",
-                        lambda: {"url": "http://portal.test", "api_key": "k"})
+    monkeypatch.setattr(routes.cloud_config, "load_config", lambda: {"url": "http://portal.test", "api_key": "k"})
 
     def boom(req, timeout=30):
         raise urllib.error.URLError("sin conexión")
+
     monkeypatch.setattr(routes.urllib.request, "urlopen", boom)
 
 

@@ -1,0 +1,5 @@
+# Herramientas de desarrollo y CI. No las instala Render ni el empaquetado del escritorio.
+# Se instalan ademas de los locks: pip install -r cloud/requirements.lock -r requirements.lock -r requirements-dev.txt
+pytest==9.1.1
+httpx==0.28.1
+ruff==0.17.1

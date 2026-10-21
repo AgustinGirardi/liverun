@@ -12,6 +12,7 @@ arranca igual: sin mails se pierde la verificación y el reset, no el resto.
 Los envíos se llaman desde BackgroundTasks: un fallo se loguea y nunca rompe
 el request que lo disparó.
 """
+
 import logging
 import os
 import smtplib
@@ -92,6 +93,7 @@ def enviar(para: str, asunto: str, texto: str, html: str, link: str = "") -> boo
 
 # ── Contenido ─────────────────────────────────────────────────────────────────
 
+
 def _html(saludo: str, cuerpo: str, boton: str, link: str, pie: str) -> str:
     """HTML mínimo y con estilos en línea (los clientes de mail ignoran <style>).
     Todo lo variable llega escapado."""
@@ -121,7 +123,9 @@ def mail_verificacion(nombre: str | None, link: str) -> tuple[str, str, str]:
 def mail_reset(nombre: str | None, link: str) -> tuple[str, str, str]:
     asunto = "Cambiá tu contraseña de LiveRun"
     cuerpo = "Pediste cambiar la contraseña de tu cuenta. Elegí una nueva desde este link."
-    pie = ("El link vence en 1 hora y sirve una sola vez. Si no lo pediste vos, "
-           "ignorá este mail: tu contraseña sigue igual.")
+    pie = (
+        "El link vence en 1 hora y sirve una sola vez. Si no lo pediste vos, "
+        "ignorá este mail: tu contraseña sigue igual."
+    )
     texto = f"{_saludo(nombre)}\n\n{cuerpo}\n\n{link}\n\n{pie}\n"
     return asunto, texto, _html(_saludo(nombre), cuerpo, "Elegir contraseña nueva", link, pie)

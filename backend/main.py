@@ -9,10 +9,12 @@ from contextlib import asynccontextmanager
 from backend.core.database import init_db
 from backend.api.routes import router
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     yield
+
 
 app = FastAPI(title="LiveRun API", version="2.0.0", lifespan=lifespan)
 
@@ -23,19 +25,23 @@ app = FastAPI(title="LiveRun API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://127.0.0.1:8001", "http://localhost:8001",
-        "http://127.0.0.1:5173", "http://localhost:5173",
+        "http://127.0.0.1:8001",
+        "http://localhost:8001",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
     ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 # /health se define ANTES de montar el SPA: si no, el catch-all "/{full_path}"
 # lo tapa y devuelve el index.html en lugar del JSON de estado.
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "LiveRun", "version": "2.0.0"}
+
 
 app.include_router(router, prefix="/api/v1")
 
@@ -68,6 +74,7 @@ if STATIC.exists():
         # No interceptar rutas de la API
         if full_path.startswith("api/"):
             from fastapi import HTTPException
+
             raise HTTPException(404)
         # Confinar al directorio estático: full_path llega ya URL-decodificado,
         # así que "%2e%2e/" se vuelve "../" y sin este chequeo leería archivos
