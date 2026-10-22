@@ -7,7 +7,7 @@ Qué leer según lo que busques. Lo que no está en esta tabla es historia: sirv
 | Documento | Para qué |
 |---|---|
 | [`../README.md`](../README.md) | Qué es LiveRun, cómo correrlo, los tests y el lint |
-| [`../DEPLOY.md`](../DEPLOY.md) | Despliegue del portal en Render, claves de publicación y checklist post-deploy |
+| [`../DEPLOY.md`](../DEPLOY.md) | Despliegue del portal en Cloud Run (Render, de respaldo), migración a Postgres, plan de corte, claves de publicación y checklist post-deploy |
 | [`../PENDIENTES.md`](../PENDIENTES.md) | Lo que sigue abierto y el orden para cerrarlo |
 | [`PRODUCT.md`](PRODUCT.md) | Contexto de producto: a quién sirve y qué prioriza |
 | [`../mobile/README.md`](../mobile/README.md) | App móvil y la OTA de EAS |

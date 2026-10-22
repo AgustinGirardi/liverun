@@ -3,11 +3,16 @@ import os
 import tempfile
 import pytest
 
-# Apuntar la DB del cloud a un archivo temporal ANTES de importar cloud.*
+# Apuntar la DB del cloud a un archivo temporal ANTES de importar cloud.*.
+# CT_TEST_DB (una URL de SQLAlchemy) corre la misma suite contra otro motor, p. ej.
+# postgresql+psycopg://...; es lo que hace el job python-postgres de la CI.
 _tmp = tempfile.NamedTemporaryFile(prefix="ct_test_", suffix=".db", delete=False)
 _tmp.close()
-os.environ["CT_CLOUD_DB"] = f"sqlite:///{_tmp.name}"
+os.environ["CT_CLOUD_DB"] = os.environ.get("CT_TEST_DB") or f"sqlite:///{_tmp.name}"
 os.environ["CT_PUBLISH_KEY"] = "test-publish-key"
+# Los avatares subidos por los tests van a una carpeta temporal: con una base que no
+# es SQLite, avatar_dir() caería en ./avatars y ensuciaría el repo.
+os.environ["CT_AVATAR_DIR"] = tempfile.mkdtemp(prefix="ct_test_avatars_")
 
 from fastapi.testclient import TestClient  # noqa: E402
 from cloud.db import Base, engine, SessionLocal  # noqa: E402

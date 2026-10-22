@@ -85,10 +85,22 @@ cd mobile && npm install && npx expo start
 
 ```bash
 pip install -r requirements-dev.txt                 # pytest, httpx y ruff (una vez)
-python -m pytest cloud/tests backend/tests -q       # portal + escritorio: 342 tests
+python -m pytest cloud/tests backend/tests -q       # portal + escritorio, con SQLite (ver el total al correrlo)
 cd frontend && npm test                             # lógica del cronómetro y la captura de llegadas: 36 tests
 cd mobile && npm test                               # lógica de la app: 73 tests
 ```
+
+El portal corre en Postgres en producción (Cloud Run + Neon), así que la misma suite se
+corre también contra Postgres. `CT_TEST_DB` cambia el motor de `cloud/tests`; la CI lo hace
+en el job `python-postgres`. En local hace falta un Postgres (por ejemplo con Docker):
+
+```bash
+docker run -d --name pg-test -e POSTGRES_PASSWORD=ci -p 5432:5432 postgres:16
+CT_TEST_DB=postgresql+psycopg://postgres:ci@localhost:5432/postgres python -m pytest cloud/tests -q
+```
+
+Sin `CT_TEST_DB`, el test que comprueba las secuencias de Postgres
+(`test_migrar_portal_a_postgres.py`) se saltea.
 
 ### Lint y tipos
 
@@ -102,7 +114,7 @@ cd mobile && npm run lint && npx tsc --noEmit       # app móvil: lint y tipos
 
 ### Dependencias de Python
 
-Los `requirements*.txt` son los pisos que se editan a mano; los `.lock` son lo que se instala (en Render y en la CI), con todas las versiones fijadas. Para regenerarlos después de cambiar un piso:
+Los `requirements*.txt` son los pisos que se editan a mano; los `.lock` son lo que se instala (en Render, en la imagen de Cloud Run y en la CI), con todas las versiones fijadas. Para regenerarlos después de cambiar un piso:
 
 ```bash
 uv pip compile cloud/requirements.txt --universal --python-version 3.12 -o cloud/requirements.lock
@@ -112,9 +124,8 @@ uv pip compile requirements.txt -c cloud/requirements.lock --universal --python-
 `pytest`, `httpx` y `ruff` viven aparte, en `requirements-dev.txt`, para que no se instalen en producción. Para auditar vulnerabilidades: `pipx run pip-audit --no-deps --disable-pip -r cloud/requirements.lock`.
 
 El resto de la documentación está indexada en [docs/README.md](docs/README.md). El
-despliegue del portal en Render está documentado paso a paso en
-[DEPLOY.md](DEPLOY.md), incluido el blueprint (`render.yaml`) y la migración a
-un dominio propio.
+despliegue del portal en Google Cloud Run (con la base en Neon), la migración de datos desde
+SQLite y el plan de corte están en [DEPLOY.md](DEPLOY.md). Render queda como apéndice hasta su baja.
 
 ---
 

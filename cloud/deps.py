@@ -17,8 +17,21 @@ from cloud.security import verify_token
 
 log = logging.getLogger("cloud.deps")
 
-# URL pública del portal: la usan CORS (main.py) y los links de los mails (auth.py).
+# URL pública del portal: la usan CORS, los links de los mails, el redirect de
+# Google, el back_url de Mercado Pago y las URLs de avatar. Un solo lugar.
 PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
+
+
+def en_produccion() -> bool:
+    """True si el portal corre en producción: CT_PRODUCCION=1 (Cloud Run) o, por
+    compatibilidad, la variable RENDER que setea Render. Se lee en cada llamada
+    (no al importar) para que los tests puedan tocar el entorno.
+
+    En producción se exige la firma de los webhooks, la cookie de Google va
+    Secure, hay HSTS, se esconden /docs y /openapi.json y el arranque se niega
+    a usar los secretos por defecto."""
+    return os.environ.get("CT_PRODUCCION") == "1" or bool(os.environ.get("RENDER"))
+
 
 # ── Rate limiting: backend intercambiable ────────────────────────────────────
 # Por defecto en memoria (proceso único en Render starter). Con más de un worker

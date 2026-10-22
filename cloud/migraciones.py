@@ -1,7 +1,28 @@
-"""Migraciones livianas de columnas e índices que corren al arrancar el portal."""
+"""Migraciones livianas de columnas e índices que corren al arrancar el portal.
+
+Nacieron para SQLite (create_all no altera tablas existentes). Una base de
+Postgres siempre nace de create_all con el esquema completo, así que acá las
+columnas ya existen y los ALTER no se ejecutan; igual todo el módulo es
+portable entre los dos motores (sin PRAGMA ni funciones propias de SQLite)."""
+
+from sqlalchemy import inspect, text
 
 from cloud.deps import admin_emails
 from cloud.nombres import normalizar_nombre
+
+
+def _columnas(conn, tabla: str) -> list[str]:
+    """Nombres de las columnas de `tabla`, o [] si la tabla no existe."""
+    insp = inspect(conn)
+    if not insp.has_table(tabla):
+        return []
+    return [c["name"] for c in insp.get_columns(tabla)]
+
+
+def _ahora_utc_sql(conn) -> str:
+    """Expresión SQL de "ahora" en UTC naive, que es como guardamos las fechas.
+    CURRENT_TIMESTAMP de SQLite ya es UTC; el de Postgres depende de la zona de la sesión."""
+    return "CURRENT_TIMESTAMP" if conn.dialect.name == "sqlite" else "(now() AT TIME ZONE 'utc')"
 
 
 def _ensure_run_columns():
@@ -11,7 +32,7 @@ def _ensure_run_columns():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(portal_users)"))]
+        cols = _columnas(conn, "portal_users")
         if not cols:
             return  # tabla inexistente: create_all la crea completa
         wanted = {
@@ -20,10 +41,10 @@ def _ensure_run_columns():
             "weekly_goal": "ALTER TABLE portal_users ADD COLUMN weekly_goal INTEGER NOT NULL DEFAULT 3",
             "avatar_url": "ALTER TABLE portal_users ADD COLUMN avatar_url VARCHAR(400)",
             "is_admin": "ALTER TABLE portal_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
-            "premium_until": "ALTER TABLE portal_users ADD COLUMN premium_until DATETIME",
+            "premium_until": "ALTER TABLE portal_users ADD COLUMN premium_until TIMESTAMP",
             "pending_discount_percent": "ALTER TABLE portal_users ADD COLUMN pending_discount_percent INTEGER",
             "tokens_valid_from": "ALTER TABLE portal_users ADD COLUMN tokens_valid_from INTEGER",
-            "email_verified_at": "ALTER TABLE portal_users ADD COLUMN email_verified_at DATETIME",
+            "email_verified_at": "ALTER TABLE portal_users ADD COLUMN email_verified_at TIMESTAMP",
         }
         for col, ddl in wanted.items():
             if col not in cols:
@@ -33,7 +54,7 @@ def _ensure_run_columns():
         # solo toca las que siguen en NULL. CURRENT_TIMESTAMP de SQLite es UTC.
         conn.execute(
             text(
-                "UPDATE portal_users SET email_verified_at = CURRENT_TIMESTAMP "
+                f"UPDATE portal_users SET email_verified_at = {_ahora_utc_sql(conn)} "
                 "WHERE google_id IS NOT NULL AND email_verified_at IS NULL"
             )
         )
@@ -88,7 +109,7 @@ def _ensure_billing_columns():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(run_billing_payments)"))]
+        cols = _columnas(conn, "run_billing_payments")
         if not cols:
             return  # tabla inexistente: create_all ya la crea con la columna
         if "granted_s" not in cols:
@@ -99,17 +120,19 @@ def _migrar_avatares_a_relativo():
     """Los avatares propios se guardaban con el host adentro, así que un cambio
     de dominio los rompía en la base. Los pasa a ruta relativa. Idempotente.
     No toca las fotos de Google: esas no contienen "/avatars/"."""
-    from sqlalchemy import text
     from cloud.db import engine
 
     with engine.begin() as conn:
-        conn.execute(
+        filas = conn.execute(
             text(
-                "UPDATE portal_users "
-                "SET avatar_url = substr(avatar_url, instr(avatar_url, '/avatars/')) "
-                "WHERE avatar_url LIKE '%/avatars/%' AND avatar_url NOT LIKE '/avatars/%'"
+                "SELECT id, avatar_url FROM portal_users WHERE avatar_url LIKE '%/avatars/%' AND avatar_url NOT LIKE '/avatars/%'"
             )
-        )
+        ).all()
+        if filas:
+            conn.execute(
+                text("UPDATE portal_users SET avatar_url = :url WHERE id = :id"),
+                [{"id": uid, "url": url[url.index("/avatars/") :]} for uid, url in filas],
+            )
 
 
 def _ensure_email_hash_column():
@@ -120,7 +143,7 @@ def _ensure_email_hash_column():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_results)"))]
+        cols = _columnas(conn, "published_results")
         if not cols:
             return  # tabla inexistente: create_all (ya corrió en init_db) la crea con la columna
         if "email_hash" not in cols:
@@ -140,7 +163,7 @@ def _ensure_name_norm_column(lote: int = 500):
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_results)"))]
+        cols = _columnas(conn, "published_results")
         if not cols:
             return  # tabla inexistente: create_all ya la crea con la columna
         if "name_norm" not in cols:
@@ -166,7 +189,7 @@ def _ensure_category_position_column():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_results)"))]
+        cols = _columnas(conn, "published_results")
         if not cols:
             return  # tabla inexistente: create_all ya la crea con la columna
         if "category_position" not in cols:
@@ -181,7 +204,7 @@ def _ensure_owner_key_column():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_races)"))]
+        cols = _columnas(conn, "published_races")
         if not cols:
             return  # tabla inexistente: create_all ya la crea con la columna
         if "owner_key_hash" not in cols:
@@ -197,7 +220,7 @@ def _ensure_password_set_column():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(portal_users)"))]
+        cols = _columnas(conn, "portal_users")
         if not cols:
             return  # tabla inexistente: create_all ya la crea con la columna
         if "password_set" not in cols:
@@ -213,7 +236,7 @@ def _ensure_event_columns():
     from cloud.db import engine
 
     with engine.begin() as conn:
-        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(published_races)"))]
+        cols = _columnas(conn, "published_races")
         if not cols:
             return
         wanted = {
@@ -225,3 +248,18 @@ def _ensure_event_columns():
         for col, ddl in wanted.items():
             if col not in cols:
                 conn.execute(text(ddl))
+
+
+def migrar_esquema():
+    """Todas las migraciones de columnas e índices, en orden. No incluye
+    _ensure_admins: esa depende de CT_ADMIN_EMAILS y es del arranque del portal,
+    no del esquema (el script de migración a Postgres no debe tocar los admins)."""
+    _ensure_email_hash_column()
+    _ensure_name_norm_column()
+    _ensure_category_position_column()
+    _ensure_event_columns()
+    _ensure_owner_key_column()
+    _ensure_run_columns()
+    _ensure_password_set_column()
+    _ensure_billing_columns()
+    _migrar_avatares_a_relativo()

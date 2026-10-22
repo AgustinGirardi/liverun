@@ -61,3 +61,25 @@ Hecho en código: CI (`.github/workflows/ci.yml`), `npm audit fix` en el escrito
 - [ ] **`eas-update.yml` en Node 20.** La CI ya usa Node 22. Subirlo, y pensar si la OTA debería esperar a la CI (hoy un push con `mobile/` en rojo igual publica).
 - [ ] **`backend/api/routes.py`** (1278 líneas, 52 funciones) quedó afuera: mismo tratamiento que `cloud/main.py`, en su propio plan.
 - [ ] **Formateo de `ruff`.** Entró junto con el resto en un solo commit: `git blame` marca ese commit en las líneas que solo cambiaron de formato. Si molesta, rehacerlo como commit aparte y listarlo en `.git-blame-ignore-revs`.
+
+
+## 7. Push del 21/10 y migración del portal a Cloud Run (plan `docs/plans/2026-10-21-push-pendiente-de-main-plan-de-migracion-del-porta.md`)
+
+**Pusheado:** `main` quedó en `1e9a6a3` (el esquema de la base no cambió, así que no hizo falta snapshot). Render quedó sano (`/api/health` → `{"status":"ok"}`, `/api/races` → 200) y la primera corrida de la CI en GitHub pasó en verde. Con esto se cierra el pendiente "primera corrida de la CI" de la sección 6.
+
+**Hecho en código (sin desplegar):** el portal reconoce producción con `CT_PRODUCCION=1` (y `RENDER`, por compatibilidad); `CT_AVATAR_DIR` para los avatares; migraciones y ranking portables a Postgres; `scripts/migrar_portal_a_postgres.py` con verificación por conteo y hash; `Dockerfile`, `.dockerignore`; en la CI, el job `python-postgres` (suite completa contra Postgres 16) y el job `deploy-portal` (se saltea mientras no esté `GCP_PROJECT_ID`); `DEPLOY.md` reescrito para Cloud Run, con Render como apéndice.
+
+**Todavía no se tocó nada en Google Cloud, Neon ni Render.** Nada de la migración fue probado contra un proyecto real: no hay Docker en esta máquina (la imagen no se construyó) y los flags de `gcloud` (volumen de Cloud Storage, probes, `domain-mappings`) se escribieron sin probarlos. Para Agustín, en orden:
+
+- [ ] **1. Crear el proyecto de Google Cloud y hacer el Paso 1 de DEPLOY.md** (APIs, Artifact Registry, bucket, cuentas de servicio, Workload Identity). Cargar las variables del repo en GitHub: recién con `GCP_PROJECT_ID` el job de deploy deja de saltearse.
+- [ ] **2. Crear la base en Neon** (us-east-1) y un branch de ensayo; cargar los secretos en Secret Manager con **los mismos valores que hoy tiene Render** (Paso 3).
+- [ ] **3. Construir la imagen y probarla** (`docker build` + `curl /api/health`, Paso 4). Es lo primero que puede fallar.
+- [ ] **4. Ensayar la migración de datos:** copia de la base de Render → `migrar_portal_a_postgres.py` contra el branch de Neon → recorrer el portal en la URL `*.run.app`. Anotar cold starts y confirmar que la IP del cliente llega bien (`X-Forwarded-For`).
+- [ ] **5. Elegir y comprar el dominio** (`liverun.com.ar`, ver el Paso 5 del apéndice) antes del corte: sin dominio propio, los links compartidos mueren con `onrender.com`.
+- [ ] **6. Cortar** (Paso 7 de DEPLOY.md): ventana sin carreras, Render suspendido, migración final, DNS, Google OAuth, webhook de Mercado Pago y la URL en cada escritorio (el escritorio no sigue redirecciones de un POST).
+- [ ] **7. Commit aparte con las URLs nuevas** en `backend/core/account.py` (`DEFAULT_PORTAL`), `mobile/src/lib/api.ts`, `mobile/src/app/ranking.tsx` y `mobile/vercel.json`.
+- [ ] **8. Baja de Render** tras 2 a 4 semanas sin incidentes; borrar `render.yaml` y el apéndice de DEPLOY.md.
+- [ ] **Decidir `min-instances`** con la latencia medida en el paso 4 (0 = ~US$0–3/mes; 1 = ~US$10/mes más).
+- [ ] **Backup fuera del proveedor.** Hoy solo están el PITR de Neon y el versionado del bucket (mismo proveedor de cuentas). Se descartó usar una PC propia; queda el `pg_dump` manual antes de cada cambio de esquema.
+- [ ] **Rate limit:** con `max-instances=1` alcanza la memoria. Si algún día hace falta escalar, registrar un backend compartido en `cloud/deps.py` (`_BACKENDS`).
+- [ ] **Nombre de las variables de Render** (`RENDER`, `render.yaml`): siguen funcionando; quitar la compatibilidad con `RENDER` en `en_produccion()` junto con la baja.

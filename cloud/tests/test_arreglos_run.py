@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 import cloud.run as run
 from cloud.tests.conftest import make_user, publish_race
@@ -180,17 +180,19 @@ def test_lifespan_corre_las_migraciones_y_agrega_granted_s(client):
             text(
                 "CREATE TABLE run_billing_payments (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
                 "mp_payment_id VARCHAR(64) NOT NULL UNIQUE, amount NUMERIC(12,2), status VARCHAR(20), "
-                "created_at DATETIME)"
+                "created_at TIMESTAMP)"
             )
         )
         conn.execute(
-            text("INSERT INTO run_billing_payments (user_id, mp_payment_id, status) VALUES (1, 'viejo', 'approved')")
+            text(
+                "INSERT INTO run_billing_payments (id, user_id, mp_payment_id, status) VALUES (1, 1, 'viejo', 'approved')"
+            )
         )
     for _ in range(2):  # idempotente: dos arranques seguidos
         with TestClient(run_app()) as c:
             assert c.get("/api/races").status_code == 200
     with engine.begin() as conn:
-        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(run_billing_payments)"))]
+        cols = [c["name"] for c in inspect(conn).get_columns("run_billing_payments")]
         filas = conn.execute(text("SELECT mp_payment_id, granted_s FROM run_billing_payments")).all()
     assert "granted_s" in cols
     assert filas == [("viejo", None)]  # los datos existentes quedan intactos

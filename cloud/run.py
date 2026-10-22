@@ -19,16 +19,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from cloud.db import DB_URL, get_db
-from cloud.deps import current_user, rate_limit, rate_limit_key
+from cloud.deps import PUBLIC_URL, current_user, rate_limit, rate_limit_key
 from cloud.models import Activity, Coupon, CouponRedemption, Friendship, PortalUser
 
 router = APIRouter(prefix="/api/run", tags=["Run"])
 
 USERNAME_RE = re.compile(r"^[a-z0-9_.]{3,30}$")
 
-PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
-
-# Avatares: archivos chicos en el mismo disco persistente que la DB.
+# Avatares: archivos chicos. En Render van en el mismo disco persistente que la
+# DB; en Cloud Run, en un bucket montado como volumen (CT_AVATAR_DIR).
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
 AVATAR_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 # Firmas de archivo por formato: el Content-Type lo declara el cliente y no
@@ -55,12 +54,14 @@ def avatar_absoluto(url: Optional[str]) -> Optional[str]:
 
 
 def avatar_dir() -> Path:
-    """Carpeta de avatares junto a la base SQLite (en Render: /var/data/avatars)."""
-    if DB_URL.startswith("sqlite:///"):
-        base = Path(DB_URL.removeprefix("sqlite:///")).parent
+    """Carpeta de avatares: CT_AVATAR_DIR si está definida; si no, junto a la
+    base SQLite (en Render: /var/data/avatars)."""
+    explicita = os.environ.get("CT_AVATAR_DIR", "").strip()
+    if explicita:
+        d = Path(explicita)
     else:
-        base = Path(".")
-    d = base / "avatars"
+        base = Path(DB_URL.removeprefix("sqlite:///")).parent if DB_URL.startswith("sqlite:///") else Path(".")
+        d = base / "avatars"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -790,10 +791,22 @@ def list_friends(user: PortalUser = Depends(current_user), db: Session = Depends
 GLOBAL_TOP = 50
 
 
+def _offset_ar(momento_utc: datetime) -> timedelta:
+    """Desfase de la hora argentina respecto de UTC en `momento_utc`."""
+    return momento_utc.replace(tzinfo=timezone.utc).astimezone(TZ_AR).utcoffset()
+
+
 def _offset_sqlite(momento_utc: datetime) -> str:
     """Modificador de SQLite para pasar un naive UTC a hora argentina."""
-    off = momento_utc.replace(tzinfo=timezone.utc).astimezone(TZ_AR).utcoffset()
-    return f"{int(off.total_seconds())} seconds"
+    return f"{int(_offset_ar(momento_utc).total_seconds())} seconds"
+
+
+def _dia_argentino(db: Session, columna, momento_utc: datetime):
+    """Expresión SQL: el día calendario argentino de una columna datetime en UTC.
+    SQLite: date(x, '-10800 seconds'). Postgres: date(x + interval)."""
+    if db.get_bind().dialect.name == "sqlite":
+        return func.date(columna, _offset_sqlite(momento_utc))
+    return func.date(columna + _offset_ar(momento_utc))
 
 
 @router.get("/ranking")
@@ -833,8 +846,8 @@ def ranking(
             select(
                 Activity.user_id,
                 func.sum(Activity.distance_m),
-                # Días distintos en hora argentina (SQLite: date(x, '-10800 seconds')).
-                func.count(func.distinct(func.date(Activity.started_at, _offset_sqlite(since_dt)))),
+                # Días distintos en hora argentina.
+                func.count(func.distinct(_dia_argentino(db, Activity.started_at, since_dt))),
                 func.count(),
             )
             .where(Activity.started_at >= since_dt)

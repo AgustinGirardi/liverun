@@ -26,14 +26,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from cloud.db import get_db
-from cloud.deps import admin_emails
+from cloud.deps import PUBLIC_URL, admin_emails, en_produccion
 from cloud.models import PortalUser
 from cloud.run import ahora_utc
 from cloud.security import SECRET, hash_password, make_token
 
 GOOGLE_CLIENT_ID = os.environ.get("CT_GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("CT_GOOGLE_CLIENT_SECRET", "")
-PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
 
 # Esquemas de deep link aceptados: la app instalada (liverun; se mantiene el
 # scheme viejo por builds anteriores) y, sólo si se enciende a mano, Expo Go.
@@ -55,7 +54,6 @@ STATE_TTL_S = 600
 # alcanza porque Google vuelve con una navegación GET de primer nivel.
 NONCE_COOKIE = "lr_google_nonce"
 _COOKIE_PATH = "/api/run/auth/google"
-_COOKIE_SECURE = bool(os.environ.get("RENDER"))
 
 router = APIRouter(prefix="/api/run/auth/google", tags=["Run"])
 
@@ -254,7 +252,7 @@ def google_start(app_redirect: str):
             path=_COOKIE_PATH,
             httponly=True,
             samesite="lax",
-            secure=_COOKIE_SECURE,
+            secure=en_produccion(),
         )
     return resp
 

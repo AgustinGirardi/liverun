@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from cloud import billing
 from cloud.db import get_db
-from cloud.deps import current_user, rate_limit
+from cloud.deps import current_user, en_produccion, rate_limit
 from cloud.models import PortalUser
 from sqlalchemy.orm import Session
 
@@ -20,10 +20,6 @@ router = APIRouter(prefix="/api/run/billing", tags=["Billing"])
 # Clave secreta del webhook, del panel de MP. Es un valor DISTINTO del access
 # token: mezclarlos hace que la verificación falle en silencio.
 MP_WEBHOOK_SECRET = os.environ.get("CT_MP_WEBHOOK_SECRET", "")
-
-# En produccion no aceptamos avisos sin firma. Fuera de produccion si, para no
-# obligar a configurar el secreto del webhook en cada entorno de desarrollo.
-_EXIGIR_FIRMA = bool(os.environ.get("RENDER"))
 
 # Los ids de preapproval de MP son alfanuméricos. Igual que con los ids de pago,
 # validamos el formato antes de meterlos en la URL del GET autenticado.
@@ -44,7 +40,9 @@ def _firma_valida(request: Request, data_id) -> bool:
     vendedor y bloqueando el worker 20 s por vez.
     """
     if not MP_WEBHOOK_SECRET:
-        return not _EXIGIR_FIRMA
+        # En produccion no aceptamos avisos sin firma. Fuera de produccion si, para no
+        # obligar a configurar el secreto del webhook en cada entorno de desarrollo.
+        return not en_produccion()
     crudo = request.headers.get("x-signature") or ""
     partes = dict(t.split("=", 1) for t in crudo.split(",") if "=" in t)
     ts, v1 = partes.get("ts", "").strip(), partes.get("v1", "").strip()

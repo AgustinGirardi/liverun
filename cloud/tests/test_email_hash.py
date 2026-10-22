@@ -13,7 +13,9 @@ def test_migration_adds_column_to_existing_table():
     from cloud.migraciones import _ensure_email_hash_column
 
     with engine.begin() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS published_results"))
+        # Postgres no deja borrar una tabla referenciada (claims) sin CASCADE; SQLite no lo admite.
+        cascade = "" if engine.dialect.name == "sqlite" else " CASCADE"
+        conn.execute(text(f"DROP TABLE IF EXISTS published_results{cascade}"))
         conn.execute(
             text(
                 "CREATE TABLE published_results ("
@@ -27,11 +29,5 @@ def test_migration_adds_column_to_existing_table():
     insp = inspect(engine)
     cols = {c["name"] for c in insp.get_columns("published_results")}
     assert "email_hash" in cols
-    with engine.connect() as conn:
-        idxs = [
-            r[0]
-            for r in conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='published_results'")
-            )
-        ]
+    idxs = [i["name"] for i in inspect(engine).get_indexes("published_results")]
     assert "ix_published_results_email_hash" in idxs

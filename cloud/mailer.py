@@ -21,6 +21,8 @@ from email.message import EmailMessage
 from email.utils import make_msgid, parseaddr
 from html import escape
 
+from cloud.deps import en_produccion
+
 log = logging.getLogger("cloud.mailer")
 
 TIMEOUT_S = 10
@@ -41,11 +43,6 @@ def configurado() -> bool:
     return bool(_config()["host"])
 
 
-def _en_produccion() -> bool:
-    # Misma detección que main._EN_PRODUCCION: Render setea RENDER.
-    return bool(os.environ.get("RENDER"))
-
-
 def enviar(para: str, asunto: str, texto: str, html: str, link: str = "") -> bool:
     """Manda un mail (texto plano + HTML). Devuelve True si salió.
 
@@ -54,7 +51,7 @@ def enviar(para: str, asunto: str, texto: str, html: str, link: str = "") -> boo
     """
     cfg = _config()
     if not cfg["host"]:
-        if _en_produccion():
+        if en_produccion():
             log.warning("SMTP no configurado: no se mandó el mail '%s'.", asunto)
         else:
             log.warning("SMTP no configurado (desarrollo). Mail a %s: '%s' — %s", para, asunto, link)

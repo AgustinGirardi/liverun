@@ -1,0 +1,17 @@
+# La imagen del portal solo necesita cloud/ y su lock; lo demás no entra.
+*
+
+!cloud/
+!cloud/requirements.lock
+
+# Dentro de cloud/: nada de bases, avatares locales, tests ni cachés.
+cloud/tests
+cloud/avatars
+cloud/cloud.db
+**/__pycache__
+**/*.pyc
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/.env
+**/.env.*

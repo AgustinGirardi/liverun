@@ -5,7 +5,6 @@ Roles:
   - Corredor:   crea cuenta, reclama sus resultados (dorsal + apellido) y ve su historial.
 """
 
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -19,20 +18,9 @@ from cloud.auth import router as auth_router
 from cloud.billing_routes import router as billing_router
 from cloud.claims import router as claims_router
 from cloud.db import SessionLocal, init_db
-from cloud.deps import PUBLIC_URL, avisar_si_multiworker
+from cloud.deps import PUBLIC_URL, avisar_si_multiworker, en_produccion
 from cloud.google_auth import router as google_router
-from cloud.migraciones import (
-    _ensure_admins,
-    _ensure_billing_columns,
-    _ensure_category_position_column,
-    _ensure_email_hash_column,
-    _ensure_event_columns,
-    _ensure_name_norm_column,
-    _ensure_owner_key_column,
-    _ensure_password_set_column,
-    _ensure_run_columns,
-    _migrar_avatares_a_relativo,
-)
+from cloud.migraciones import _ensure_admins, migrar_esquema
 from cloud.organizadores import router as organizadores_router
 from cloud.publish import PUBLISH_API_KEY, router as publish_router
 from cloud.run import avatar_dir, router as run_router
@@ -41,8 +29,9 @@ from cloud.search import router as search_router
 
 # Docs interactivas: utiles en desarrollo, pero en produccion son un catalogo
 # gratis de los endpoints de admin y organizador para cualquier escaneo
-# automatizado. RENDER lo setea la plataforma; en local siguen disponibles.
-_EN_PRODUCCION = bool(os.environ.get("RENDER"))
+# automatizado. CT_PRODUCCION=1 (o RENDER, que setea Render) lo marca; en local
+# siguen disponibles.
+_EN_PRODUCCION = en_produccion()
 
 
 @asynccontextmanager
@@ -138,17 +127,17 @@ def health():
 
 
 def _startup():
-    # En producción (Render setea la env var RENDER) NO arrancar con secretos por
-    # defecto: tokens y publicación quedarían falsificables. Fallar temprano y claro.
-    if os.environ.get("RENDER"):
+    # En producción (CT_PRODUCCION=1, o RENDER en Render) NO arrancar con secretos
+    # por defecto: tokens y publicación quedarían falsificables. Fallar temprano y claro.
+    if en_produccion():
         from cloud.security import SECRET
 
         if SECRET == "dev-insecure-secret-change-me" or PUBLISH_API_KEY == "dev-publish-key-change-me":
             raise RuntimeError(
                 "Faltan secretos en producción: definí CT_CLOUD_SECRET y CT_PUBLISH_KEY "
-                "(Render los genera automáticamente vía render.yaml)."
+                "(Render los genera vía render.yaml; en Cloud Run vienen de Secret Manager)."
             )
-    if os.environ.get("RENDER") and not mailer.configurado():
+    if en_produccion() and not mailer.configurado():
         # No se frena el arranque: sin mails solo se pierden la verificación
         # y el reset de contraseña, no el resto del portal.
         mailer.log.warning(
@@ -157,15 +146,7 @@ def _startup():
         )
     avisar_si_multiworker()
     init_db()
-    _ensure_email_hash_column()
-    _ensure_name_norm_column()
-    _ensure_category_position_column()
-    _ensure_event_columns()
-    _ensure_owner_key_column()
-    _ensure_run_columns()
-    _ensure_password_set_column()
-    _ensure_billing_columns()
-    _migrar_avatares_a_relativo()
+    migrar_esquema()
     _ensure_admins()
 
 

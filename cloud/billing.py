@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from cloud.deps import PUBLIC_URL
 from cloud.models import BillingPayment, BillingSubscription, PortalUser
 
 MP_ACCESS_TOKEN = os.environ.get("CT_MP_ACCESS_TOKEN", "")
@@ -36,7 +37,6 @@ CURRENCY = os.environ.get("CT_PREMIUM_CURRENCY", "ARS")
 RATE_SOURCE = os.environ.get("CT_USD_RATE_SOURCE", "oficial")
 MANUAL_RATE = os.environ.get("CT_USD_RATE")  # override manual del tipo de cambio
 RATE_FALLBACK = float(os.environ.get("CT_USD_RATE_FALLBACK", "1100"))
-PUBLIC_URL = os.environ.get("CT_PUBLIC_URL", "https://chronotrack-portal.onrender.com").rstrip("/")
 MP_API = "https://api.mercadopago.com"
 
 _RATE_TTL = 3600  # cacheamos la cotización 1 hora
