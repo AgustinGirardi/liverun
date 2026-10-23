@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from cloud.run import ahora_utc, fecha_ar
 from cloud.tests.conftest import make_user
 
 
@@ -89,11 +90,13 @@ def test_eliminar_actividad_ajena_404(client):
 
 def test_summary_semana_y_mes(client):
     h = make_user(client)
-    now = datetime.now()
+    # El portal toma started_at como UTC y cuenta los días en hora argentina: el test
+    # no puede depender de la zona de la máquina (entre las 21 y las 24 ART el día difiere).
+    now = ahora_utc()
     crear(client, h, uuid="hoy", started=now, dist=5000.0)
     s = client.get("/api/run/summary", headers=h).json()
     assert s["week"]["days_run"] == 1
     assert s["week"]["goal"] == 3
     assert s["week"]["km"] == 5.0
     assert s["month"]["activities"] == 1
-    assert s["month"]["run_dates"] == [now.date().isoformat()]
+    assert s["month"]["run_dates"] == [fecha_ar(now).isoformat()]

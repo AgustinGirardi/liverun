@@ -83,3 +83,17 @@ Hecho en código: CI (`.github/workflows/ci.yml`), `npm audit fix` en el escrito
 - [ ] **Backup fuera del proveedor.** Hoy solo están el PITR de Neon y el versionado del bucket (mismo proveedor de cuentas). Se descartó usar una PC propia; queda el `pg_dump` manual antes de cada cambio de esquema.
 - [ ] **Rate limit:** con `max-instances=1` alcanza la memoria. Si algún día hace falta escalar, registrar un backend compartido en `cloud/deps.py` (`_BACKENDS`).
 - [ ] **Nombre de las variables de Render** (`RENDER`, `render.yaml`): siguen funcionando; quitar la compatibilidad con `RENDER` en `en_produccion()` junto con la baja.
+
+## 8. Cierre del 22/10 (plan `docs/plans/2026-10-23-cerrar-los-pendientes-abiertos-de-liverun-22-10-20.md`)
+
+**Hecho:** `main` pusheado hasta `c1da443` (migración a Cloud Run en código; el esquema no cambió, así que no hizo falta snapshot). Render sigue siendo donde corre el portal: `/api/health` → `{"status":"ok"}`, `/api/races` → 200, `/docs` → 404 y HSTS presente. `deploy-portal` se saltea (falta `GCP_PROJECT_ID`). Canal de EAS: `preview` ahora apunta al branch `main` (era `preview`, vacío). Build Android `preview` encolado con la política `fingerprint`: https://expo.dev/accounts/agusgirarfi/projects/chronotrack-run/builds/bfe740d0-2a7d-4711-bb7e-e0ac19040c9f
+
+**Bug de la CI, arreglado:** `test_summary_semana_y_mes` comparaba `datetime.now()` (hora de la máquina) con el día argentino que calcula el portal. Fallaba entre las 21 y las 24 ART en cualquier máquina que no esté en ART, como el runner de Actions (UTC). La primera corrida del push dio rojo en `Python` y `Portal contra Postgres` por eso; el test ahora usa `ahora_utc()` y `fecha_ar()`.
+
+Para Agustín, en orden (necesitan paneles o el teléfono):
+
+- [ ] **1. Render → Events:** que el deploy en *Live* sea el último commit de `main`. Desde afuera no se puede distinguir de la versión anterior (la respuesta es la misma).
+- [ ] **2. Render → Environment:** `CT_PUBLIC_URL` con la URL real y `CT_SMTP_HOST`, `CT_SMTP_PORT`, `CT_SMTP_USER`, `CT_SMTP_PASSWORD`, `CT_SMTP_FROM` cargadas. En Logs no debe aparecer `CT_SMTP_HOST no está configurado`. Prueba de mail: Ingresar → ¿Olvidaste tu contraseña?
+- [ ] **3. Render → Disks:** snapshots automáticos activos y uno manual con la fecha anotada (es el respaldo previo a la migración a Cloud Run).
+- [ ] **4. Build de EAS:** esperar a que termine el del link de arriba, instalar el APK y, desde GitHub → Actions, correr `EAS Update (OTA)` a mano (*Run workflow*) para publicar un update con el fingerprint de ese build. Abrir la app dos veces y comprobar que lo toma. Después, la verificación en dispositivo de la sección 1.
+- [ ] **5. Confirmar la CI en verde** del commit que corrige el test (la del push de `c1da443` quedó en rojo por el test, no por el código).
