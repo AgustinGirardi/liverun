@@ -97,3 +97,12 @@ Para Agustín, en orden (necesitan paneles o el teléfono):
 - [ ] **3. Render → Disks:** snapshots automáticos activos y uno manual con la fecha anotada (es el respaldo previo a la migración a Cloud Run).
 - [ ] **4. Build de EAS:** esperar a que termine el del link de arriba, instalar el APK y, desde GitHub → Actions, correr `EAS Update (OTA)` a mano (*Run workflow*) para publicar un update con el fingerprint de ese build. Abrir la app dos veces y comprobar que lo toma. Después, la verificación en dispositivo de la sección 1.
 - [ ] **5. Confirmar la CI en verde** del commit que corrige el test (la del push de `c1da443` quedó en rojo por el test, no por el código).
+
+## 9. Hardening de seguridad (plan `docs/plans/2026-11-03-hardening-de-seguridad-y-privacidad-de-liverun-soc.md`)
+
+**Hecho en código (sin desplegar):** sesiones, contraseñas, bloqueo por cuenta, headers, CORS y topes de tamaño del portal (detalle y tests en `docs/seguridad/README.md`).
+
+- [ ] **Antes de desplegar:** cargar `CT_PUBLIC_URL` en producción (si falta, el portal ya no arranca) y avisar que se desloguea a todos los usuarios (token viejo retirado, TTL 14 días).
+- [ ] Fase 0: documentos de `docs/seguridad/`, Dependabot, gitleaks, `npm audit` y actions por SHA.
+- [ ] Fases 1 (auditoría con esquema), 2, 3, 4 y 5 del plan, un PR por fase y después del corte a Cloud Run.
+- [ ] Invertir el orden en `/api/publish`: validar la API key antes que el body (hoy un body inválido da 422 sin pedir clave).

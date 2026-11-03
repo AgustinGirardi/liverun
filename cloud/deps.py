@@ -190,6 +190,34 @@ def rate_limit_key(key: str, limit: int = 10, window: float = 60.0):
         raise HTTPException(429, "Demasiados intentos. Esperá un minuto e intentá de nuevo.")
 
 
+# ── Bloqueo por cuenta ───────────────────────────────────────────────────────
+# El tope por IP no frena a quien rota IPs contra una sola cuenta. Se cuentan
+# los fallos por email (exista o no, para no revelar quién tiene cuenta) y al
+# llegar al máximo la cuenta no admite ni la contraseña correcta hasta que
+# pasa la ventana. Comparte _RATE, así que vale mientras el backend sea memoria.
+FALLOS_MAX = 5
+FALLOS_VENTANA = 600.0
+
+
+def _clave_fallos(email: str) -> str:
+    return f"fallo:{(email or '').strip().lower()}"
+
+
+def verificar_cuenta_no_bloqueada(email: str) -> None:
+    ahora = time.time()
+    recientes = [t for t in _RATE.get(_clave_fallos(email), []) if ahora - t < FALLOS_VENTANA]
+    if len(recientes) >= FALLOS_MAX:
+        raise HTTPException(429, "Demasiados intentos fallidos en esta cuenta. Esperá unos minutos e intentá de nuevo.")
+
+
+def registrar_fallo_de_cuenta(email: str) -> None:
+    _RATE[_clave_fallos(email)].append(time.time())
+
+
+def limpiar_fallos_de_cuenta(email: str) -> None:
+    _RATE.pop(_clave_fallos(email), None)
+
+
 def current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> PortalUser:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "No autenticado")

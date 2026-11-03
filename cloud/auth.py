@@ -12,11 +12,22 @@ from sqlalchemy.orm import Session
 
 from cloud import mailer
 from cloud.db import get_db
-from cloud.deps import PUBLIC_URL, admin_emails, current_user, rate_limit, rate_limit_key
+from cloud.deps import (
+    PUBLIC_URL,
+    admin_emails,
+    current_user,
+    limpiar_fallos_de_cuenta,
+    rate_limit,
+    rate_limit_key,
+    registrar_fallo_de_cuenta,
+    verificar_cuenta_no_bloqueada,
+)
 from cloud.models import PortalUser
 from cloud.run import ahora_utc
 from cloud.security import (
+    es_contrasena_comun,
     hash_password,
+    necesita_rehash,
     verify_password,
     make_token,
     make_mail_token,
@@ -28,6 +39,12 @@ from cloud.claims import _autolink
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 router = APIRouter()
+
+
+def _contrasena_aceptable(v: str) -> str:
+    if es_contrasena_comun(v):
+        raise ValueError("Esa contraseña es de las más usadas. Elegí otra.")
+    return v
 
 
 class RegisterIn(BaseModel):
@@ -42,6 +59,8 @@ class RegisterIn(BaseModel):
             raise ValueError("Email inválido")
         return v.strip().lower()
 
+    _password_ok = field_validator("password")(_contrasena_aceptable)
+
 
 class LoginIn(BaseModel):
     email: str
@@ -53,6 +72,8 @@ class ChangePasswordIn(BaseModel):
     # Google): ver change_password.
     current_password: Optional[str] = None
     new_password: str = Field(..., min_length=8)
+
+    _password_ok = field_validator("new_password")(_contrasena_aceptable)
 
 
 class MailTokenIn(BaseModel):
@@ -71,6 +92,8 @@ class ForgotIn(BaseModel):
 class ResetIn(BaseModel):
     token: str = Field(..., max_length=2000)
     new_password: str = Field(..., min_length=8)
+
+    _password_ok = field_validator("new_password")(_contrasena_aceptable)
 
 
 # ── Cuentas de corredor ──────────────────────────────────────────────────────
@@ -116,6 +139,7 @@ def register(body: RegisterIn, request: Request, background: BackgroundTasks, db
 def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
     # Login más estricto: es el vector de fuerza-bruta de contraseñas.
     rate_limit(request, "login", limit=15, window=60.0)
+    verificar_cuenta_no_bloqueada(body.email)
     user = db.scalar(select(PortalUser).where(PortalUser.email == body.email.lower()))
     if not user:
         # Gastar el mismo PBKDF2 que gastariamos con un usuario real. Sin esto
@@ -123,15 +147,30 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
         # (200.000 iteraciones), y esa diferencia sola permite listar quien
         # tiene cuenta en el portal.
         verify_password(body.password, _DUMMY_HASH)
+        registrar_fallo_de_cuenta(body.email)
         raise HTTPException(401, "Email o contraseña incorrectos")
     if not verify_password(body.password, user.password_hash):
+        registrar_fallo_de_cuenta(body.email)
         raise HTTPException(401, "Email o contraseña incorrectos")
+    limpiar_fallos_de_cuenta(body.email)
+    if necesita_rehash(user.password_hash):
+        user.password_hash = hash_password(body.password)
+        db.commit()
     try:
         linked = _autolink(user, db)
     except Exception:
         db.rollback()
         linked = 0
     return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": linked}
+
+
+@router.post("/api/auth/logout", tags=["Corredor"])
+def logout(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+    """Cierra todas las sesiones de la cuenta en el servidor: sube el corte de
+    tokens (+1 s, igual que change_password) y todo token emitido antes muere."""
+    user.tokens_valid_from = int(time.time()) + 1
+    db.commit()
+    return {"logged_out": True}
 
 
 @router.delete("/api/auth/account", tags=["Corredor"])

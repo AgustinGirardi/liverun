@@ -28,6 +28,7 @@ RUTAS_ESPERADAS = {
     ("GET", "/api/search"),
     ("PATCH", "/api/run/profile"),
     ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),
     ("POST", "/api/auth/password/forgot"),
     ("POST", "/api/auth/password/reset"),

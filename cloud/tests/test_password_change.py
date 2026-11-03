@@ -59,30 +59,21 @@ def test_cierra_las_sesiones_abiertas_pero_no_la_propia(client):
     assert client.get("/api/run/profile", headers=nuevo).status_code == 200
 
 
-def test_acepta_tokens_del_formato_viejo_hasta_que_se_cambie_la_clave(client, db):
-    """Los tokens de 3 partes emitidos antes de este cambio siguen valiendo, así
-    nadie queda deslogueado por el deploy. Pero caen apenas se cambia la clave."""
+def test_rechaza_tokens_del_formato_viejo(client, db):
+    """El formato de 3 partes (sin iat) se retiró en el hardening de sesiones:
+    esas sesiones piden login de nuevo, ni siquiera con la firma bien."""
     import hashlib
     import hmac as _hmac
     from sqlalchemy import select
     from cloud.models import PortalUser
 
     make_user(client, email="viejo@test.com")
-    # Los tokens de 3 partes solo existen en cuentas anteriores al deploy, que
-    # no tienen tokens_valid_from (las nuevas lo fijan al registrarse).
-    u = db.scalar(select(PortalUser).where(PortalUser.email == "viejo@test.com"))
-    u.tokens_valid_from = None
-    db.commit()
-    uid = u.id
-    exp = int(time.time()) + 3600
-    payload = f"{uid}.{exp}"
+    uid = db.scalar(select(PortalUser).where(PortalUser.email == "viejo@test.com")).id
+    payload = f"{uid}.{int(time.time()) + 3600}"
     sig = _hmac.new(SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
     antiguo = {"Authorization": f"Bearer {payload}.{sig}"}
 
-    assert verify_token(f"{payload}.{sig}") == (uid, 0)
-    assert client.get("/api/run/profile", headers=antiguo).status_code == 200
-
-    _cambiar(client, antiguo)
+    assert verify_token(f"{payload}.{sig}") is None
     assert client.get("/api/run/profile", headers=antiguo).status_code == 401
 
 

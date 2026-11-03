@@ -142,7 +142,7 @@ def _sondear(tmp_path, **env) -> str:
 
 
 def test_en_produccion_con_ct_produccion_no_hay_docs_y_si_hsts(tmp_path):
-    assert _sondear(tmp_path, CT_PRODUCCION="1") == "404 404 True"
+    assert _sondear(tmp_path, CT_PRODUCCION="1", CT_PUBLIC_URL="https://liverun.example") == "404 404 True"
 
 
 def test_en_desarrollo_hay_docs_y_no_hay_hsts(tmp_path):

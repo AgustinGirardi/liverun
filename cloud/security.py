@@ -8,8 +8,19 @@ import json
 import hashlib
 
 SECRET = os.environ.get("CT_CLOUD_SECRET", "dev-insecure-secret-change-me")
-TOKEN_TTL = 60 * 60 * 24 * 30  # 30 días
-_ITERS = 200_000
+TOKEN_TTL = 60 * 60 * 24 * 14  # 14 días
+_ITERS = 600_000  # OWASP Password Storage Cheat Sheet para PBKDF2-HMAC-SHA256
+
+# Contraseñas que figuran en todas las listas de filtradas (NIST 800-63B 5.1.1.2).
+_COMUNES = frozenset(
+    "password password1 password12 password123 contrasena contraseña 12345678 123456789 1234567890 "
+    "87654321 11111111 00000000 qwertyui qwerty123 qwertyuiop abcd1234 abc12345 iloveyou admin123 "
+    "letmein1 welcome1 asdfghjk 1q2w3e4r".split()
+)
+
+
+def es_contrasena_comun(password: str) -> bool:
+    return (password or "").strip().lower() in _COMUNES
 
 
 def hash_password(password: str) -> str:
@@ -26,6 +37,14 @@ def verify_password(password: str, stored: str) -> bool:
         dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, int(iters))
         return hmac.compare_digest(dk, expected)
     except Exception:
+        return False
+
+
+def necesita_rehash(stored: str) -> bool:
+    """True si el hash guardado usa menos iteraciones que las vigentes."""
+    try:
+        return int(stored.split("$")[1]) < _ITERS
+    except (IndexError, ValueError):
         return False
 
 
@@ -57,19 +76,14 @@ def make_token(user_id: int, iat: int = 0) -> str:
 def verify_token(token: str):
     """Devuelve (user_id, iat) si el token es válido, o None.
 
-    Acepta el formato viejo de 3 partes (sin iat) para no cerrar las sesiones
-    que ya estaban abiertas: se les asigna iat=0, así siguen andando pero
-    quedan invalidadas en cuanto el usuario cambie su contraseña.
+    El formato viejo de 3 partes (sin iat) ya no se acepta: esas sesiones
+    piden login de nuevo.
     """
     try:
         partes = token.split(".")
-        if len(partes) == 4:
-            user_id, iat, exp, sig = partes
-        elif len(partes) == 3:
-            user_id, exp, sig = partes
-            iat = "0"
-        else:
+        if len(partes) != 4:
             return None
+        user_id, iat, exp, sig = partes
         payload = ".".join(partes[:-1])
         good = hmac.new(SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(good, sig):

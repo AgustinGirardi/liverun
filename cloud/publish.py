@@ -58,7 +58,7 @@ class PublishPayload(BaseModel):
     location: Optional[str] = None
     race_date: Optional[date] = None
     distances: list[float] = []
-    results: list[PublishResult] = []
+    results: list[PublishResult] = Field(default_factory=list, max_length=20_000)
 
 
 class EventPayload(BaseModel):

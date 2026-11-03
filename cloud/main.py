@@ -5,12 +5,14 @@ Roles:
   - Corredor:   crea cuenta, reclama sus resultados (dorsal + apellido) y ve su historial.
 """
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from cloud import mailer
@@ -55,8 +57,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[PUBLIC_URL, "http://localhost:8002", "http://127.0.0.1:8002"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
 
@@ -80,6 +82,12 @@ _CSP = (
 )
 
 
+_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+
+# Tope del body de los pedidos de la API: una carrera grande publica ~1 MB.
+MAX_BODY_BYTES = 8 * 1024 * 1024
+
+
 def _cache_control(path: str) -> Optional[str]:
     """Caché de los archivos del portal. Sin esta cabecera el navegador aplica
     su heurística (un 10 % de la edad del archivo) y, después de publicar,
@@ -95,6 +103,16 @@ def _cache_control(path: str) -> Optional[str]:
 
 
 @app.middleware("http")
+async def _limite_de_body(request: Request, call_next):
+    """413 si el Content-Length declarado excede el tope (OWASP API4). Cubre al
+    cliente honesto; la cantidad de resultados la acota cada modelo."""
+    declarado = request.headers.get("content-length", "")
+    if declarado.isdigit() and int(declarado) > MAX_BODY_BYTES:
+        return JSONResponse({"detail": "El pedido es demasiado grande."}, status_code=413)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def _security_headers(request: Request, call_next):
     """Cabeceras defensivas: sin sniffing de content-type (avatares subidos),
     sin embeber el portal en iframes de terceros, referrer mínimo."""
@@ -103,6 +121,13 @@ async def _security_headers(request: Request, call_next):
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     resp.headers.setdefault("Content-Security-Policy", _CSP)
+    resp.headers.setdefault("Permissions-Policy", _PERMISSIONS_POLICY)
+    resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    # Los avatares los embeben la app web y el portal desde otro origen.
+    resp.headers.setdefault(
+        "Cross-Origin-Resource-Policy",
+        "cross-origin" if request.url.path.startswith("/avatars/") else "same-origin",
+    )
     cache = _cache_control(request.url.path)
     if cache:
         resp.headers.setdefault("Cache-Control", cache)
@@ -137,6 +162,11 @@ def _startup():
                 "Faltan secretos en producción: definí CT_CLOUD_SECRET y CT_PUBLISH_KEY "
                 "(Render los genera vía render.yaml; en Cloud Run vienen de Secret Manager)."
             )
+    if en_produccion() and not os.environ.get("CT_PUBLIC_URL"):
+        raise RuntimeError(
+            "Falta CT_PUBLIC_URL en producción: CORS, los links de los mails y el redirect de "
+            "Google apuntarían a la URL por defecto (ver DEPLOY.md)."
+        )
     if en_produccion() and not mailer.configurado():
         # No se frena el arranque: sin mails solo se pierden la verificación
         # y el reset de contraseña, no el resto del portal.
