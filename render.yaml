@@ -60,8 +60,8 @@ services:
       # Emails admin del portal, separados por coma.
       - key: CT_ADMIN_EMAILS
         sync: false
-      # URL pública del portal (links de los mails, CORS, Mercado Pago). Si no
-      # se carga, se usa https://chronotrack-portal.onrender.com.
+      # URL pública del portal (links de los mails, CORS, Mercado Pago). OBLIGATORIA:
+      # en producción el portal no arranca sin ella (sync: false, se carga a mano).
       - key: CT_PUBLIC_URL
         sync: false
       # Mails de verificación y de "olvidé mi contraseña" (SMTP, ver DEPLOY.md).

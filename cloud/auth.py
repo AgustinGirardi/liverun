@@ -10,7 +10,7 @@ from sqlalchemy import select, delete as sa_delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from cloud import mailer
+from cloud import audit, mailer
 from cloud.db import get_db
 from cloud.deps import (
     PUBLIC_URL,
@@ -123,6 +123,8 @@ def register(body: RegisterIn, request: Request, background: BackgroundTasks, db
     )
     db.add(user)
     try:
+        db.flush()  # el id hace falta para el evento, que viaja en la misma transacción
+        audit.registrar(db, "register", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
         db.commit()
     except IntegrityError:
         # Dos registros simultáneos con el mismo email: el segundo pierde contra
@@ -135,11 +137,34 @@ def register(body: RegisterIn, request: Request, background: BackgroundTasks, db
     return {"token": make_token(user.id), "email": user.email, "full_name": user.full_name, "linked": 0}
 
 
+def _auditar_login_fallido(db: Session, request: Request, email: str, user_id: Optional[int]) -> None:
+    audit.registrar(
+        db,
+        "login_fail",
+        "fail",
+        request=request,
+        user_id=user_id,
+        actor_type="anon",
+        detalle=f"email:{audit.huella_email(email)}",
+    )
+
+
 @router.post("/api/auth/login", tags=["Corredor"])
 def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
     # Login más estricto: es el vector de fuerza-bruta de contraseñas.
     rate_limit(request, "login", limit=15, window=60.0)
-    verificar_cuenta_no_bloqueada(body.email)
+    try:
+        verificar_cuenta_no_bloqueada(body.email)
+    except HTTPException:
+        audit.registrar(
+            db,
+            "login_locked",
+            "fail",
+            request=request,
+            actor_type="anon",
+            detalle=f"email:{audit.huella_email(body.email)}",
+        )
+        raise
     user = db.scalar(select(PortalUser).where(PortalUser.email == body.email.lower()))
     if not user:
         # Gastar el mismo PBKDF2 que gastariamos con un usuario real. Sin esto
@@ -148,14 +173,17 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
         # tiene cuenta en el portal.
         verify_password(body.password, _DUMMY_HASH)
         registrar_fallo_de_cuenta(body.email)
+        _auditar_login_fallido(db, request, body.email, None)
         raise HTTPException(401, "Email o contraseña incorrectos")
     if not verify_password(body.password, user.password_hash):
         registrar_fallo_de_cuenta(body.email)
+        _auditar_login_fallido(db, request, body.email, user.id)
         raise HTTPException(401, "Email o contraseña incorrectos")
     limpiar_fallos_de_cuenta(body.email)
     if necesita_rehash(user.password_hash):
         user.password_hash = hash_password(body.password)
-        db.commit()
+    audit.registrar(db, "login_ok", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
+    db.commit()  # antes del autolink: si éste hace rollback, el evento ya quedó
     try:
         linked = _autolink(user, db)
     except Exception:
@@ -165,10 +193,11 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/api/auth/logout", tags=["Corredor"])
-def logout(user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
+def logout(request: Request, user: PortalUser = Depends(current_user), db: Session = Depends(get_db)):
     """Cierra todas las sesiones de la cuenta en el servidor: sube el corte de
     tokens (+1 s, igual que change_password) y todo token emitido antes muere."""
     user.tokens_valid_from = int(time.time()) + 1
+    audit.registrar(db, "logout", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
     db.commit()
     return {"logged_out": True}
 
@@ -203,10 +232,11 @@ def delete_account(request: Request, user: PortalUser = Depends(current_user), d
             # era un `pass` mudo y el preapproval quedaba vivo cobrando todos los
             # meses sin ningún rastro. Ahora queda registrado, y si llega a
             # cobrar, apply_payment lo cancela al no poder mapearlo a nadie.
-            print(
-                f"[MP] no se pudo cancelar {sub.mp_preapproval_id} al borrar "
-                f"la cuenta {user.id}: {e} — queda como huérfano",
-                flush=True,
+            audit.log.error(
+                "[MP] no se pudo cancelar %s al borrar la cuenta %s: %s — queda como huérfano",
+                sub.mp_preapproval_id,
+                user.id,
+                type(e).__name__,
             )
 
     # El avatar es un archivo en disco: el CASCADE de la DB no lo cubre.
@@ -225,6 +255,7 @@ def delete_account(request: Request, user: PortalUser = Depends(current_user), d
     db.execute(sa_delete(BillingPayment).where(BillingPayment.user_id == user.id))
     db.execute(sa_delete(BillingSubscription).where(BillingSubscription.user_id == user.id))
     db.delete(user)  # el cascade del ORM borra claims y actividades
+    audit.registrar(db, "account_deleted", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
     db.commit()
     return {"deleted": True}
 
@@ -257,6 +288,7 @@ def change_password(
     user.password_hash = hash_password(body.new_password)
     user.password_set = 1
     user.tokens_valid_from = corte
+    audit.registrar(db, "password_change", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
     db.commit()
     return {"token": make_token(user.id, iat=corte)}
 
@@ -340,6 +372,7 @@ def verify_email(body: VerifyIn, request: Request, db: Session = Depends(get_db)
             if not verify_password(body.password, user.password_hash):
                 raise HTTPException(401, "La contraseña no coincide con la de esta cuenta.")
     _marcar_verificado(user)
+    audit.registrar(db, "email_verified", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
     db.commit()
     try:
         linked = _autolink(user, db)
@@ -384,6 +417,7 @@ def reset_password(body: ResetIn, request: Request, db: Session = Depends(get_db
     user.password_set = 1
     user.tokens_valid_from = corte
     _marcar_verificado(user)
+    audit.registrar(db, "password_reset", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
     db.commit()
     try:
         linked = _autolink(user, db)

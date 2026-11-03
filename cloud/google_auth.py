@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from cloud.db import get_db
+from cloud import audit
 from cloud.deps import PUBLIC_URL, admin_emails, en_produccion
 from cloud.models import PortalUser
 from cloud.run import ahora_utc
@@ -136,11 +137,15 @@ def verify_state(state: str, now: Optional[float] = None, browser_nonce: Optiona
         return None
 
 
-def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str], picture: Optional[str]) -> PortalUser:
+def upsert_google_user(
+    db: Session, sub: str, email: str, name: Optional[str], picture: Optional[str], request: Optional[Request] = None
+) -> PortalUser:
     """Busca por google_id; si no, vincula por email (cuenta de portal
     existente); si no, crea la cuenta. Devuelve el usuario."""
     user = db.scalar(select(PortalUser).where(PortalUser.google_id == sub))
     if user:
+        audit.registrar(db, "google_login", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
+        db.commit()
         return user
     email = email.strip().lower()
     es_admin = email in admin_emails()
@@ -166,6 +171,7 @@ def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str], p
             user.avatar_url = picture
         if es_admin:
             user.is_admin = 1
+        audit.registrar(db, "google_link", "ok", request=request, user_id=user.id, target=f"user:{user.id}")
         db.commit()
         return user
     user = PortalUser(
@@ -184,6 +190,8 @@ def upsert_google_user(db: Session, sub: str, email: str, name: Optional[str], p
         tokens_valid_from=int(time.time()),
     )
     db.add(user)
+    db.flush()  # el id hace falta para el evento
+    audit.registrar(db, "register", "ok", request=request, user_id=user.id, target=f"user:{user.id}", detalle="google")
     db.commit()
     return user
 
@@ -280,6 +288,7 @@ def google_callback(
         email=claims["email"],
         name=claims.get("name"),
         picture=claims.get("picture"),
+        request=request,
     )
     # iat nunca antes del corte de sesiones (al vincular Google se pone en
     # ahora+1): si no, el token recién emitido nacería inválido.

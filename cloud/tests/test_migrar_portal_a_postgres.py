@@ -63,6 +63,7 @@ def _poblar(engine) -> None:
                 m.CouponRedemption(coupon_id=cupon.id, user_id=beto.id),
                 m.BillingSubscription(user_id=ana.id, mp_preapproval_id="pre-1"),
                 m.BillingPayment(user_id=ana.id, mp_payment_id="pay-1", amount=Decimal("1999.50"), status="approved"),
+                m.AuditEvent(created_at=AHORA, action="login_ok", result="ok", actor_type="user", user_id=ana.id),
             ]
         )
         s.commit()
@@ -198,5 +199,9 @@ def test_en_postgres_las_secuencias_quedan_listas_para_seguir_insertando(origen_
             s.add(nuevo)
             s.commit()  # sin la reasignación de secuencias esto choca con el id 1
             assert nuevo.id == 3
+            evento = m.AuditEvent(created_at=AHORA, action="login_ok", result="ok", actor_type="user")
+            s.add(evento)
+            s.commit()  # idem para audit_events: el origen de prueba tiene 1 fila
+            assert evento.id == 2
     finally:
         destino.dispose()

@@ -18,6 +18,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from cloud import audit
 from cloud.db import DB_URL, get_db
 from cloud.deps import PUBLIC_URL, current_user, rate_limit, rate_limit_key
 from cloud.models import Activity, Coupon, CouponRedemption, Friendship, PortalUser
@@ -326,7 +327,13 @@ def admin_list_users(
 
 
 @router.post("/admin/users/{user_id}/grant")
-def admin_grant(user_id: int, body: GrantIn, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_grant(
+    user_id: int,
+    body: GrantIn,
+    request: Request,
+    admin: PortalUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
     """Da, extiende o quita premium manualmente (sin cobro). Para regalos,
     soporte o tu propia cuenta. unlimited = 100 años; revoke = sin premium."""
     target = db.get(PortalUser, user_id)
@@ -343,6 +350,16 @@ def admin_grant(user_id: int, body: GrantIn, admin: PortalUser = Depends(require
         target.premium_until = base + timedelta(days=30 * body.months)
     else:
         raise HTTPException(400, "Indicá months, unlimited o revoke")
+    audit.registrar(
+        db,
+        "admin_grant",
+        "ok",
+        request=request,
+        user_id=admin.id,
+        actor_type="admin",
+        target=f"user:{target.id}",
+        detalle="revoke" if body.revoke else "unlimited" if body.unlimited else f"months:{body.months}",
+    )
     db.commit()
     return _admin_user_dict(target, now)
 
@@ -409,8 +426,26 @@ def _coupon_dict(c: Coupon) -> dict:
     }
 
 
+def _auditar_cupon(
+    db: Session, request: Request, admin: PortalUser, accion: str, c: Coupon, detalle: Optional[str] = None
+) -> None:
+    """Solo el id: el código del cupón es un secreto que canjea premium."""
+    audit.registrar(
+        db,
+        accion,
+        "ok",
+        request=request,
+        user_id=admin.id,
+        actor_type="admin",
+        target=f"coupon:{c.id}",
+        detalle=detalle,
+    )
+
+
 @router.post("/admin/coupons")
-def admin_create_coupon(body: CouponCreate, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_create_coupon(
+    body: CouponCreate, request: Request, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)
+):
     code = body.code.strip().upper()
     if not COUPON_RE.match(code):
         raise HTTPException(400, "El código debe tener 8-32 caracteres (letras y números)")
@@ -431,6 +466,8 @@ def admin_create_coupon(body: CouponCreate, admin: PortalUser = Depends(require_
         expires_at=body.expires_at,
     )
     db.add(c)
+    db.flush()  # el id del cupón es el target del evento
+    _auditar_cupon(db, request, admin, "coupon_created", c)
     db.commit()
     return _coupon_dict(c)
 
@@ -442,11 +479,14 @@ def admin_list_coupons(admin: PortalUser = Depends(require_admin), db: Session =
 
 
 @router.post("/admin/coupons/{coupon_id}/toggle")
-def admin_toggle_coupon(coupon_id: int, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def admin_toggle_coupon(
+    coupon_id: int, request: Request, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)
+):
     c = db.get(Coupon, coupon_id)
     if not c:
         raise HTTPException(404, "Cupón no encontrado")
     c.active = 0 if c.active else 1
+    _auditar_cupon(db, request, admin, "coupon_toggled", c, detalle="active" if c.active else "inactive")
     db.commit()
     return _coupon_dict(c)
 

@@ -12,12 +12,13 @@ import secrets
 from hmac import compare_digest
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from cloud.db import get_db
+from cloud import audit
 from cloud.models import PortalUser, PublishedRace, PublishKey
 from cloud.run import ahora_utc, iso_utc, require_admin
 
@@ -96,6 +97,11 @@ def _por_id(db: Session, key_id: int) -> PublishKey:
     return k
 
 
+def _auditar(db: Session, request: Request, admin: PortalUser, accion: str, fila: PublishKey) -> None:
+    """Solo el id de la key: ni el secreto ni su prefijo ni el nombre del organizador."""
+    audit.registrar(db, accion, "ok", request=request, user_id=admin.id, actor_type="admin", target=f"key:{fila.id}")
+
+
 @router.get("")
 def listar(_: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     cuentas = dict(
@@ -105,19 +111,21 @@ def listar(_: PortalUser = Depends(require_admin), db: Session = Depends(get_db)
 
 
 @router.post("")
-def crear(body: NuevaKey, _: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def crear(body: NuevaKey, request: Request, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     """La key en claro se devuelve esta única vez: después solo queda el hash."""
     key = _generar_key()
     fila = PublishKey(
         name=body.name, key_hash=hash_key(key), key_prefix=key[:_LARGO_PREFIJO_VISIBLE], created_at=ahora_utc()
     )
     db.add(fila)
+    db.flush()  # el id de la fila es el target del evento
+    _auditar(db, request, admin, "publish_key_created", fila)
     db.commit()
     return {**_dict(fila, 0), "key": key}
 
 
 @router.post("/{key_id}/rotate")
-def rotar(key_id: int, _: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def rotar(key_id: int, request: Request, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     """Cambia el secreto conservando al organizador: sus carreras pasan al hash nuevo."""
     fila = _por_id(db, key_id)
     if fila.revoked_at is not None:
@@ -126,17 +134,19 @@ def rotar(key_id: int, _: PortalUser = Depends(require_admin), db: Session = Dep
     viejo, nuevo = fila.key_hash, hash_key(key)
     db.execute(update(PublishedRace).where(PublishedRace.owner_key_hash == viejo).values(owner_key_hash=nuevo))
     fila.key_hash, fila.key_prefix, fila.rotated_at = nuevo, key[:_LARGO_PREFIJO_VISIBLE], ahora_utc()
+    _auditar(db, request, admin, "publish_key_rotated", fila)
     db.commit()
     carreras = db.scalar(select(func.count()).select_from(PublishedRace).where(PublishedRace.owner_key_hash == nuevo))
     return {**_dict(fila, carreras), "key": key}
 
 
 @router.post("/{key_id}/revoke")
-def revocar(key_id: int, _: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
+def revocar(key_id: int, request: Request, admin: PortalUser = Depends(require_admin), db: Session = Depends(get_db)):
     """Corta la publicación. Las carreras quedan publicadas."""
     fila = _por_id(db, key_id)
     if fila.revoked_at is None:
         fila.revoked_at = ahora_utc()
+        _auditar(db, request, admin, "publish_key_revoked", fila)
         db.commit()
     carreras = db.scalar(
         select(func.count()).select_from(PublishedRace).where(PublishedRace.owner_key_hash == fila.key_hash)

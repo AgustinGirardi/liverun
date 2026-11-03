@@ -111,3 +111,23 @@ def test_el_dia_argentino_cae_en_el_dia_anterior_de_madrugada_utc(db):
         select(_dia_argentino(db, Activity.started_at, datetime(2026, 10, 19))).order_by(Activity.started_at)
     ).all()
     assert [str(d) for d in dias] == ["2026-10-20", "2026-10-21"]
+
+
+def test_una_base_sin_audit_events_la_recibe_con_init_db_y_es_idempotente():
+    """La tabla es nueva, así que create_all la crea sola (SQLite y Postgres): no hay ALTER."""
+    from cloud.db import init_db
+
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS audit_events"))
+    assert "audit_events" not in inspect(engine).get_table_names()
+    for _ in range(2):
+        init_db()
+        migraciones.migrar_esquema()
+    columnas = {c["name"] for c in inspect(engine).get_columns("audit_events")}
+    assert columnas == {"id", "created_at", "action", "result", "actor_type", "user_id", "target", "ip", "detail"}
+    indexadas = {c for i in inspect(engine).get_indexes("audit_events") for c in i["column_names"]}
+    assert {"created_at", "action"} <= indexadas
+
+
+def test_audit_events_no_tiene_clave_foranea_a_usuarios():
+    assert inspect(engine).get_foreign_keys("audit_events") == []

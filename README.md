@@ -140,6 +140,11 @@ legible por cualquiera. Lo que eso implicó:
 - **Los secretos de producción los genera Render** (`generateValue` en
   `render.yaml`) y el portal **se niega a arrancar** si detecta los valores por
   defecto de desarrollo (`cloud/main.py`, `_startup`).
+- **Auditoría de eventos.** Logins (ok, fallidos y bloqueados), cambios y resets de
+  contraseña, verificaciones, borrados de cuenta, claves de organizador y acciones de
+  admin quedan en la tabla `audit_events` y en el log (JSON, logger `cloud.audit`), sin
+  email, nombre ni token y con la IP truncada. Retención prevista: 12 meses
+  ([`docs/seguridad/`](docs/seguridad/README.md)).
 - **Auditoría previa a abrir el repo.** Se revisaron autenticación, autorización,
   el cobro y sus webhooks, rate limiting, subida de archivos y el SPA. Los
   hallazgos están corregidos, y cada corrección tiene su test de regresión en

@@ -271,3 +271,22 @@ class Claim(Base):
     user = relationship("PortalUser", back_populates="claims")
     result = relationship("PublishedResult", back_populates="claims")
     __table_args__ = (UniqueConstraint("user_id", "result_id", name="uq_user_result"),)
+
+
+class AuditEvent(Base):
+    """Evento sensible (login, cambio de contraseña, claves, acciones de admin).
+
+    `user_id` NO es una FK a propósito: el historial tiene que sobrevivir al
+    borrado de la cuenta y no bloquear `db.delete(user)`. Nunca guarda email,
+    nombre ni token: la IP va truncada y el detalle es texto corto sin PII."""
+
+    __tablename__ = "audit_events"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime, nullable=False, index=True)
+    action = Column(String(40), nullable=False, index=True)
+    result = Column(String(4), nullable=False)  # ok | fail
+    actor_type = Column(String(12), nullable=False)  # user | admin | publish_key | anon | system
+    user_id = Column(Integer, nullable=True)
+    target = Column(String(64), nullable=True)  # p. ej. key:12, user:7
+    ip = Column(String(64), nullable=True)
+    detail = Column(String(200), nullable=True)

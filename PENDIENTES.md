@@ -100,9 +100,10 @@ Para Agustín, en orden (necesitan paneles o el teléfono):
 
 ## 9. Hardening de seguridad (plan `docs/plans/2026-11-03-hardening-de-seguridad-y-privacidad-de-liverun-soc.md`)
 
-**Hecho en código (sin desplegar):** sesiones, contraseñas, bloqueo por cuenta, headers, CORS y topes de tamaño del portal (detalle y tests en `docs/seguridad/README.md`).
+**Hecho en código (sin desplegar):** sesiones, contraseñas, bloqueo por cuenta, headers, CORS, topes de tamaño y auditoría de eventos (`audit_events`) del portal (detalle y tests en `docs/seguridad/README.md`, con el paso a paso de deploy).
 
 - [ ] **Antes de desplegar:** cargar `CT_PUBLIC_URL` en producción (si falta, el portal ya no arranca) y avisar que se desloguea a todos los usuarios (token viejo retirado, TTL 14 días).
 - [x] Fase 0: documentos de `docs/seguridad/`, Dependabot, gitleaks, `npm audit` y actions por SHA (2026-11-03). Queda revisar a mano las altas de `mobile/` (entran en la migración a Expo 58).
-- [ ] Fases 1 (auditoría con esquema), 2, 3, 4 y 5 del plan, un PR por fase y después del corte a Cloud Run.
+- [x] Fase 1b: `cloud/audit.py`, tabla `audit_events` y eventos de auth, claves y admin (2026-11-03).
+- [ ] Fases 2, 3, 4 y 5 del plan, un PR por fase y después del corte a Cloud Run.
 - [ ] Invertir el orden en `/api/publish`: validar la API key antes que el body (hoy un body inválido da 422 sin pedir clave).
