@@ -24,8 +24,8 @@ jobs:
     name: Python (portal + escritorio)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"   # el mismo que PYTHON_VERSION en render.yaml
           cache: pip
@@ -46,6 +46,22 @@ jobs:
           pipx run pip-audit==2.10.1 --no-deps --disable-pip -r cloud/requirements.lock
           pipx run pip-audit==2.10.1 --no-deps --disable-pip -r requirements.lock
 
+  secretos:
+    name: Secretos en el historial (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0   # el historial completo: el repo es público
+      - name: Instalar gitleaks (CLI oficial, versión y checksum fijos)
+        run: |
+          v=8.30.1
+          curl -sSfL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+      - name: Buscar secretos en todos los commits
+        run: ./gitleaks git --redact --verbose --exit-code 1 .
+
   python-postgres:
     name: Portal contra Postgres
     runs-on: ubuntu-latest
@@ -65,8 +81,8 @@ jobs:
     env:
       CT_TEST_DB: postgresql+psycopg://postgres:ci@localhost:5432/portal_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
           cache: pip
@@ -91,7 +107,7 @@ jobs:
       SERVICIO: liverun-portal
       IMAGEN: us-east4-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/liverun/portal:${{ github.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: ¿Cambió algo que va en la imagen?
@@ -107,12 +123,12 @@ jobs:
             echo "El push no toca el portal: no se despliega."
           fi
       - if: steps.cambios.outputs.portal == 'true'
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - if: steps.cambios.outputs.portal == 'true'
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2
       - if: steps.cambios.outputs.portal == 'true'
         name: Construir y subir la imagen
         run: |
@@ -156,13 +172,15 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
+      - name: Vulnerabilidades (informativo hasta migrar a Expo 58)
+        run: npm audit || true
       - name: Tests
         run: npm test -- --ci
       - name: Lint
@@ -177,13 +195,15 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4   # el build lee ../version.txt
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 # el build lee ../version.txt
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - name: Vulnerabilidades altas en las dependencias
+        run: npm audit --audit-level=high
       - name: Lint
         run: npm run lint
       - name: Tests

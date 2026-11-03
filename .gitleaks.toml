@@ -1,0 +1,10 @@
+# Falsos positivos confirmados en la auditoría del 2026-11-03 (se miró el historial completo).
+title = "LiveRun"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Clave de ejemplo (no real) de un test del escritorio"
+paths = ['''backend/tests/test_cloud_config\.py''']
+regexes = ['''lr_pub_abcdefgh1234''']

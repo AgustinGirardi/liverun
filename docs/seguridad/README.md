@@ -9,6 +9,22 @@ por fase, token propio con TTL corto + logout + bloqueo por cuenta, DPAPI/`keyri
 para la clave del escritorio, retención GPS 24 meses / cuentas sin verificar 30 días /
 auditoría 12 meses.
 
+## Documentos
+
+- [`gap-analysis.md`](gap-analysis.md): controles del plan mapeados a SOC 2 / ISO / PCI / OWASP / CIS / NIST y resultados de la auditoría inicial.
+- [`inventario-datos.md`](inventario-datos.md): qué dato vive dónde, base legal, retención y quién accede.
+- [`matriz-accesos.md`](matriz-accesos.md): rol × endpoint y eventos de auditoría.
+- [`organizativo.md`](organizativo.md): checklist de lo que no es código (AAIP, DPA, MFA, revisión legal).
+
+## Hecho (Fase 0: auditoría y CI)
+
+| Control | Qué cambió | Dónde | Test |
+|---|---|---|---|
+| Auditoría inicial | `pip-audit` limpio; `npm audit` (zod alta en `frontend/` resuelta); gitleaks sobre 176 commits: solo un falso positivo de test, sin secretos que rotar | [`gap-analysis.md`](gap-analysis.md) | — |
+| Secretos | Job `secretos` (gitleaks pineado con checksum, historial completo); `.gitleaks.toml` con el falso positivo | `.github/workflows/ci.yml`, `.gitleaks.toml` | `test_config_ci.py` |
+| Dependencias | Dependabot semanal (pip ×2, npm ×2, actions); `npm audit --audit-level=high` bloqueante en `frontend/`, informativo en `mobile/` hasta Expo 58 | `.github/dependabot.yml`, `ci.yml` | `test_config_ci.py` |
+| Cadena de suministro | Todas las actions por SHA de 40 caracteres con el tag en comentario | `.github/workflows/*.yml` | `test_config_ci.py` |
+
 ## Hecho (Fase 1, parte sin cambio de esquema)
 
 | Control | Qué cambió | Dónde | Test |
@@ -29,7 +45,6 @@ auditoría 12 meses.
 
 ## Pendiente (fases siguientes)
 
-- **Fase 0:** `gap-analysis.md`, `inventario-datos.md`, `matriz-accesos.md`, `organizativo.md`, Dependabot, gitleaks, `npm audit` y actions por SHA en la CI.
 - **Fase 1 (con esquema):** `cloud/audit.py` + tabla `audit_events` + migración (también en Postgres); auditar emisión/rotación/revocación de claves y acciones de admin.
 - **Fase 2:** `result_revisions`, hash del lote, certificado con código y `/api/verificar/{código}`.
 - **Fase 3:** política de privacidad, consentimiento versionado, `GET /api/me/export`, purga por retención (primero en modo "solo reportar").

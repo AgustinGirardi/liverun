@@ -1,0 +1,48 @@
+# Actualizaciones semanales. Las minor/patch de cada ecosistema llegan en un solo
+# PR para no inundar; las major van aparte. Las actions están fijadas por SHA
+# (ver ci.yml): sin Dependabot se quedarían viejas.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /cloud
+    schedule:
+      interval: weekly
+    groups:
+      portal:
+        update-types: [minor, patch]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      escritorio:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      frontend:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    groups:
+      mobile:
+        update-types: [minor, patch]
+    # Expo fija las versiones de sus paquetes por SDK: se suben con la migración a Expo 58.
+    ignore:
+      - dependency-name: "expo"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        update-types: [minor, patch]

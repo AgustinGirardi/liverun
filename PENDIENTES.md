@@ -103,6 +103,6 @@ Para Agustín, en orden (necesitan paneles o el teléfono):
 **Hecho en código (sin desplegar):** sesiones, contraseñas, bloqueo por cuenta, headers, CORS y topes de tamaño del portal (detalle y tests en `docs/seguridad/README.md`).
 
 - [ ] **Antes de desplegar:** cargar `CT_PUBLIC_URL` en producción (si falta, el portal ya no arranca) y avisar que se desloguea a todos los usuarios (token viejo retirado, TTL 14 días).
-- [ ] Fase 0: documentos de `docs/seguridad/`, Dependabot, gitleaks, `npm audit` y actions por SHA.
+- [x] Fase 0: documentos de `docs/seguridad/`, Dependabot, gitleaks, `npm audit` y actions por SHA (2026-11-03). Queda revisar a mano las altas de `mobile/` (entran en la migración a Expo 58).
 - [ ] Fases 1 (auditoría con esquema), 2, 3, 4 y 5 del plan, un PR por fase y después del corte a Cloud Run.
 - [ ] Invertir el orden en `/api/publish`: validar la API key antes que el body (hoy un body inválido da 422 sin pedir clave).
