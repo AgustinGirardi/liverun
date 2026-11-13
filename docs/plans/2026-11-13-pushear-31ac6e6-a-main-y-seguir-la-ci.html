@@ -1,0 +1,121 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="script-src 'none'"><title>Pushear 31ac6e6 a main y seguir la CI</title><style>
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+main{max-width:760px;margin:0 auto;padding:16px}section{margin:24px 0}ul{list-style:none;padding:0;display:grid;gap:8px}li{background:var(--surface);border-radius:var(--r-lg);padding:12px}li.chosen{outline:2px solid var(--act)}iframe{width:100%;height:320px;border:0;border-radius:var(--r-md);margin-top:8px}.comment{color:var(--risk)}</style></head><body><main><h1>Pushear 31ac6e6 a main y seguir la CI</h1><p>Main está un commit adelante de origin/main: 31ac6e6, que trae el checklist de Render en DEPLOY.md, un test que exige las variables de render.yaml con sync: false, los comandos de EAS y PENDIENTES.md. No cambia código de la app. Se pushea sin force y se sigue la CI hasta que pasen todos los jobs. Se espera que deploy-portal quede salteado porque falta GCP_PROJECT_ID. Si algo falla, se diagnostica la causa y se propone el arreglo sin aplicarlo.</p><section><h2>Qué se pushea</h2><iframe sandbox title="Qué se pushea" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.pp{display:grid;gap:10px}.pp .f{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--surface-2);border-radius:var(--r-sm);font-size:14px}&lt;/style&gt;&lt;div class='card'&gt;&lt;p&gt;&lt;b&gt;31ac6e6&lt;/b&gt; · docs(deploy): checklist de Render con test, por qué se saltea deploy-portal y OTA&lt;/p&gt;&lt;div class='pp'&gt;&lt;div class='f'&gt;&lt;span&gt;DEPLOY.md&lt;/span&gt;&lt;span class='dim'&gt;checklist y deploy-portal&lt;/span&gt;&lt;/div&gt;&lt;div class='f'&gt;&lt;span&gt;PENDIENTES.md&lt;/span&gt;&lt;span class='dim'&gt;diagnóstico de OTA&lt;/span&gt;&lt;/div&gt;&lt;div class='f'&gt;&lt;span&gt;mobile/README.md&lt;/span&gt;&lt;span class='dim'&gt;comandos de EAS&lt;/span&gt;&lt;/div&gt;&lt;div class='f'&gt;&lt;span&gt;cloud/tests/test_health.py&lt;/span&gt;&lt;span class='dim'&gt;test de render.yaml&lt;/span&gt;&lt;/div&gt;&lt;div class='f'&gt;&lt;span&gt;docs/plans/2026-11-13-…&lt;/span&gt;&lt;span class='dim'&gt;plan .md y .html&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class='dim'&gt;Fast-forward sobre origin/main. Sin force.&lt;/p&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Cómo quedaría la CI</h2><iframe sandbox title="Cómo quedaría la CI" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.ci{display:grid;gap:8px}.ci .row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--surface-2);border-radius:var(--r-sm);font-size:14px}&lt;/style&gt;&lt;div class='card'&gt;&lt;div class='ci'&gt;&lt;div class='row'&gt;&lt;span&gt;Python (portal + escritorio)&lt;/span&gt;&lt;span class='chip'&gt;success&lt;/span&gt;&lt;/div&gt;&lt;div class='row'&gt;&lt;span&gt;Secretos (gitleaks)&lt;/span&gt;&lt;span class='chip'&gt;success&lt;/span&gt;&lt;/div&gt;&lt;div class='row'&gt;&lt;span&gt;Portal contra Postgres&lt;/span&gt;&lt;span class='chip'&gt;success&lt;/span&gt;&lt;/div&gt;&lt;div class='row'&gt;&lt;span&gt;Móvil (Expo)&lt;/span&gt;&lt;span class='chip'&gt;success&lt;/span&gt;&lt;/div&gt;&lt;div class='row'&gt;&lt;span&gt;Escritorio (frontend)&lt;/span&gt;&lt;span class='chip'&gt;success&lt;/span&gt;&lt;/div&gt;&lt;div class='row'&gt;&lt;span&gt;Desplegar el portal en Cloud Run&lt;/span&gt;&lt;span class='chip dim'&gt;skipped (esperado)&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;p class='dim'&gt;Si deploy-portal aparece en failure en vez de skipped, la condición if está mal.&lt;/p&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Riesgos a vigilar</h2><iframe sandbox title="Riesgos a vigilar" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;div class='grid'&gt;&lt;div class='card'&gt;&lt;b&gt;ruff format --check&lt;/b&gt;&lt;p class='dim'&gt;El test nuevo nunca pasó por el formateo de la CI.&lt;/p&gt;&lt;/div&gt;&lt;div class='card'&gt;&lt;b&gt;gitleaks&lt;/b&gt;&lt;p class='dim'&gt;El commit nombra SMTP y un fingerprint. Ya hubo un falso positivo, resuelto en 3c4ce59.&lt;/p&gt;&lt;/div&gt;&lt;div class='card'&gt;&lt;b&gt;pyyaml&lt;/b&gt;&lt;p class='dim'&gt;El test la importa, pero solo llega como transitiva en los locks.&lt;/p&gt;&lt;/div&gt;&lt;div class='card'&gt;&lt;b class='risk'&gt;Dependabot&lt;/b&gt;&lt;p class='dim'&gt;Las ramas de Dependabot fallan en Móvil. Es ruido ajeno a este push.&lt;/p&gt;&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Pasos de verificación</h2><iframe sandbox title="Pasos de verificación" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;div class='card'&gt;&lt;ol&gt;&lt;li&gt;&lt;code&gt;git push origin main&lt;/code&gt;&lt;/li&gt;&lt;li&gt;&lt;code&gt;gh run list --branch main --limit 1&lt;/code&gt;&lt;/li&gt;&lt;li&gt;&lt;code&gt;gh run watch &amp;lt;id&amp;gt;&lt;/code&gt; hasta que termine&lt;/li&gt;&lt;li&gt;Confirmar 5 jobs en success y deploy-portal en skipped&lt;/li&gt;&lt;li&gt;Si falla: &lt;code&gt;gh run view &amp;lt;id&amp;gt; --log-failed&lt;/code&gt;, diagnosticar y proponer el arreglo&lt;/li&gt;&lt;/ol&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>¿Cómo se pushea el commit?</h2><ul><li class=""><strong>Push directo a main</strong> <em>(recomendada)</em><p>Es lo que pediste. El cambio es documentación y un test, y es fast-forward.</p><iframe sandbox title="Push directo a main" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;div class='card'&gt;&lt;code&gt;git push origin main&lt;/code&gt;&lt;p class='dim'&gt;La CI corre sobre main.&lt;/p&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></li><li class=""><strong>Rama y PR</strong><p>Se espera la CI en el PR antes de mergear. Es más lento, pero main nunca queda en rojo.</p><iframe sandbox title="Rama y PR" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;div class='card'&gt;&lt;code&gt;git push origin HEAD:docs/deploy&lt;/code&gt;&lt;p class='dim'&gt;PR, CI y merge.&lt;/p&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></li><li class=""><strong>Correr ruff y pytest local antes</strong><p>Detecta fallos de formato o de pyyaml antes de publicar, a costa de unos minutos.</p><iframe sandbox title="Correr ruff y pytest local antes" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;div class='card'&gt;&lt;code&gt;ruff check . &amp;amp;&amp;amp; ruff format --check .&lt;/code&gt;&lt;br&gt;&lt;code&gt;pytest cloud/tests -q&lt;/code&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></li></ul></section><section><h2>Si un job falla, ¿qué hacemos?</h2><ul><li class=""><strong>Solo diagnosticar y proponer</strong> <em>(recomendada)</em><p>Según el pedido: se lee el log, se explica la causa y se propone el arreglo sin tocar nada.</p></li><li class=""><strong>Diagnosticar y arreglar</strong><p>Se arregla en un commit aparte, con un test que reproduzca el fallo si aplica.</p></li><li class=""><strong>Revertir 31ac6e6</strong><p>Se deja main como estaba hasta entender la causa. Es lo más conservador, pero pierde el avance.</p></li></ul></section><section><h2>¿Qué hacemos con pyyaml, que el test usa pero no está declarada?</h2><ul><li class=""><strong>Dejarla como está</strong><p>Hoy llega por los locks y la CI pasa. Si un lock la saca, el test rompe.</p></li><li class=""><strong>Sumarla a requirements-dev.txt</strong> <em>(recomendada)</em><p>El test depende de ella a propósito, así que queda declarada. Es un cambio mínimo, en un commit aparte.</p></li><li class=""><strong>Parsear render.yaml sin yaml</strong><p>Evita la dependencia, pero es frágil y se aleja del estilo del repo.</p></li></ul></section><section><h2>¿Cómo seguimos la CI?</h2><ul><li class=""><strong>gh run watch en primer plano</strong> <em>(recomendada)</em><p>Se ve el resultado apenas termina y se puede diagnosticar enseguida.</p></li><li class=""><strong>Polling en segundo plano</strong><p>Te libera la sesión, pero el aviso llega con demora.</p></li><li class=""><strong>Revisar a mano más tarde</strong><p>No hay seguimiento activo. Un fallo se descubre tarde.</p></li></ul></section></main></body></html>
