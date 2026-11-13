@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arreglar gitleaks en test_auditoria</title>
+<style>body{font-family:system-ui,sans-serif;background:#16181d;color:#e6e8ec;max-width:720px;margin:0 auto;padding:16px;line-height:1.5}
+h1{font-size:1.3rem}.card{background:#20242b;border:1px solid #333a45;border-radius:8px;padding:12px;margin:12px 0}
+.rec{border-color:#4f9d69}code{background:#2b303a;padding:1px 5px;border-radius:4px}textarea{width:100%;background:#16181d;color:inherit;border:1px solid #333a45;border-radius:6px}</style></head>
+<body>
+<h1>Arreglar el job <code>secretos</code> (gitleaks)</h1>
+<div class="card"><b>De qué se trata.</b> Tras el push, todos los jobs pasaron (incluido <code>python-postgres</code>) menos <code>secretos</code>:
+gitleaks marca <code>PASSWORD = "clave-sentinela-9X7"</code> en <code>cloud/tests/test_auditoria.py:21</code>. Es un valor de prueba, no un secreto real.</div>
+<div class="card"><b>Cómo quedaría.</b> En <code>.gitleaks.toml</code>, una allowlist acotada por archivo y por valor. Sin cambios de código.</div>
+<h2>Decisión 1: cómo silenciar el hallazgo</h2>
+<div class="card rec"><b>A (recomendada)</b>: allowlist por path + valor en <code>.gitleaks.toml</code>.</div>
+<div class="card"><b>B</b>: bajar la entropía del valor y allowlistear el commit viejo por fingerprint.</div>
+<div class="card"><b>C</b>: <code>.gitleaksignore</code> con el fingerprint.</div>
+<div class="card"><b>D</b>: reescribir historial (descartada: requiere force-push).</div>
+<h2>Decisión 2: cómo seguir</h2>
+<div class="card rec"><b>A (recomendada)</b>: commit chico + push y <code>gh run watch</code>.</div>
+<div class="card"><b>B</b>: rama + PR para ver la CI antes de mergear.</div>
+<h2>Comentarios</h2><textarea rows="4" aria-label="Comentarios"></textarea>
+</body></html>

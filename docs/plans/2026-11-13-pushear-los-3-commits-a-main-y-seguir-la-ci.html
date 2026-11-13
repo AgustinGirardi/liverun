@@ -1,0 +1,91 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="script-src 'none'"><title>Push de 3 commits de seguridad a main y seguimiento de la CI</title><style>
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+main{max-width:760px;margin:0 auto;padding:16px}section{margin:24px 0}ul{list-style:none;padding:0;display:grid;gap:8px}li{background:var(--surface);border-radius:var(--r-lg);padding:12px}li.chosen{outline:2px solid var(--act)}iframe{width:100%;height:320px;border:0;border-radius:var(--r-md);margin-top:8px}.comment{color:var(--risk)}</style></head><body><main><h1>Push de 3 commits de seguridad a main y seguimiento de la CI</h1><p>main está 3 commits adelante de origin/main: hardening de sesiones y headers, Fase 0 (Dependabot, gitleaks, actions por SHA) y auditoría de eventos con la tabla nueva audit_events. El plan es pushear sin force y seguir la CI hasta el final, mirando en especial el job python-postgres, que nunca corrió local contra Postgres. Si falla, se diagnostica con el log y se propone el arreglo en un plan nuevo, sin tocar nada antes de que lo apruebes. Ojo: el push a main puede disparar el deploy a Cloud Run y Render.</p><section><h2>Qué se pushea</h2><iframe sandbox title="Qué se pushea" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.pp{display:grid;gap:8px}.pp .row{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md)}.pp code{color:var(--act);font-weight:600}&lt;/style&gt;&lt;div class=&quot;pp&quot;&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;main&lt;/b&gt; → &lt;b&gt;origin/main&lt;/b&gt; &lt;span class=&quot;chip&quot;&gt;ahead 3&lt;/span&gt; &lt;span class=&quot;dim&quot;&gt;AgustinGirardi/liverun · fast-forward, sin force&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;row&quot;&gt;&lt;code&gt;d53fb7c&lt;/code&gt;&lt;div&gt;Hardening de sesiones, headers y límites del portal&lt;div class=&quot;dim&quot;&gt;+ plan aprobado · 16 archivos&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;row&quot;&gt;&lt;code&gt;0f2e28f&lt;/code&gt;&lt;div&gt;Fase 0: auditoría, Dependabot, gitleaks, actions por SHA&lt;div class=&quot;dim&quot;&gt;14 archivos&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;row&quot;&gt;&lt;code&gt;152ea67&lt;/code&gt;&lt;div&gt;Auditoría de eventos: tabla &lt;code&gt;audit_events&lt;/code&gt; + log JSON sin PII&lt;div class=&quot;dim&quot;&gt;13 archivos · lo nuevo que toca Postgres&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Jobs de la CI que se van a seguir</h2><iframe sandbox title="Jobs de la CI que se van a seguir" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.cj{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}.cj .card{padding:10px 12px}.cj .hot{border-color:var(--risk);background:var(--risk-soft)}&lt;/style&gt;&lt;div class=&quot;cj&quot;&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;python&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;ruff, formato, pytest SQLite, pip-audit&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;secretos&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;gitleaks sobre todo el historial&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card hot&quot;&gt;&lt;b&gt;python-postgres&lt;/b&gt; &lt;span class=&quot;chip risk&quot;&gt;foco&lt;/span&gt;&lt;div class=&quot;dim&quot;&gt;pytest cloud/tests contra Postgres 16&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;mobile&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;tests, lint, tipos&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;frontend&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;audit, lint, tests, build&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;deploy-portal&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;Cloud Run, si pasan python y postgres&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Sospechosos si python-postgres falla</h2><iframe sandbox title="Sospechosos si python-postgres falla" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.sp{display:grid;gap:8px}.sp .card{padding:10px 12px}&lt;/style&gt;&lt;div class=&quot;sp&quot;&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;1 · test_migraciones&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;Hace &lt;code&gt;DROP TABLE IF EXISTS audit_events&lt;/code&gt; sobre la base compartida: en Postgres puede bloquearse por una sesión abierta o dejar la tabla ausente para los tests siguientes.&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;2 · test_auditoria (315 líneas)&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;Postgres hace cumplir el largo de &lt;code&gt;String(n)&lt;/code&gt;, SQLite no. También DateTime naive y resultados sin ORDER BY.&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;b&gt;3 · cloud/audit.py&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;El commit propio de los eventos fail frente a la transacción de la request.&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Qué puede pasar después del push</h2><iframe sandbox title="Qué puede pasar después del push" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.fl{display:grid;gap:8px}.fl .row{padding:10px 12px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface-2)}.fl .ok{border-color:var(--act);background:var(--act-soft)}.fl .ko{border-color:var(--risk);background:var(--risk-soft)}&lt;/style&gt;&lt;div class=&quot;fl&quot;&gt;&lt;div class=&quot;row ok&quot;&gt;&lt;b&gt;Todo verde&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;Se confirma python-postgres, se corre el deploy si hay variables de GCP y se verifica /api/health.&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;row ko&quot;&gt;&lt;b&gt;Falla python-postgres&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;Se lee el log con gh run view --log-failed, se diagnostica y se arma un plan nuevo con el arreglo y su test (rojo → verde). No se toca código sin tu aprobación.&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;row&quot;&gt;&lt;b&gt;Falla gitleaks u otro job&lt;/b&gt;&lt;div class=&quot;dim&quot;&gt;Mismo camino: diagnóstico y propuesta de arreglo.&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>Riesgos</h2><iframe sandbox title="Riesgos" srcdoc="&lt;!doctype html&gt;&lt;html lang=&quot;es&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;style&gt;
+:root{--ground:#111214;--surface:#18191c;--surface-2:#202125;--ink:#ececed;--dim:#9a9ca3;--line:rgba(255,255,255,.08);--line-strong:rgba(255,255,255,.16);--act:#8ab4ff;--act-ink:#0b1220;--act-soft:rgba(138,180,255,.14);--risk:#f0b45c;--risk-soft:rgba(240,180,92,.14);--r-sm:6px;--r-md:10px;--r-lg:16px;--r-pill:999px}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--ground);color:var(--ink);font:14px/1.45 system-ui,sans-serif}
+.card{background:var(--surface);border-radius:var(--r-lg);padding:12px}
+.card.raised{background:var(--surface-2)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grid{display:grid;gap:8px}
+.dim{color:var(--dim)}
+.risk{color:var(--risk);background:var(--risk-soft);border-radius:var(--r-sm);padding:2px 8px}
+.chip{display:inline-block;border-radius:var(--r-pill);padding:2px 10px;background:var(--surface-2);font-size:12px}
+.chip.act{color:var(--act);background:var(--act-soft)}
+.btn{display:inline-block;border-radius:var(--r-md);padding:6px 14px;background:var(--act);color:var(--act-ink);font-weight:600}
+.btn.quiet{background:var(--surface-2);color:var(--ink)}
+h1,h2,h3,p{margin:0}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;style&gt;.rk{display:grid;gap:8px}.rk .card{padding:10px 12px}&lt;/style&gt;&lt;div class=&quot;rk&quot;&gt;&lt;div class=&quot;card&quot;&gt;&lt;span class=&quot;chip risk&quot;&gt;deploy&lt;/span&gt; El push toca &lt;code&gt;cloud/&lt;/code&gt; y &lt;code&gt;ci.yml&lt;/code&gt;: se dispara Cloud Run (si &lt;code&gt;GCP_PROJECT_ID&lt;/code&gt; está cargada) y Render despliega solo por autoDeploy.&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;span class=&quot;chip risk&quot;&gt;público&lt;/span&gt; El repo es público: un push no se despublica. Sin force-push.&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;span class=&quot;chip&quot;&gt;gitleaks&lt;/span&gt; Escanea el historial completo; un hallazgo viejo no cubierto en &lt;code&gt;.gitleaks.toml&lt;/code&gt; rompe el job.&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;span class=&quot;chip&quot;&gt;esquema&lt;/span&gt; &lt;code&gt;audit_events&lt;/code&gt; la crea create_all al arrancar, sin migración manual.&lt;/div&gt;&lt;div class=&quot;card&quot;&gt;&lt;span class=&quot;chip&quot;&gt;concurrency&lt;/span&gt; Un push nuevo cancela la corrida en curso de la misma rama.&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;" loading="lazy"></iframe></section><section><h2>¿Cómo hacemos el push?</h2><ul><li class=""><strong>Push directo a main</strong> <em>(recomendada)</em><p>Es lo pedido. Fast-forward, sin force. La CI corre sobre main y dispara el deploy si pasa.</p></li><li class=""><strong>Rama + PR</strong><p>Se ve la CI antes de mergear y main no se toca hasta que esté verde. Cuesta un paso más.</p></li><li class=""><strong>Probar antes con Postgres local (Docker)</strong><p>Corre cloud/tests contra postgres:16 local y recién después se pushea. Más lento, pero detecta el problema antes.</p></li><li class=""><strong>Push con el deploy desactivado</strong><p>Se pausa deploy-portal temporalmente. Requiere tocar variables del repo y acordarse de reactivarlo.</p></li></ul></section><section><h2>Si falla python-postgres, ¿qué hacemos?</h2><ul><li class=""><strong>Diagnosticar y plan nuevo</strong> <em>(recomendada)</em><p>Se lee el log, se identifica la causa y se propone el arreglo con su test. No se cambia nada sin tu OK.</p></li><li class=""><strong>Revertir los commits en main</strong><p>Deja main sano rápido, pero se pierde el hardening publicado hasta rehacerlo.</p></li><li class=""><strong>Arreglo directo sin plan aparte</strong><p>Más veloz, pero se saltea la aprobación que pediste para el arreglo.</p></li><li class=""><strong>Saltear el test solo en Postgres</strong><p>Descartada por los estándares: nunca se saltea un test para que pase la suite.</p></li></ul></section><section><h2>¿Qué hacemos con el deploy a Cloud Run?</h2><ul><li class=""><strong>Que corra si pasa la CI</strong> <em>(recomendada)</em><p>Es el comportamiento actual: deploy-portal necesita python y python-postgres en verde, y verifica /api/health.</p></li><li class=""><strong>Pausarlo hasta confirmar python-postgres</strong><p>Más cauto, aunque el job ya depende de ese resultado.</p></li><li class=""><strong>Desplegar a mano más tarde</strong><p>Control total del momento, pero hay que acordarse y Render igual despliega solo.</p></li></ul></section><section><h2>¿Cómo seguimos la CI?</h2><ul><li class=""><strong>gh run watch hasta el final</strong> <em>(recomendada)</em><p>Se queda mirando y reporta el resultado de todos los jobs apenas terminan.</p></li><li class=""><strong>Revisar al rato con gh run list</strong><p>No bloquea la sesión, pero el resultado llega más tarde.</p></li><li class=""><strong>Chequeo periódico programado</strong><p>Útil si la CI tarda mucho, pero suma complejidad para una corrida de unos 2 minutos.</p></li></ul></section></main></body></html>
