@@ -8,3 +8,9 @@ useDefault = true
 description = "Clave de ejemplo (no real) de un test del escritorio"
 paths = ['''backend/tests/test_cloud_config\.py''']
 regexes = ['''lr_pub_abcdefgh1234''']
+
+# `paths` en gitleaks 8.30.1 ignora el archivo entero aunque haya `condition = "AND"`,
+# así que se acota solo por el valor exacto (cubre el test y los planes que lo citan).
+[[allowlists]]
+description = "Contraseña sentinela (no real) del test de auditoría"
+regexes = ['''clave-sentinela-9X7''']
