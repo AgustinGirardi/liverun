@@ -46,10 +46,31 @@ El fingerprint es un hash de lo nativo (dependencias nativas, plugins, `app.json
 Cambia al tocar `package.json` con paquetes nativos o `app.json`; un cambio solo de
 JS no lo cambia. Un build instalado con otro fingerprint ignora el update en silencio.
 
-- **Primera vez, o después de cambiar algo nativo:** `npx eas-cli@latest build -p android --profile preview`
-  e instalar el APK.
-- **Comprobar que coinciden:** en expo.dev, el *runtime version* del build debe ser el mismo
-  que el del último update del branch `main`. Si no, `npx eas-cli@latest fingerprint:compare`
-  dice qué difiere.
+Comandos, en orden (desde `mobile/`):
+
+```bash
+# 1. Confirmar que el canal apunta a main
+npx eas-cli@latest channel:view preview
+# 2. Ver qué difiere entre un build y un update (ids en expo.dev o con build:list / update:list)
+npx eas-cli@latest fingerprint:compare --build-id <ID-DEL-BUILD> --update-id <ID-DEL-GRUPO>
+# 3. Solo si difiere algo nativo real (package.json, app.json, plugins): build nuevo e instalar el APK
+npx eas-cli@latest build -p android --profile preview
+# 4. Publicar un update (o GitHub → Actions → "EAS Update (OTA)" → Run workflow)
+npx eas-cli@latest update --branch main --message "<mensaje>"
+# 5. Verificar: el runtime del update de la plataforma del build debe ser el del build
+npx eas-cli@latest update:list --branch main --limit 5
+```
+
+Después, abrir la app dos veces: baja el update al abrirse y lo aplica en la apertura siguiente.
+
+> **El fingerprint no es igual en todos lados.** El mismo código puede dar otro hash según
+> dónde se calcule (esta PC con Windows, la CI con Linux, el servidor de builds de EAS) o
+> por qué fuentes incluya. La fuente de verdad es el `runtimeVersion` **del build instalado**
+> contra el **del último update de esa plataforma** en el branch (`update:list` muestra una
+> fila por plataforma). Antes de pedir un build, comprobá que la diferencia sea nativa: si
+> `package.json`, el lock y `app.json` no cambiaron desde el commit del build, un build nuevo
+> no arregla nada. `npx expo-updates fingerprint:generate --platform android` calcula el hash
+> local para comparar.
+
 - **Builds de tienda** (`production`): antes de publicar, `npx eas-cli@latest channel:edit production --branch main`.
 - La app baja el update al abrirse y lo aplica en la apertura siguiente: abrila dos veces.

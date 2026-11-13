@@ -56,6 +56,25 @@ no son secretas):
 
 `CT_AVATAR_DIR=/data/avatars` y `CT_PRODUCCION=1` vienen en el `Dockerfile`.
 
+## Por qué `deploy-portal` se saltea
+
+El job `Desplegar el portal en Cloud Run` tiene `if: vars.GCP_PROJECT_ID != ''`
+(`.github/workflows/ci.yml`). Mientras el repo no tenga esa **variable** (no secreto), la CI
+sale en verde con el job en *skipped*. Hoy el repo no tiene ninguna variable.
+
+Para que deje de saltearse, en este orden:
+
+1. Hacer el [Paso 1](#paso-1--preparar-google-cloud-una-sola-vez) (proyecto, Artifact
+   Registry, bucket, cuentas de servicio, Workload Identity) y el
+   [Paso 2](#paso-2--crear-la-base-en-neon) (Neon).
+2. Hacer el [Paso 3](#paso-3--cargar-los-secretos): los secretos viven en Secret Manager de
+   GCP, no en GitHub.
+3. Recién ahí cargar **las seis variables de la tabla de arriba juntas**
+   (`gh variable set <NOMBRE> --body "<valor>"` o Settings → Variables).
+
+> ⚠️ Cargar solo `GCP_PROJECT_ID` hace que el job arranque y falle en la autenticación: la CI
+> de `main` queda en rojo. Cargala al final, con las demás.
+
 ## Paso 1 — Preparar Google Cloud (una sola vez)
 
 Con `gcloud` instalado y logueado. Reemplazá los valores de ejemplo.
@@ -469,23 +488,30 @@ el mail ...`).
 Las cuentas que ya existían: las que entran con Google quedan verificadas solas;
 las de email y contraseña ven un aviso en el inicio para verificar.
 
-### Checklist después de cada deploy (a mano, en el dashboard de Render)
+### Checklist después de cada deploy de Render
 
-Lo que el repo ya garantiza: `render.yaml` apunta el health check a `/api/health`
-(un `SELECT 1`, con test) y declara `CT_PUBLIC_URL` y `CT_SMTP_*`. Lo que solo se ve en
-el dashboard:
+**Lo que garantiza el repo (con tests):**
+
+- `render.yaml` apunta el health check a `/api/health` (un `SELECT 1`;
+  `cloud/tests/test_health.py`).
+- `render.yaml` declara `CT_PUBLIC_URL` y `CT_SMTP_HOST/PORT/USER/PASSWORD/FROM` con
+  `sync: false` y sin `value:` (mismo archivo): el Blueprint las crea vacías y el valor real
+  nunca entra al repo.
+- El portal no arranca en producción sin `CT_PUBLIC_URL` (`cloud/tests/test_headers.py`).
+
+**Pasos manuales en el panel de Render** (el repo no puede saber si se hicieron):
 
 - [ ] **Antes de pushear algo que crea tablas o columnas:** Disks → *Create snapshot*.
-- [ ] El deploy llega a **Live** y Settings → *Health Check Path* dice `/api/health`.
-- [ ] `curl -s https://chronotrack-portal.onrender.com/api/health` responde `{"status":"ok"}`.
-- [ ] Environment: `CT_PUBLIC_URL` y `CT_SMTP_HOST/PORT/USER/PASSWORD/FROM` con valor
-      (son `sync: false`: el Blueprint las crea vacías).
+- [ ] Events: el deploy en **Live** es el último commit de `main`.
+- [ ] Settings → *Health Check Path* dice `/api/health`, y
+      `curl -s https://chronotrack-portal.onrender.com/api/health` responde `{"status":"ok"}`.
+- [ ] Environment: `CT_PUBLIC_URL` y `CT_SMTP_HOST/PORT/USER/PASSWORD/FROM` con valor real.
 - [ ] Logs de arranque **sin** `CT_SMTP_HOST no está configurado` y **sin** el aviso de
       "workers con el rate limit en memoria"; un solo `Started server process`.
 - [ ] Prueba de mail: Ingresar → ¿Olvidaste tu contraseña? → llega el mail.
 - [ ] Portal en el navegador, tema claro y oscuro (inicio, buscar, calendario, progreso,
       cuenta, admin → Claves), con la consola **sin violaciones de CSP**.
-- [ ] Disks: snapshots automáticos activos; anotar la fecha del último manual.
+- [ ] Disks: snapshots automáticos activos; anotar la fecha del último snapshot manual.
 
 ### Verificar que funciona
 

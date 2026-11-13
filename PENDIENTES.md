@@ -96,7 +96,7 @@ Para Agustín, en orden (necesitan paneles o el teléfono):
 - [ ] **2. Render → Environment:** `CT_PUBLIC_URL` con la URL real y `CT_SMTP_HOST`, `CT_SMTP_PORT`, `CT_SMTP_USER`, `CT_SMTP_PASSWORD`, `CT_SMTP_FROM` cargadas. En Logs no debe aparecer `CT_SMTP_HOST no está configurado`. Prueba de mail: Ingresar → ¿Olvidaste tu contraseña?
 - [ ] **3. Render → Disks:** snapshots automáticos activos y uno manual con la fecha anotada (es el respaldo previo a la migración a Cloud Run).
 - [ ] **4. Build de EAS:** esperar a que termine el del link de arriba, instalar el APK y, desde GitHub → Actions, correr `EAS Update (OTA)` a mano (*Run workflow*) para publicar un update con el fingerprint de ese build. Abrir la app dos veces y comprobar que lo toma. Después, la verificación en dispositivo de la sección 1.
-- [ ] **5. Confirmar la CI en verde** del commit que corrige el test (la del push de `c1da443` quedó en rojo por el test, no por el código).
+- [x] **5. Confirmar la CI en verde** del commit que corrige el test (la del push de `c1da443` quedó en rojo por el test, no por el código).
 
 ## 9. Hardening de seguridad (plan `docs/plans/2026-11-03-hardening-de-seguridad-y-privacidad-de-liverun-soc.md`)
 
@@ -107,3 +107,18 @@ Para Agustín, en orden (necesitan paneles o el teléfono):
 - [x] Fase 1b: `cloud/audit.py`, tabla `audit_events` y eventos de auth, claves y admin (2026-11-03).
 - [ ] Fases 2, 3, 4 y 5 del plan, un PR por fase y después del corte a Cloud Run.
 - [ ] Invertir el orden en `/api/publish`: validar la API key antes que el body (hoy un body inválido da 422 sin pedir clave).
+
+## 10. Deploy en orden (plan `docs/plans/2026-11-13-dejar-el-deploy-de-liverun-en-orden.md`, 13/11)
+
+**Estado real de los tres pendientes:**
+
+- **Render:** `/api/health` → `{"status":"ok"}` el 13/11. Nuevo test (`test_health.py`) que exige `CT_PUBLIC_URL` y las cinco `CT_SMTP_*` en `render.yaml` con `sync: false` y sin `value:`. El checklist de DEPLOY.md quedó separado en "lo que garantiza el repo" y "pasos manuales". `render.yaml` no se tocó (se da de baja con el corte a Cloud Run).
+- **OTA de EAS:** el canal `preview` ya apunta a `main` y hay updates de iOS y de Android en `main`. **Diagnóstico nuevo:** el build Android `preview` (`bfe740d0…`, commit `c1da443`) tiene fingerprint `0377e9e3…`, y ese mismo hash lo calcula esta PC con `expo-updates fingerprint:generate --platform android`. El update de Android que publica la CI sale con `d832b607…`, y `fingerprint:compare` marca `eas.json` como la ruta que difiere, que no cambió desde `c1da443`. No hay cambio nativo real: **no se pidió build** (no arreglaría nada). La diferencia está en cómo calcula el hash la CI. Sin resolver; ver el paso 2.
+- **`deploy-portal`:** se saltea porque el repo no tiene la variable `GCP_PROJECT_ID`. DEPLOY.md ahora lo explica con el orden y la advertencia de no cargarla sola.
+
+Para Agustín, en orden:
+
+- [ ] **1. Render (panel):** Events (Live = último commit de `main`), Health Check Path, Environment (`CT_PUBLIC_URL` y `CT_SMTP_*` con valor real), logs sin `CT_SMTP_HOST no está configurado` + mail de prueba, Disks (snapshots automáticos y uno manual con fecha).
+- [ ] **2. OTA:** decidir cómo alinear el fingerprint de la CI con el del build. Opciones a probar: publicar el update desde esta PC (`cd mobile && npx eas-cli@latest update --branch main --platform android`) y verificar con `update:list` que sale con `0377e9e3…`; o agregar un `.fingerprintignore` para `eas.json` (hay que confirmar que ese es el origen de la diferencia). Después, abrir la app dos veces. No se publicó nada desde esta sesión.
+- [ ] **3. GitHub (variables):** `GCP_PROJECT_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_DEPLOY_SERVICE_ACCOUNT`, `GCS_AVATARS_BUCKET`, `CT_PUBLIC_URL`, `CT_ADMIN_EMAILS`, todas juntas y al final, después del Paso 1 (GCP), el Paso 2 (Neon) y el Paso 3 (secretos) de DEPLOY.md.
+- [ ] **4. Hub de Obsidian:** actualizar `01 - Projects/LiveRun/LiveRun.md` y capturar en el Inbox la lección "el fingerprint depende de dónde se calcula". No se hizo desde esta sesión (el vault lo gestiona Gira).
